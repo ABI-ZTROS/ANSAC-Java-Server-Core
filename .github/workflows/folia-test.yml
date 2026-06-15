@@ -27,7 +27,7 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build plugin
-      run: gradle shadowJar --no-daemon
+      run: gradle fatJar --no-daemon
 
     - name: Download Folia 1.21.11
       run: |

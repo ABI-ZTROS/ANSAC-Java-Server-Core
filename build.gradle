@@ -1,6 +1,5 @@
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'dev.ztros.ansac'
@@ -21,44 +20,46 @@ repositories {
     maven { url = 'https://repo.nexomc.com/releases/' }
 }
 
-configurations {
-    // Custom configuration for dependencies to be shaded into the JAR
-    shade
-    implementation.extendsFrom(shade)
-}
-
 dependencies {
     // Server API (provided at runtime)
     compileOnly 'dev.folia:folia-api:1.20.1-R0.1-SNAPSHOT'
     compileOnly 'com.github.retrooper:packetevents-api:2.7.0'
     compileOnly 'com.github.retrooper:packetevents-spigot:2.7.0'
 
-    // FoliaLib - shaded into the plugin JAR via custom 'shade' configuration
-    shade('com.tcoded:FoliaLib:0.4.3') {
-        transitive = false
-    }
+    // FoliaLib - bundled into the plugin JAR
+    implementation 'com.tcoded:FoliaLib:0.4.3'
 
     // Lombok - compile time only
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
 }
 
-shadowJar {
+// Custom JAR task that merges FoliaLib into the plugin JAR
+tasks.register('fatJar', Jar) {
+    dependsOn configurations.runtimeClasspath
     archiveClassifier = ''
     archiveFileName = 'ANSAC-AntiCheat-' + project.version + '.jar'
 
-    // Use the 'shade' configuration
-    configurations = [project.configurations.shade]
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    // Relocate FoliaLib to prevent conflicts
-    relocate 'com.tcoded.folialib', 'dev.ztros.ansac.lib.folialib'
+    from sourceSets.main.output
 
-    // Merge service files
-    mergeServiceFiles()
+    // Include FoliaLib classes, relocated
+    from(zipTree(configurations.runtimeClasspath.singleFile)) {
+        exclude 'META-INF/**'
+        eachFile { fcd ->
+            // Relocate FoliaLib package
+            if (fcd.relativePath.pathString.replace('\\', '/').startsWith('com/tcoded/folialib')) {
+                fcd.relativePath = fcd.relativePath.pathString
+                    .replace('\\', '/')
+                    .replace('com/tcoded/folialib', 'dev/ztros/ansac/lib/folialib')
+            }
+        }
+    }
 }
 
 tasks.named('build') {
-    dependsOn tasks.named('shadowJar')
+    dependsOn tasks.named('fatJar')
 }
 
 tasks.named('compileJava') {
