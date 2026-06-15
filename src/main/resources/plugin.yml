@@ -1,0 +1,28 @@
+name: ANSAC
+version: '${version}'
+main: dev.ztros.ansac.ANSACPlugin
+description: 'Advanced Network Security Anti-Cheat for Folia'
+author: ZTROS-Team
+website: https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core
+folia-supported: true
+api-version: '1.20'
+
+softdepend:
+  - packetevents
+
+permissions:
+  ansac.bypass:
+    description: Bypass all ANSAC checks
+    default: op
+  ansac.admin:
+    description: Access to ANSAC admin commands
+    default: op
+  ansac.alerts:
+    description: Receive ANSAC alert notifications
+    default: op
+  ansac.command.reload:
+    description: Reload ANSAC configuration
+    default: op
+  ansac.command.status:
+    description: View ANSAC status
+    default: op

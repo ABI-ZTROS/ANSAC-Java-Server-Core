@@ -1,0 +1,73 @@
+# ==========================================
+# ANSAC - Advanced Network Security Anti-Cheat
+# Configuration File
+# ==========================================
+
+settings:
+  # Enable debug logging
+  debug: false
+
+  # Enable alert messages to staff
+  alerts-enabled: true
+
+  # Enable punishments (kick/ban)
+  punishments-enabled: true
+
+  # Violation decay interval in seconds
+  violation-decay-interval: 30
+
+  # Violation decay factor (0.0 - 1.0, higher = slower decay)
+  violation-decay-factor: 0.9
+
+  # Ping check interval in seconds
+  ping-check-interval: 5
+
+# ==========================================
+# Check Configurations
+# ==========================================
+
+checks:
+  movement:
+    speed:
+      enabled: true
+      punishable: true
+      max-vl: 20
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    fly:
+      enabled: true
+      punishable: true
+      max-vl: 20
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+  combat:
+    reach:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    killaura:
+      enabled: true
+      punishable: true
+      max-vl: 20
+      setback-threshold: 10.0
+      alert-threshold: 2.0
+
+  packet:
+    timer:
+      enabled: true
+      punishable: true
+      max-vl: 20
+      setback-threshold: 10.0
+      alert-threshold: 3.0
+
+    badpackets:
+      enabled: true
+      punishable: true
+      max-vl: 10
+      setback-threshold: 3.0
+      alert-threshold: 1.0
