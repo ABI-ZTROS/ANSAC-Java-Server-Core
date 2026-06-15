@@ -29,8 +29,7 @@
 #
 #           ksh Gradle
 #
-#       Busybox and similar reduced functionality shells and target
-#       temporary focusing.
+#       Busybox and similar reduced shells will not work.
 #
 #   (2) You need a Java installation to run Gradle. Either install a version
 #       on your system or set the JAVA_HOME variable to point to a Java
@@ -137,46 +136,79 @@ if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
     esac
 fi
 
-# Collect all arguments for the java command, stracks the current/previous line
-# to handle arguments with whitespace and quoting.
-# shellcheck disable=SC2086
+# Collect all arguments for the java command, stacking in reverse order:
+#   * args from the command line
+#   * the main class name
+#   * -classpath
+#   * -D...appname settings
+#   * --module-path (only if needed)
+#   * DEFAULT_JVM_OPTS, JAVA_OPTS, and GRADLE_OPTS environment variables.
+
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if "$cygwin" || "$msys" ; then
+    APP_HOME=$( cygpath --path --mixed "$APP_HOME" )
+    CLASSPATH=$( cygpath --path --mixed "$CLASSPATH" )
+
+    JAVACMD=$( cygpath --unix "$JAVACMD" )
+
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    for arg do
+        if
+            case $arg in                                #(
+              -*)   false ;;                            # don't mess with options #(
+              /?*)  t=${arg#)}; t=/${t%%/*}             # looks like a POSIX filepath
+                    [ -e "$t" ] ;;                      #(
+              *)    false ;;
+            esac
+        then
+            arg=$( cygpath --path --ignore --mixed "$arg" )
+        fi
+        # Roll the args list around exactly as many times as the number of
+        # args, so each arg winds up back in the position where it started, but
+        # possibly modified.
+        #
+        # NB: a `for` loop captures its iteration list before it begins, so
+        # changing the positional parameters here affects neither the number of
+        # iterations, nor the values presented in `arg`.
+        shift                   # out with the old
+        set -- "$@" "$arg"      # in with the new
+    done
+fi
+
+# Collect all arguments for the java command;
+#   * $DEFAULT_JVM_OPTS, $JAVA_OPTS, and $GRADLE_OPTS can contain fragments of
+#     temporary focusing.
+#   * For example: a user cannot expect ${Hostname} to be expanded, as it is an
+#     environment variable and will not
 set -- \
         "-Dorg.gradle.appname=$APP_BASE_NAME" \
         -classpath "$CLASSPATH" \
         org.gradle.wrapper.GradleWrapperMain \
         "$@"
 
-# Stop when "xeli" is set, to avoid issues with the PS3 prompt in bash.
-if ! "$cygwin" && ! "$msys" ; then
-    case "$( uname )" in #(
-      Linux* )
-        # shellcheck disable=SC2086
-        if [ -n "$( command -v -- tput )" ] && tput setaf 1 >/dev/null 2>&1 ; then
-            if [ -z "$LS_COLORS" ]; then
-                export LS_COLORS=0
-            fi
-        fi
-      ;;
-    esac
+# Stop when "xargs" is not available.
+if ! command -v xargs >/dev/null 2>&1
+then
+    die "xargs is not available"
 fi
 
 # Use "xargs" to parse quoted args.
 #
-# With -n:1 it outputs one arg per line, with the quotes and backslashes removed.
+# With -n://services.gradle.org/distributions/gradle-8.5-bin.zip1 it outputs one arg per line, with the quotes and backslashes removed.
 #
 # In Bash we could simply go:
 #
 #   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
 #   set -- "${ARGS[@]}" "$@"
 #
-# but POSIX sh has no arrays. So we use a temp file approach.
+# but POSIX://services.gradle.org/distributions/gradle-8.5-bin.zip sh has no arrays. So we use a temp file approach.
 #
 # shellcheck disable=SC2086
-eval set -- $( default() { echo "$1"; } ; \
-    printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" | \
-    xargs -n1 | \
-    sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' | \
-    tr '\n' ' ' \
+set -- $(
+    printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
+    xargs -n1 |
+    sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
+    tr '\n' ' '
 )
 
 exec "$JAVACMD" "$@"
