@@ -39,6 +39,9 @@ shadowJar {
     archiveClassifier = ''
     archiveFileName = 'ANSAC-AntiCheat-' + project.version + '.jar'
 
+    // Explicitly include runtime classpath (implementation dependencies)
+    configurations = [project.configurations.runtimeClasspath]
+
     // Relocate FoliaLib to prevent conflicts
     relocate 'com.tcoded.folialib', 'dev.ztros.ansac.lib.folialib'
 
