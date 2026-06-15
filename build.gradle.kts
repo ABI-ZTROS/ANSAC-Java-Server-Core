@@ -22,12 +22,15 @@ repositories {
 }
 
 dependencies {
+    // Server API (provided at runtime)
     compileOnly("dev.folia:folia-api:1.20.1-R0.1-SNAPSHOT")
     compileOnly("com.github.retrooper:packetevents-api:2.7.0")
     compileOnly("com.github.retrooper:packetevents-spigot:2.7.0")
 
+    // FoliaLib - shaded into the plugin JAR
     implementation("com.tcoded:FoliaLib:0.4.3")
 
+    // Lombok - compile time only
     compileOnly("org.projectlombok:lombok:1.18.30")
     annotationProcessor("org.projectlombok:lombok:1.18.30")
 }
@@ -42,11 +45,11 @@ tasks {
         archiveClassifier.set("")
         archiveFileName.set("ANSAC-AntiCheat-${project.version}.jar")
 
+        // Relocate FoliaLib to prevent conflicts
         relocate("com.tcoded.folialib", "dev.ztros.ansac.lib.folialib")
 
-        minimize {
-            exclude(dependency("com.tcoded:FoliaLib:.*"))
-        }
+        // Merge service files (META-INF/services)
+        mergeServiceFiles()
     }
 
     build {
