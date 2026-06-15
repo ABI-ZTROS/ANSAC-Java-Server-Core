@@ -1,193 +1,102 @@
 package dev.ztros.ansac.scheduler;
 
+import com.tcoded.folialib.FoliaLib;
+import com.tcoded.folialib.wrapper.task.WrappedTask;
 import dev.ztros.ansac.ANSACPlugin;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
-import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitTask;
 
-import java.lang.reflect.Method;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Cross-platform scheduler adapter for Folia and Paper/Spigot.
- * Detects Folia at runtime and uses the appropriate scheduler.
+ * Uses FoliaLib internally to handle platform differences.
+ * Adapted for FoliaLib 0.4.3 API (Consumer<WrappedTask> based).
  */
 public class SchedulerAdapter {
 
     private final ANSACPlugin plugin;
-    private final boolean isFolia;
-
-    // Folia scheduler methods (cached via reflection)
-    private Method globalRegionScheduler_execute;
-    private Method asyncScheduler_execute;
-    private Method regionScheduler_execute;
-    private Method entityScheduler_execute;
+    private final FoliaLib foliaLib;
 
     public SchedulerAdapter(ANSACPlugin plugin) {
         this.plugin = plugin;
-        this.isFolia = detectFolia();
-
-        if (isFolia) {
-            initFoliaSchedulers();
-        }
-    }
-
-    /**
-     * Detect if running on Folia
-     */
-    private boolean detectFolia() {
-        try {
-            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
-            return true;
-        } catch (ClassNotFoundException e) {
-            return false;
-        }
-    }
-
-    /**
-     * Initialize Folia scheduler methods via reflection
-     */
-    private void initFoliaSchedulers() {
-        try {
-            // Global Region Scheduler
-            Object globalScheduler = Bukkit.getServer().getClass()
-                    .getMethod("getGlobalRegionScheduler")
-                    .invoke(Bukkit.getServer());
-            globalRegionScheduler_execute = globalScheduler.getClass()
-                    .getMethod("execute", org.bukkit.plugin.Plugin.class, Runnable.class);
-
-            // Async Scheduler
-            Object asyncScheduler = Bukkit.getServer().getClass()
-                    .getMethod("getAsyncScheduler")
-                    .invoke(Bukkit.getServer());
-            asyncScheduler_execute = asyncScheduler.getClass()
-                    .getMethod("runNow", org.bukkit.plugin.Plugin.class, Runnable.class);
-
-            // Region Scheduler
-            regionScheduler_execute = Location.class
-                    .getMethod("getRegionScheduler")
-                    .invoke(new Location(Bukkit.getWorlds().get(0), 0, 0, 0))
-                    .getClass().getMethod("execute", org.bukkit.plugin.Plugin.class, Runnable.class);
-
-            // Entity Scheduler
-            entityScheduler_execute = Entity.class
-                    .getMethod("getScheduler")
-                    .invoke(Bukkit.getWorlds().get(0).getEntities().stream().findFirst().orElse(null))
-                    .getClass().getMethod("execute", org.bukkit.plugin.Plugin.class, Runnable.class, Runnable.class);
-
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to initialize Folia schedulers: " + e.getMessage());
-        }
+        this.foliaLib = plugin.getFoliaLib();
     }
 
     /**
      * Check if running on Folia
      */
     public boolean isFolia() {
-        return isFolia;
+        return foliaLib.isFolia();
     }
 
     /**
-     * Run task on the next tick
+     * Run task on the next tick (GlobalRegionScheduler on Folia, main thread on Paper)
      */
     public void runNextTick(Runnable task) {
-        if (isFolia && globalRegionScheduler_execute != null) {
-            try {
-                globalRegionScheduler_execute.invoke(
-                        Bukkit.getServer().getClass().getMethod("getGlobalRegionScheduler").invoke(Bukkit.getServer()),
-                        plugin, task);
-                return;
-            } catch (Exception e) {
-                // Fall through to Bukkit scheduler
-            }
-        }
-        Bukkit.getScheduler().runTask(plugin, task);
+        foliaLib.getImpl().runNextTick(wrappedTask -> task.run());
     }
 
     /**
      * Run task asynchronously
      */
     public void runAsync(Runnable task) {
-        if (isFolia && asyncScheduler_execute != null) {
-            try {
-                asyncScheduler_execute.invoke(
-                        Bukkit.getServer().getClass().getMethod("getAsyncScheduler").invoke(Bukkit.getServer()),
-                        plugin, task);
-                return;
-            } catch (Exception e) {
-                // Fall through to Bukkit scheduler
-            }
-        }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, task);
+        foliaLib.getImpl().runAsync(wrappedTask -> task.run());
     }
 
     /**
-     * Run task at a specific location
+     * Run task at a specific location (uses RegionScheduler on Folia)
      */
     public void runAtLocation(Location location, Runnable task) {
-        if (isFolia) {
-            try {
-                Object regionScheduler = location.getClass().getMethod("getRegionScheduler").invoke(location);
-                regionScheduler.getClass().getMethod("execute", org.bukkit.plugin.Plugin.class, Runnable.class)
-                        .invoke(regionScheduler, plugin, task);
-                return;
-            } catch (Exception e) {
-                // Fall through to Bukkit scheduler
-            }
-        }
-        Bukkit.getScheduler().runTask(plugin, task);
+        foliaLib.getImpl().runAtLocation(location, wrappedTask -> task.run());
     }
 
     /**
-     * Run task tied to an entity
+     * Run task tied to an entity (uses EntityScheduler on Folia)
      */
     public void runAtEntity(Entity entity, Runnable task) {
-        if (isFolia) {
-            try {
-                Object entityScheduler = entity.getClass().getMethod("getScheduler").invoke(entity);
-                entityScheduler.getClass().getMethod("execute", org.bukkit.plugin.Plugin.class, Runnable.class, Runnable.class)
-                        .invoke(entityScheduler, plugin, task, null);
-                return;
-            } catch (Exception e) {
-                // Fall through to Bukkit scheduler
-            }
-        }
-        Bukkit.getScheduler().runTask(plugin, task);
+        foliaLib.getImpl().runAtEntity(entity, wrappedTask -> task.run());
     }
 
     /**
-     * Run delayed task
+     * Run delayed task (ticks)
      */
-    public void runLater(Runnable task, long delayTicks) {
-        Bukkit.getScheduler().runTaskLater(plugin, task, delayTicks);
+    public WrappedTask runLater(Runnable task, long delayTicks) {
+        return foliaLib.getImpl().runLater(task, delayTicks);
     }
 
     /**
-     * Run delayed task at location
+     * Run delayed task at location (ticks)
      */
-    public void runLaterAtLocation(Location location, Runnable task, long delayTicks) {
-        Bukkit.getScheduler().runTaskLater(plugin, task, delayTicks);
+    public WrappedTask runLaterAtLocation(Location location, Runnable task, long delayTicks) {
+        return foliaLib.getImpl().runAtLocationLater(location, task, delayTicks);
     }
 
     /**
-     * Run repeating timer task
+     * Run repeating timer task (ticks)
      */
-    public BukkitTask runTimer(Runnable task, long delayTicks, long periodTicks) {
-        return Bukkit.getScheduler().runTaskTimer(plugin, task, delayTicks, periodTicks);
+    public WrappedTask runTimer(Runnable task, long delayTicks, long periodTicks) {
+        return foliaLib.getImpl().runTimer(task, delayTicks, periodTicks);
     }
 
     /**
-     * Run repeating timer task at location
+     * Run repeating timer task at location (ticks)
      */
-    public BukkitTask runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
-        return Bukkit.getScheduler().runTaskTimer(plugin, task, delayTicks, periodTicks);
+    public WrappedTask runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
+        return foliaLib.getImpl().runAtLocationTimer(location, task, delayTicks, periodTicks);
+    }
+
+    /**
+     * Run timer with TimeUnit (for async operations)
+     */
+    public WrappedTask runTimerAsync(Runnable task, long delay, long period, TimeUnit unit) {
+        return foliaLib.getImpl().runTimerAsync(task, delay, period, unit);
     }
 
     /**
      * Cancel all tasks for this plugin
      */
     public void cancelAllTasks() {
-        Bukkit.getScheduler().cancelTasks(plugin);
+        foliaLib.getImpl().cancelAllTasks();
     }
 }

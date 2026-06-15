@@ -1,5 +1,6 @@
 package dev.ztros.ansac;
 
+import com.tcoded.folialib.FoliaLib;
 import dev.ztros.ansac.checks.CheckManager;
 import dev.ztros.ansac.config.ANSACConfig;
 import dev.ztros.ansac.listeners.PacketListener;
@@ -13,6 +14,9 @@ public class ANSACPlugin extends JavaPlugin {
 
     @Getter
     private static ANSACPlugin instance;
+
+    @Getter
+    private FoliaLib foliaLib;
 
     @Getter
     private SchedulerAdapter schedulerAdapter;
@@ -36,7 +40,8 @@ public class ANSACPlugin extends JavaPlugin {
         getLogger().info("  Version: " + getDescription().getVersion());
         getLogger().info("========================================");
 
-        // Initialize scheduler adapter for cross-platform compatibility
+        // Initialize FoliaLib for cross-platform compatibility
+        this.foliaLib = new FoliaLib(this);
         this.schedulerAdapter = new SchedulerAdapter(this);
 
         // Load configuration
