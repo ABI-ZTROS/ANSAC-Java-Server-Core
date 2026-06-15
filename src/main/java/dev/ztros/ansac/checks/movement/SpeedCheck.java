@@ -64,7 +64,7 @@ public class SpeedCheck extends Check {
         }
 
         // Jumping while sprinting
-        if (player.isSprinting() && !data.isOnGround(player)) {
+        if (player.isSprinting() && !player.isOnGround()) {
             speed = SPRINT_JUMP_SPEED;
         }
 

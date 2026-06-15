@@ -34,7 +34,7 @@ public class FlyCheck extends Check {
         if (from == null || to == null) return;
 
         double deltaY = data.getVerticalDistance();
-        boolean onGround = data.isOnGround(player);
+        boolean onGround = player.isOnGround();
 
         // Skip if in special states
         if (isInSpecialState(player)) return;
