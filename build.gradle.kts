@@ -18,6 +18,7 @@ repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://repo.codemc.io/repository/maven-public/")
+    maven("https://repo.nexomc.com/releases/")
     maven("https://jitpack.io")
 }
 
@@ -26,7 +27,7 @@ dependencies {
     compileOnly("com.github.retrooper:packetevents-api:2.7.0")
     compileOnly("com.github.retrooper:packetevents-spigot:2.7.0")
 
-    implementation("com.github.technicallycoded:FoliaLib:main-SNAPSHOT")
+    implementation("com.tcoded:FoliaLib:0.5.1")
 
     compileOnly("org.projectlombok:lombok:1.18.30")
     annotationProcessor("org.projectlombok:lombok:1.18.30")
@@ -45,7 +46,7 @@ tasks {
         relocate("com.tcoded.folialib", "dev.ztros.ansac.lib.folialib")
 
         minimize {
-            exclude(dependency("com.github.technicallycoded:FoliaLib:.*"))
+            exclude(dependency("com.tcoded:FoliaLib:.*"))
         }
     }
 
