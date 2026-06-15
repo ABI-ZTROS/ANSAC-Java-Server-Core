@@ -64,7 +64,7 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build release JAR
-      run: gradle clean shadowJar --no-daemon --no-build-cache
+      run: gradle clean shadowJar --no-daemon --no-build-cache --info 2>&1 | grep -iE "shadow|relocat|tcoded|folialib|FoliaLib|implementation|configur" || true
 
     - name: Get version
       id: version
