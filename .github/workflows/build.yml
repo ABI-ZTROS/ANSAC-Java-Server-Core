@@ -64,7 +64,14 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build release JAR
-      run: gradle clean shadowJar --no-daemon --no-build-cache --info 2>&1 | grep -iE "shadow|relocat|tcoded|folialib|FoliaLib|implementation|configur" || true
+      run: |
+        echo "=== Dependencies ==="
+        gradle dependencies --configuration runtimeClasspath --no-daemon 2>&1 | head -30
+        echo "=== Shadow Config ==="
+        gradle clean shadowJar --no-daemon --no-build-cache --debug 2>&1 | grep -iE "shadow|relocat|tcoded|folialib|FoliaLib|runtimeClasspath|configur|transform|jar.*merge|Creating|Adding" | head -30
+        echo "=== JAR contents ==="
+        jar tf build/libs/ANSAC-AntiCheat-*.jar | head -30
+        ls -la build/libs/
 
     - name: Get version
       id: version
