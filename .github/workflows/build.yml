@@ -31,7 +31,8 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build with Gradle
-      run: gradle clean build --no-daemon --no-build-cache
+      run: |
+        gradle clean build --no-daemon --no-build-cache --refresh-dependencies
 
     - name: Run tests
       run: gradle test --no-daemon
@@ -64,7 +65,7 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build release JAR
-      run: gradle clean fatJar --no-daemon --no-build-cache
+      run: gradle clean fatJar --no-daemon --no-build-cache --refresh-dependencies
 
     - name: Verify JAR
       run: |
