@@ -21,14 +21,22 @@ repositories {
     maven { url = 'https://repo.nexomc.com/releases/' }
 }
 
+configurations {
+    // Custom configuration for dependencies to be shaded into the JAR
+    shade
+    implementation.extendsFrom(shade)
+}
+
 dependencies {
     // Server API (provided at runtime)
     compileOnly 'dev.folia:folia-api:1.20.1-R0.1-SNAPSHOT'
     compileOnly 'com.github.retrooper:packetevents-api:2.7.0'
     compileOnly 'com.github.retrooper:packetevents-spigot:2.7.0'
 
-    // FoliaLib - shaded into the plugin JAR
-    implementation 'com.tcoded:FoliaLib:0.4.3'
+    // FoliaLib - shaded into the plugin JAR via custom 'shade' configuration
+    shade('com.tcoded:FoliaLib:0.4.3') {
+        transitive = false
+    }
 
     // Lombok - compile time only
     compileOnly 'org.projectlombok:lombok:1.18.30'
@@ -39,8 +47,8 @@ shadowJar {
     archiveClassifier = ''
     archiveFileName = 'ANSAC-AntiCheat-' + project.version + '.jar'
 
-    // Explicitly include runtime classpath (implementation dependencies)
-    configurations = [project.configurations.runtimeClasspath]
+    // Use the 'shade' configuration
+    configurations = [project.configurations.shade]
 
     // Relocate FoliaLib to prevent conflicts
     relocate 'com.tcoded.folialib', 'dev.ztros.ansac.lib.folialib'
