@@ -22,10 +22,13 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Build plugin
+    - name: Setup Gradle Wrapper
       run: |
         chmod +x gradlew
-        ./gradlew shadowJar --no-daemon
+        chmod +x gradle/wrapper/gradle-wrapper.jar
+
+    - name: Build plugin
+      run: ./gradlew shadowJar --no-daemon
 
     - name: Download Folia 1.21.11
       run: |

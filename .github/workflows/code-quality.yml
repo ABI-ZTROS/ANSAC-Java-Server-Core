@@ -21,10 +21,13 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Run Checkstyle
+    - name: Setup Gradle Wrapper
       run: |
         chmod +x gradlew
-        ./gradlew checkstyleMain checkstyleTest --no-daemon
+        chmod +x gradle/wrapper/gradle-wrapper.jar
+
+    - name: Run Checkstyle
+      run: ./gradlew checkstyleMain checkstyleTest --no-daemon
       continue-on-error: true
 
   spotbugs:
@@ -41,10 +44,13 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Run SpotBugs
+    - name: Setup Gradle Wrapper
       run: |
         chmod +x gradlew
-        ./gradlew spotbugsMain spotbugsTest --no-daemon
+        chmod +x gradle/wrapper/gradle-wrapper.jar
+
+    - name: Run SpotBugs
+      run: ./gradlew spotbugsMain spotbugsTest --no-daemon
       continue-on-error: true
 
     - name: Upload SpotBugs report

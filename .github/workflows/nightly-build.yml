@@ -21,10 +21,13 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Build with Gradle
+    - name: Setup Gradle Wrapper
       run: |
         chmod +x gradlew
-        ./gradlew shadowJar --no-daemon
+        chmod +x gradle/wrapper/gradle-wrapper.jar
+
+    - name: Build with Gradle
+      run: ./gradlew shadowJar --no-daemon
 
     - name: Get current date
       id: date
