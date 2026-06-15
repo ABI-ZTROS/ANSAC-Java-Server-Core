@@ -31,7 +31,7 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build with Gradle
-      run: gradle build --no-daemon
+      run: gradle clean build --no-daemon --no-build-cache
 
     - name: Run tests
       run: gradle test --no-daemon
@@ -64,7 +64,7 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build release JAR
-      run: gradle shadowJar --no-daemon
+      run: gradle clean shadowJar --no-daemon --no-build-cache
 
     - name: Get version
       id: version
@@ -122,7 +122,7 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build release JAR
-      run: gradle shadowJar --no-daemon
+      run: gradle clean shadowJar --no-daemon --no-build-cache
 
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
