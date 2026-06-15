@@ -19,15 +19,14 @@ jobs:
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Setup Gradle Wrapper
-      run: |
-        chmod +x gradlew
-        chmod +x gradle/wrapper/gradle-wrapper.jar
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.5'
 
     - name: Build with Gradle
-      run: ./gradlew shadowJar --no-daemon
+      run: gradle shadowJar --no-daemon
 
     - name: Get current date
       id: date

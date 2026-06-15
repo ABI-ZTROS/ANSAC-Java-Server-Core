@@ -19,15 +19,14 @@ jobs:
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Setup Gradle Wrapper
-      run: |
-        chmod +x gradlew
-        chmod +x gradle/wrapper/gradle-wrapper.jar
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.5'
 
     - name: Run Checkstyle
-      run: ./gradlew checkstyleMain checkstyleTest --no-daemon
+      run: gradle checkstyleMain checkstyleTest --no-daemon
       continue-on-error: true
 
   spotbugs:
@@ -42,15 +41,14 @@ jobs:
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: gradle
 
-    - name: Setup Gradle Wrapper
-      run: |
-        chmod +x gradlew
-        chmod +x gradle/wrapper/gradle-wrapper.jar
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-version: '8.5'
 
     - name: Run SpotBugs
-      run: ./gradlew spotbugsMain spotbugsTest --no-daemon
+      run: gradle spotbugsMain spotbugsTest --no-daemon
       continue-on-error: true
 
     - name: Upload SpotBugs report
