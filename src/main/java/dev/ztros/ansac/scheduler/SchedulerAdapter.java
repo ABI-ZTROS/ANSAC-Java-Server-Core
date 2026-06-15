@@ -6,7 +6,7 @@ import dev.ztros.ansac.ANSACPlugin;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 
-import java.util.function.Consumer;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Cross-platform scheduler adapter for Folia and Paper/Spigot.
@@ -33,59 +33,63 @@ public class SchedulerAdapter {
      * Run task on the next tick (GlobalRegionScheduler on Folia, main thread on Paper)
      */
     public WrappedTask runNextTick(Runnable task) {
-        return foliaLib.getScheduler().runNextTick(wrappedTask -> task.run());
+        return foliaLib.getScheduler().runNextTick(task);
     }
 
     /**
      * Run task asynchronously
      */
     public WrappedTask runAsync(Runnable task) {
-        return foliaLib.getScheduler().runAsync(wrappedTask -> task.run());
+        return foliaLib.getScheduler().runAsync(task);
     }
 
     /**
      * Run task at a specific location (uses RegionScheduler on Folia)
      */
     public WrappedTask runAtLocation(Location location, Runnable task) {
-        return foliaLib.getScheduler().runAtLocation(location, wrappedTask -> task.run());
+        return foliaLib.getScheduler().runAtLocation(location, task);
     }
 
     /**
      * Run task tied to an entity (uses EntityScheduler on Folia)
      */
     public WrappedTask runAtEntity(Entity entity, Runnable task) {
-        return foliaLib.getScheduler().runAtEntity(entity, wrappedTask -> task.run());
+        return foliaLib.getScheduler().runAtEntity(entity, task);
     }
 
     /**
      * Run delayed task
      */
     public WrappedTask runLater(Runnable task, long delayTicks) {
-        return foliaLib.getScheduler().runLater(wrappedTask -> task.run(), delayTicks);
+        return foliaLib.getScheduler().runLater(task, delayTicks);
     }
 
     /**
      * Run delayed task at location
      */
     public WrappedTask runLaterAtLocation(Location location, Runnable task, long delayTicks) {
-        return foliaLib.getScheduler().runAtLocationTimer(location, delayTicks, 1L, wrappedTask -> {
-            task.run();
-            wrappedTask.cancel();
-        });
+        return foliaLib.getScheduler().runLaterAtLocation(location, task, delayTicks);
     }
 
     /**
      * Run repeating timer task
      */
     public WrappedTask runTimer(Runnable task, long delayTicks, long periodTicks) {
-        return foliaLib.getScheduler().runTimer(wrappedTask -> task.run(), delayTicks, periodTicks);
+        return foliaLib.getScheduler().runTimer(task, delayTicks, periodTicks);
     }
 
     /**
      * Run repeating timer task at location
      */
     public WrappedTask runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
-        return foliaLib.getScheduler().runAtLocationTimer(location, delayTicks, periodTicks, wrappedTask -> task.run());
+        return foliaLib.getScheduler().runTimerAtLocation(location, task, delayTicks, periodTicks);
+    }
+
+    /**
+     * Run timer with TimeUnit (for async operations)
+     */
+    public WrappedTask runTimerAsync(Runnable task, long delay, long period, TimeUnit unit) {
+        return foliaLib.getScheduler().runTimerAsync(task, delay, period, unit);
     }
 
     /**
