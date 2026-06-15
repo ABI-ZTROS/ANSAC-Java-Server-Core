@@ -17,7 +17,7 @@ repositories {
     mavenCentral()
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://repo.codemc.io/repository/maven-public/' }
-    maven { url = 'https://repo.nexomc.com/releases/' }
+    maven { url = 'https://jitpack.io' }
 }
 
 dependencies {
@@ -27,7 +27,7 @@ dependencies {
     compileOnly 'com.github.retrooper:packetevents-spigot:2.7.0'
 
     // FoliaLib - bundled into the plugin JAR
-    implementation 'com.tcoded:FoliaLib:0.4.3'
+    implementation 'com.github.TechnicallyCoded:FoliaLib:0.4.3'
 
     // Lombok - compile time only
     compileOnly 'org.projectlombok:lombok:1.18.30'
@@ -45,14 +45,13 @@ tasks.register('fatJar', Jar) {
     from sourceSets.main.output
 
     // Include FoliaLib classes, relocated
-    from(zipTree(configurations.runtimeClasspath.singleFile)) {
+    from(configurations.runtimeClasspath.files.collect { zipTree(it) }) {
         exclude 'META-INF/**'
         eachFile { fcd ->
             // Relocate FoliaLib package
-            if (fcd.relativePath.pathString.replace('\\', '/').startsWith('com/tcoded/folialib')) {
-                fcd.relativePath = fcd.relativePath.pathString
-                    .replace('\\', '/')
-                    .replace('com/tcoded/folialib', 'dev/ztros/ansac/lib/folialib')
+            def path = fcd.relativePath.pathString.replace('\\', '/')
+            if (path.startsWith('com/tcoded/folialib')) {
+                fcd.relativePath = path.replace('com/tcoded/folialib', 'dev/ztros/ansac/lib/folialib')
             }
         }
     }
