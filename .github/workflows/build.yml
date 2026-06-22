@@ -97,7 +97,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create auto-release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ steps.version.outputs.tag }}
         name: ${{ steps.version.outputs.name }}
@@ -141,7 +141,7 @@ jobs:
       run: gradle clean fatJar --no-daemon
 
     - name: Upload Release Asset
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         files: build/libs/ANSAC-AntiCheat-*.jar
       env:
