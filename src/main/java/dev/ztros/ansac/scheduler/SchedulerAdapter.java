@@ -1,6 +1,7 @@
 package dev.ztros.ansac.scheduler;
 
 import com.tcoded.folialib.FoliaLib;
+import com.tcoded.folialib.wrapper.task.WrappedTask;
 import dev.ztros.ansac.ANSACPlugin;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -10,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Cross-platform scheduler adapter for Folia and Paper/Spigot.
  * Uses FoliaLib internally to handle platform differences.
- * Adapted for FoliaLib 0.5.1 API (getScheduler() with direct Runnable methods).
+ * Adapted for FoliaLib 0.5.1 API.
  */
 public class SchedulerAdapter {
 
@@ -33,28 +34,28 @@ public class SchedulerAdapter {
      * Run task on the next tick (GlobalRegionScheduler on Folia, main thread on Paper)
      */
     public void runNextTick(Runnable task) {
-        foliaLib.getScheduler().runNextTick(task);
+        foliaLib.getScheduler().runNextTick(wrappedTask -> task.run());
     }
 
     /**
      * Run task asynchronously
      */
     public void runAsync(Runnable task) {
-        foliaLib.getScheduler().runAsync(task);
+        foliaLib.getScheduler().runAsync(wrappedTask -> task.run());
     }
 
     /**
      * Run task at a specific location (uses RegionScheduler on Folia)
      */
     public void runAtLocation(Location location, Runnable task) {
-        foliaLib.getScheduler().runAtLocation(location, task);
+        foliaLib.getScheduler().runAtLocation(location, wrappedTask -> task.run());
     }
 
     /**
      * Run task tied to an entity (uses EntityScheduler on Folia)
      */
     public void runAtEntity(Entity entity, Runnable task) {
-        foliaLib.getScheduler().runAtEntity(entity, task);
+        foliaLib.getScheduler().runAtEntity(entity, wrappedTask -> task.run());
     }
 
     /**
