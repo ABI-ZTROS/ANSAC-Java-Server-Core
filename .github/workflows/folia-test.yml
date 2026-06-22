@@ -29,17 +29,14 @@ jobs:
     - name: Build plugin
       run: gradle fatJar --no-daemon
 
-    - name: Download Folia 1.21.11
+    - name: Download Folia 1.20.4
       run: |
         mkdir -p server
         cd server
-        # Download latest Folia build for 1.21.11
-        curl -o folia-1.21.11.jar -L \
+        # Download Folia build matching the API version used in build.gradle (1.20.x series)
+        curl -o folia.jar -L \
           -H "User-Agent: ANSAC-CI/1.0.0 (https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core)" \
-          "https://fill-data.papermc.io/v1/projects/folia/versions/1.21.11/builds/latest/downloads/folia-1.21.11.jar" || \
-        curl -o folia-1.21.11.jar -L \
-          -H "User-Agent: ANSAC-CI/1.0.0 (https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core)" \
-          "https://fill-data.papermc.io/v1/projects/folia/versions/26.1.2/builds/latest/downloads/folia-26.1.2.jar"
+          "https://api.papermc.io/v2/projects/folia/versions/1.20.4/builds/latest/downloads/folia-1.20.4.jar"
         ls -la
 
     - name: Setup test server
@@ -48,7 +45,7 @@ jobs:
         echo "eula=true" > eula.txt
         mkdir -p plugins
         cp ../build/libs/ANSAC-AntiCheat-*.jar plugins/ANSAC-AntiCheat.jar
-        
+
         # Create server.properties
         cat > server.properties << 'EOF'
         server-port=25565
@@ -62,7 +59,7 @@ jobs:
         view-distance=6
         simulation-distance=6
         EOF
-        
+
         # Create Folia config
         mkdir -p config
         cat > config/folia-global.yml << 'EOF'
@@ -78,8 +75,8 @@ jobs:
           -XX:+ParallelRefProcEnabled \
           -XX:MaxGCPauseMillis=200 \
           -XX:+UnlockExperimentalVMOptions \
-          -jar folia-1.21.11.jar nogui || true
-        
+          -jar folia.jar nogui || true
+
         # Check if server started successfully
         if grep -q "Done" logs/latest.log 2>/dev/null; then
           echo "Server started successfully!"

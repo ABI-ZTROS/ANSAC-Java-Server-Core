@@ -18,6 +18,7 @@ import org.bukkit.entity.Player;
 /**
  * PacketEvents listener for packet-based detection.
  * Provides low-level packet analysis for combat and movement checks.
+ * On Folia, defers entity data access to the entity's region thread.
  */
 public class PacketListener extends PacketListenerAbstract {
 
@@ -67,9 +68,15 @@ public class PacketListener extends PacketListenerAbstract {
     }
 
     /**
-     * Handle flying packet for movement validation
+     * Handle flying packet for movement validation.
+     * Updates TimerCheck flying packet data that was previously missing.
      */
     private void handleFlyingPacket(Player player, PlayerData data, PacketReceiveEvent event) {
+        // Update flying packet tracking for TimerCheck
+        long now = System.currentTimeMillis();
+        data.setLastFlyingPacket(now);
+        data.setFlyingPacketCount(data.getFlyingPacketCount() + 1);
+
         WrapperPlayClientPlayerFlying flying = new WrapperPlayClientPlayerFlying(event);
 
         // Validate rotation
@@ -101,27 +108,33 @@ public class PacketListener extends PacketListenerAbstract {
     }
 
     /**
-     * Handle entity interaction for combat checks
+     * Handle entity interaction for combat checks.
+     * On Folia, defers entity data access to the entity's region thread.
      */
     private void handleInteractEntity(Player player, PlayerData data, PacketReceiveEvent event) {
         WrapperPlayClientInteractEntity interact = new WrapperPlayClientInteractEntity(event);
 
         if (interact.getAction() == WrapperPlayClientInteractEntity.InteractAction.ATTACK) {
-            Entity target = getEntityById(player, interact.getEntityId());
+            int targetEntityId = interact.getEntityId();
 
-            if (target != null) {
-                // Process reach check
-                ReachCheck reach = (ReachCheck) plugin.getCheckManager().getCheck("Reach");
-                if (reach != null) {
-                    reach.processAttack(player, data, target);
-                }
+            // Defer entity lookup and combat checks to the player's entity thread
+            plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                Entity target = getEntityById(player, targetEntityId);
 
-                // Process killaura check
-                KillAuraCheck killAura = (KillAuraCheck) plugin.getCheckManager().getCheck("KillAura");
-                if (killAura != null) {
-                    killAura.processAttack(player, data);
+                if (target != null) {
+                    // Process reach check
+                    ReachCheck reach = (ReachCheck) plugin.getCheckManager().getCheck("Reach");
+                    if (reach != null) {
+                        reach.processAttack(player, data, target);
+                    }
+
+                    // Process killaura check
+                    KillAuraCheck killAura = (KillAuraCheck) plugin.getCheckManager().getCheck("KillAura");
+                    if (killAura != null) {
+                        killAura.processAttack(player, data);
+                    }
                 }
-            }
+            });
         }
     }
 
@@ -136,7 +149,8 @@ public class PacketListener extends PacketListenerAbstract {
     }
 
     /**
-     * Get entity by ID from player's world
+     * Get entity by ID from player's world.
+     * Must be called from the correct region thread on Folia.
      */
     private Entity getEntityById(Player player, int entityId) {
         for (Entity entity : player.getWorld().getEntities()) {

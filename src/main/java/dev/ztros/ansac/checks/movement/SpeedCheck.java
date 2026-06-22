@@ -44,8 +44,8 @@ public class SpeedCheck extends Check {
         double pingFactor = 1.0 + (ping / 1000.0) * 0.5;
         expectedSpeed *= pingFactor;
 
-        // Check if speed exceeds expected
-        if (horizontalDist > expectedSpeed * LENIENCY && horizontalDist > 0.5) {
+        // Check if speed exceeds expected (LENIENCY is an additive buffer, not a multiplier)
+        if (horizontalDist > expectedSpeed + LENIENCY && horizontalDist > 0.5) {
             double severity = horizontalDist / expectedSpeed;
             flag(player, data, severity,
                 String.format("Speed: %.3f / %.3f (ping: %dms)", horizontalDist, expectedSpeed, ping));

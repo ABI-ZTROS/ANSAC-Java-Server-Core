@@ -16,6 +16,7 @@ import java.util.List;
 /**
  * Manages all anti-cheat checks.
  * Handles registration, scheduling, and execution of checks.
+ * On Folia, uses runAtEntity for each player to ensure thread safety.
  */
 public class CheckManager {
 
@@ -26,6 +27,7 @@ public class CheckManager {
         this.plugin = plugin;
         registerChecks();
         startCheckTask();
+        startMaintenanceTask();
     }
 
     /**
@@ -48,7 +50,8 @@ public class CheckManager {
     }
 
     /**
-     * Start the periodic check task
+     * Start the periodic check task.
+     * On Folia, schedules each player's check execution on their entity region thread.
      */
     private void startCheckTask() {
         plugin.getSchedulerAdapter().runTimer(() -> {
@@ -56,21 +59,58 @@ public class CheckManager {
                 PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
                 if (data == null || data.hasBypass()) continue;
 
-                for (Check check : checks) {
-                    if (check.isEnabled()) {
-                        try {
-                            check.process(player, data);
-                        } catch (Exception e) {
-                            plugin.getLogger().warning("Error in check " + check.getName() + ": " + e.getMessage());
+                // Use runAtEntity to ensure thread safety on Folia
+                plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                    for (Check check : checks) {
+                        if (check.isEnabled()) {
+                            try {
+                                check.process(player, data);
+                            } catch (Exception e) {
+                                plugin.getLogger().warning("Error in check " + check.getName() + ": " + e.getMessage());
+                            }
                         }
                     }
-                }
+                });
             }
         }, 1L, 1L); // Run every tick
     }
 
     /**
-     * Process a specific player through all checks (for event-driven checks)
+     * Start maintenance tasks: violation decay and ping updates.
+     */
+    private void startMaintenanceTask() {
+        final int decayInterval = plugin.getAnsacConfig().getViolationDecayInterval();
+        final double decayFactor = plugin.getAnsacConfig().getViolationDecayFactor();
+        final int pingInterval = plugin.getAnsacConfig().getPingCheckInterval();
+
+        // Violation decay task (runs every N seconds)
+        plugin.getSchedulerAdapter().runTimerAsync(() -> {
+            long decayMillis = decayInterval * 1000L;
+            for (PlayerData data : plugin.getPlayerDataManager().playerDataMapValues()) {
+                data.getViolationsView().values().forEach(v -> {
+                    if (v.shouldDecay(decayMillis)) {
+                        v.decay(decayFactor);
+                    }
+                });
+            }
+        }, decayInterval * 20L, decayInterval * 20L);
+
+        // Ping update task (runs every N seconds)
+        plugin.getSchedulerAdapter().runTimerAsync(() -> {
+            for (Player player : plugin.getServer().getOnlinePlayers()) {
+                PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+                if (data != null) {
+                    plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                        data.updatePing();
+                    });
+                }
+            }
+        }, pingInterval * 20L, pingInterval * 20L);
+    }
+
+    /**
+     * Process a specific player through all checks (for event-driven checks).
+     * Assumes this is called from the correct region thread (e.g., PlayerMoveEvent).
      */
     public void processPlayer(Player player) {
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);

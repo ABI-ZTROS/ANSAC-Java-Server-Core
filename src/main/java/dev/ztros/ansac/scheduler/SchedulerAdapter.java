@@ -62,35 +62,35 @@ public class SchedulerAdapter {
      * Run delayed task (ticks)
      */
     public WrappedTask runLater(Runnable task, long delayTicks) {
-        return foliaLib.getImpl().runLater(task, delayTicks);
+        return foliaLib.getImpl().runLater(wrappedTask -> task.run(), delayTicks);
     }
 
     /**
      * Run delayed task at location (ticks)
      */
     public WrappedTask runLaterAtLocation(Location location, Runnable task, long delayTicks) {
-        return foliaLib.getImpl().runAtLocationLater(location, task, delayTicks);
+        return foliaLib.getImpl().runAtLocationLater(location, wrappedTask -> task.run(), delayTicks);
     }
 
     /**
      * Run repeating timer task (ticks)
      */
     public WrappedTask runTimer(Runnable task, long delayTicks, long periodTicks) {
-        return foliaLib.getImpl().runTimer(task, delayTicks, periodTicks);
+        return foliaLib.getImpl().runTimer(wrappedTask -> task.run(), delayTicks, periodTicks);
     }
 
     /**
      * Run repeating timer task at location (ticks)
      */
     public WrappedTask runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
-        return foliaLib.getImpl().runAtLocationTimer(location, task, delayTicks, periodTicks);
+        return foliaLib.getImpl().runAtLocationTimer(location, wrappedTask -> task.run(), delayTicks, periodTicks);
     }
 
     /**
      * Run timer with TimeUnit (for async operations)
      */
     public WrappedTask runTimerAsync(Runnable task, long delay, long period, TimeUnit unit) {
-        return foliaLib.getImpl().runTimerAsync(task, delay, period, unit);
+        return foliaLib.getImpl().runTimerAsync(wrappedTask -> task.run(), delay, period, unit);
     }
 
     /**

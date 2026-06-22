@@ -66,7 +66,7 @@ public abstract class Check {
         if (!enabled || data.hasBypass()) return;
 
         data.addViolation(name, severity);
-        int vl = data.getViolation(name).getTotalVL();
+        int vl = data.getViolation(name) != null ? data.getViolation(name).getTotalVL() : 0;
 
         // Alert if above threshold
         if (vl >= alertThreshold) {
@@ -85,7 +85,8 @@ public abstract class Check {
     }
 
     /**
-     * Send alert to staff
+     * Send alert to staff.
+     * Uses runAtEntity for each staff player to ensure Folia thread safety.
      */
     protected void alert(Player player, int vl, String details) {
         String message = String.format(
@@ -93,11 +94,14 @@ public abstract class Check {
             player.getName(), name, vl, details
         );
 
-        plugin.getSchedulerAdapter().runAsync(() -> {
-            plugin.getServer().getOnlinePlayers().stream()
-                .filter(p -> p.hasPermission("ansac.alerts"))
-                .forEach(p -> p.sendMessage(message));
-        });
+        // Use runAtEntity for each staff player to ensure Folia thread safety
+        for (Player staff : plugin.getServer().getOnlinePlayers()) {
+            if (staff.hasPermission("ansac.alerts")) {
+                plugin.getSchedulerAdapter().runAtEntity(staff, () -> {
+                    staff.sendMessage(message);
+                });
+            }
+        }
 
         plugin.getLogger().info("[ALERT] " + player.getName() + " failed " + name + " (VL: " + vl + ") - " + details);
     }
@@ -117,7 +121,7 @@ public abstract class Check {
      * Punish player (kick/ban)
      */
     protected void punish(Player player, PlayerData data, int vl) {
-        plugin.getSchedulerAdapter().runNextTick(() -> {
+        plugin.getSchedulerAdapter().runAtEntity(player, () -> {
             player.kickPlayer("§c[ANSAC] §7You have been detected using cheats.\n§7Check: §f" + name + "\n§7VL: §f" + vl);
         });
 

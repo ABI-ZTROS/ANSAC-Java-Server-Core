@@ -36,7 +36,7 @@ public class FlyCheck extends Check {
         double deltaY = data.getVerticalDistance();
         boolean onGround = player.isOnGround();
 
-        // Skip if in special states
+        // Skip if in special states (water, lava, climbing, sleeping, dead)
         if (isInSpecialState(player)) return;
 
         // Predict expected vertical movement
@@ -61,6 +61,8 @@ public class FlyCheck extends Check {
             }
         }
 
+        // Update lastMotionY for prediction engine
+        data.setLastMotionY(deltaY);
         data.setLastDeltaY(deltaY);
     }
 
@@ -82,7 +84,7 @@ public class FlyCheck extends Check {
                 }
             }
         } else {
-            // In air - apply gravity
+            // In air - apply gravity using lastMotionY
             double lastMotionY = data.getLastMotionY();
             predicted = (lastMotionY - GRAVITY) * DRAG;
 
@@ -115,7 +117,6 @@ public class FlyCheck extends Check {
         return player.isInWater()
             || player.isInLava()
             || player.isClimbing()
-            || player.isInsideVehicle()
             || player.isSleeping()
             || player.isDead();
     }

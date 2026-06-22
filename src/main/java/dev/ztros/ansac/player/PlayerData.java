@@ -7,6 +7,7 @@ import lombok.Setter;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,6 +62,9 @@ public class PlayerData {
 
     // Violation tracking - thread-safe
     private final Map<String, ViolationData> violations = new ConcurrentHashMap<>();
+
+    @Getter
+    private final Map<String, ViolationData> violationsView = Collections.unmodifiableMap(violations);
 
     @Getter @Setter
     private boolean alertsEnabled = true;

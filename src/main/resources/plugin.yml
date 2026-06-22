@@ -1,5 +1,5 @@
 name: ANSAC
-version: '${version}'
+version: ${version}
 main: dev.ztros.ansac.ANSACPlugin
 description: 'Advanced Network Security Anti-Cheat for Folia'
 author: ZTROS-Team

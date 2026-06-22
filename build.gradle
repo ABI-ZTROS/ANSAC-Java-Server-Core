@@ -34,6 +34,13 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
 }
 
+// Replace version placeholder in plugin.yml
+processResources {
+    filesMatching('plugin.yml') {
+        expand 'version': project.version
+    }
+}
+
 // Custom JAR task that merges FoliaLib into the plugin JAR
 tasks.register('fatJar', Jar) {
     dependsOn configurations.runtimeClasspath

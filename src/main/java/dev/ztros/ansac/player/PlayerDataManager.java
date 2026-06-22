@@ -3,6 +3,7 @@ package dev.ztros.ansac.player;
 import dev.ztros.ansac.ANSACPlugin;
 import org.bukkit.entity.Player;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -78,6 +79,13 @@ public class PlayerDataManager {
         for (PlayerData data : playerDataMap.values()) {
             data.updatePing();
         }
+    }
+
+    /**
+     * Get all player data values for iteration (thread-safe snapshot)
+     */
+    public Collection<PlayerData> playerDataMapValues() {
+        return playerDataMap.values();
     }
 
     /**

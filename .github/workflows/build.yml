@@ -134,11 +134,8 @@ jobs:
       run: gradle clean fatJar --no-daemon --no-build-cache
 
     - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v2
+      with:
+        files: build/libs/ANSAC-AntiCheat-*.jar
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: build/libs/ANSAC-AntiCheat-*.jar
-        asset_name: ANSAC-AntiCheat.jar
-        asset_content_type: application/java-archive

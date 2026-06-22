@@ -3,6 +3,8 @@ package dev.ztros.ansac.checks.violation;
 import lombok.Getter;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Thread-safe violation tracking for individual checks.
@@ -14,16 +16,12 @@ public class ViolationData {
 
     private final AtomicInteger violationLevel = new AtomicInteger(0);
 
-    @Getter
-    private long lastViolationTime;
+    private final AtomicLong lastViolationTime = new AtomicLong(0);
 
-    @Getter
-    private double highestSeverity;
+    private final AtomicReference<Double> highestSeverity = new AtomicReference<>(0.0);
 
     public ViolationData(String checkName) {
         this.checkName = checkName;
-        this.lastViolationTime = 0;
-        this.highestSeverity = 0.0;
     }
 
     /**
@@ -31,10 +29,9 @@ public class ViolationData {
      */
     public void addViolation(double severity) {
         violationLevel.incrementAndGet();
-        lastViolationTime = System.currentTimeMillis();
-        if (severity > highestSeverity) {
-            highestSeverity = severity;
-        }
+        lastViolationTime.set(System.currentTimeMillis());
+        // Thread-safe max update
+        highestSeverity.updateAndGet(current -> Math.max(current, severity));
     }
 
     /**
@@ -45,14 +42,30 @@ public class ViolationData {
     }
 
     /**
-     * Decay violations (called periodically)
+     * Get last violation time
+     */
+    public long getLastViolationTime() {
+        return lastViolationTime.get();
+    }
+
+    /**
+     * Get highest severity
+     */
+    public double getHighestSeverity() {
+        return highestSeverity.get();
+    }
+
+    /**
+     * Decay violations using atomic compare-and-set loop.
      */
     public void decay(double factor) {
-        int current = violationLevel.get();
-        if (current > 0) {
-            int newVL = (int) Math.max(0, current * factor);
-            violationLevel.set(newVL);
-        }
+        int current;
+        int newVL;
+        do {
+            current = violationLevel.get();
+            if (current <= 0) return;
+            newVL = (int) Math.max(0, current * factor);
+        } while (!violationLevel.compareAndSet(current, newVL));
     }
 
     /**
@@ -60,13 +73,13 @@ public class ViolationData {
      */
     public void reset() {
         violationLevel.set(0);
-        highestSeverity = 0.0;
+        highestSeverity.set(0.0);
     }
 
     /**
      * Check if violations should decay based on time
      */
     public boolean shouldDecay(long decayMillis) {
-        return System.currentTimeMillis() - lastViolationTime > decayMillis;
+        return System.currentTimeMillis() - lastViolationTime.get() > decayMillis;
     }
 }
