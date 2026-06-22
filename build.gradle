@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'dev.ztros.ansac'
@@ -26,7 +27,7 @@ dependencies {
     compileOnly 'com.github.retrooper:packetevents-api:2.7.0'
     compileOnly 'com.github.retrooper:packetevents-spigot:2.7.0'
 
-    // FoliaLib - bundled into the plugin JAR
+    // FoliaLib - bundled into the plugin JAR via Shadow
     implementation 'com.tcoded:FoliaLib:0.5.1'
 
     // Lombok - compile time only
@@ -41,31 +42,24 @@ processResources {
     }
 }
 
-// Custom JAR task that merges FoliaLib into the plugin JAR
-tasks.register('fatJar', Jar) {
-    dependsOn configurations.runtimeClasspath
+shadowJar {
     archiveClassifier = ''
     archiveFileName = 'ANSAC-AntiCheat-' + project.version + '.jar'
 
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // Relocate FoliaLib to prevent conflicts
+    relocate 'com.tcoded.folialib', 'dev.ztros.ansac.lib.folialib'
 
-    from sourceSets.main.output
+    // Exclude unnecessary metadata
+    exclude 'META-INF/**'
+}
 
-    // Include FoliaLib classes, relocated
-    from(configurations.runtimeClasspath.files.collect { zipTree(it) }) {
-        exclude 'META-INF/**'
-        eachFile { fcd ->
-            // Relocate FoliaLib package
-            def path = fcd.relativePath.pathString.replace('\\', '/')
-            if (path.startsWith('com/tcoded/folialib')) {
-                fcd.relativePath = path.replace('com/tcoded/folialib', 'dev/ztros/ansac/lib/folialib')
-            }
-        }
-    }
+// Alias fatJar to shadowJar for compatibility
+tasks.register('fatJar') {
+    dependsOn tasks.shadowJar
 }
 
 tasks.named('build') {
-    dependsOn tasks.named('fatJar')
+    dependsOn tasks.named('shadowJar')
 }
 
 tasks.named('compileJava') {
