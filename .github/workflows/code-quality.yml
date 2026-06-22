@@ -25,10 +25,11 @@ jobs:
       with:
         gradle-version: '8.5'
 
+    - name: Clear corrupted dependency cache
+      run: rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.tcoded/
+
     - name: Compile check
-      run: |
-        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.tcoded/
-        gradle clean build --no-daemon
+      run: gradle clean build --no-daemon
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
