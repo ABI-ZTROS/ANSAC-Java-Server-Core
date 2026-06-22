@@ -6,12 +6,13 @@ import dev.ztros.ansac.ANSACPlugin;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Cross-platform scheduler adapter for Folia and Paper/Spigot.
  * Uses FoliaLib internally to handle platform differences.
- * Adapted for FoliaLib 0.4.3 API (Consumer<WrappedTask> based).
+ * Adapted for FoliaLib 0.4.3 API.
  */
 public class SchedulerAdapter {
 
@@ -59,38 +60,41 @@ public class SchedulerAdapter {
     }
 
     /**
-     * Run delayed task (ticks)
+     * Run delayed task (ticks). Returns a CompletableFuture that completes when the task finishes.
      */
-    public WrappedTask runLater(Runnable task, long delayTicks) {
+    public CompletableFuture<Void> runLater(Runnable task, long delayTicks) {
         return foliaLib.getImpl().runLater(wrappedTask -> task.run(), delayTicks);
     }
 
     /**
-     * Run delayed task at location (ticks)
+     * Run delayed task at location (ticks). Returns a CompletableFuture that completes when the task finishes.
      */
-    public WrappedTask runLaterAtLocation(Location location, Runnable task, long delayTicks) {
+    public CompletableFuture<Void> runLaterAtLocation(Location location, Runnable task, long delayTicks) {
         return foliaLib.getImpl().runAtLocationLater(location, wrappedTask -> task.run(), delayTicks);
     }
 
     /**
-     * Run repeating timer task (ticks)
+     * Run repeating timer task (ticks).
+     * Note: FoliaLib timer methods return void; the task runs until cancelled.
      */
-    public WrappedTask runTimer(Runnable task, long delayTicks, long periodTicks) {
-        return foliaLib.getImpl().runTimer(wrappedTask -> task.run(), delayTicks, periodTicks);
+    public void runTimer(Runnable task, long delayTicks, long periodTicks) {
+        foliaLib.getImpl().runTimer(wrappedTask -> task.run(), delayTicks, periodTicks);
     }
 
     /**
-     * Run repeating timer task at location (ticks)
+     * Run repeating timer task at location (ticks).
+     * Note: FoliaLib timer methods return void; the task runs until cancelled.
      */
-    public WrappedTask runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
-        return foliaLib.getImpl().runAtLocationTimer(location, wrappedTask -> task.run(), delayTicks, periodTicks);
+    public void runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
+        foliaLib.getImpl().runAtLocationTimer(location, wrappedTask -> task.run(), delayTicks, periodTicks);
     }
 
     /**
-     * Run timer with TimeUnit (for async operations)
+     * Run timer with TimeUnit (for async operations).
+     * Note: FoliaLib timer methods return void; the task runs until cancelled.
      */
-    public WrappedTask runTimerAsync(Runnable task, long delay, long period, TimeUnit unit) {
-        return foliaLib.getImpl().runTimerAsync(wrappedTask -> task.run(), delay, period, unit);
+    public void runTimerAsync(Runnable task, long delay, long period, TimeUnit unit) {
+        foliaLib.getImpl().runTimerAsync(wrappedTask -> task.run(), delay, period, unit);
     }
 
     /**

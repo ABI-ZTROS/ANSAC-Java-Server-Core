@@ -12,6 +12,7 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Manages all anti-cheat checks.
@@ -93,7 +94,7 @@ public class CheckManager {
                     }
                 });
             }
-        }, decayInterval * 20L, decayInterval * 20L);
+        }, decayInterval, decayInterval, TimeUnit.SECONDS);
 
         // Ping update task (runs every N seconds)
         plugin.getSchedulerAdapter().runTimerAsync(() -> {
@@ -105,7 +106,7 @@ public class CheckManager {
                     });
                 }
             }
-        }, pingInterval * 20L, pingInterval * 20L);
+        }, pingInterval, pingInterval, TimeUnit.SECONDS);
     }
 
     /**
