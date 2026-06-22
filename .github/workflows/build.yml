@@ -31,7 +31,10 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build with Gradle
-      run: gradle clean build --no-daemon
+      run: |
+        # Clear potentially corrupted FoliaLib cache
+        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.github.TechnicallyCoded/
+        gradle clean build --no-daemon
 
     - name: Run tests
       run: gradle test --no-daemon
@@ -64,7 +67,9 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build release JAR
-      run: gradle clean fatJar --no-daemon
+      run: |
+        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.github.TechnicallyCoded/
+        gradle clean fatJar --no-daemon
 
     - name: Verify JAR
       run: |

@@ -27,7 +27,9 @@ jobs:
         gradle-version: '8.5'
 
     - name: Build plugin
-      run: gradle fatJar --no-daemon
+      run: |
+        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.github.TechnicallyCoded/
+        gradle fatJar --no-daemon
 
     - name: Download Folia 1.20.4
       run: |
