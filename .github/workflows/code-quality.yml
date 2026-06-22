@@ -27,7 +27,7 @@ jobs:
 
     - name: Compile check
       run: |
-        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.github.TechnicallyCoded/
+        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.tcoded/
         gradle clean build --no-daemon
 
     - name: Upload build artifacts

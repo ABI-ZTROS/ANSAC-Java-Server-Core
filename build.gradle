@@ -17,7 +17,7 @@ repositories {
     mavenCentral()
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://repo.codemc.io/repository/maven-public/' }
-    maven { url = 'https://jitpack.io' }
+    maven { url = 'https://repo.tcoded.com/releases' }
 }
 
 dependencies {
@@ -27,7 +27,7 @@ dependencies {
     compileOnly 'com.github.retrooper:packetevents-spigot:2.7.0'
 
     // FoliaLib - bundled into the plugin JAR
-    implementation 'com.github.TechnicallyCoded:FoliaLib:0.4.3'
+    implementation 'com.tcoded:FoliaLib:0.5.1'
 
     // Lombok - compile time only
     compileOnly 'org.projectlombok:lombok:1.18.30'

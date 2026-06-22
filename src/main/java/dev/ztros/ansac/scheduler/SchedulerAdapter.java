@@ -1,18 +1,16 @@
 package dev.ztros.ansac.scheduler;
 
 import com.tcoded.folialib.FoliaLib;
-import com.tcoded.folialib.wrapper.task.WrappedTask;
 import dev.ztros.ansac.ANSACPlugin;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Cross-platform scheduler adapter for Folia and Paper/Spigot.
  * Uses FoliaLib internally to handle platform differences.
- * Adapted for FoliaLib 0.4.3 API.
+ * Adapted for FoliaLib 0.5.1 API (getScheduler() with direct Runnable methods).
  */
 public class SchedulerAdapter {
 
@@ -35,72 +33,69 @@ public class SchedulerAdapter {
      * Run task on the next tick (GlobalRegionScheduler on Folia, main thread on Paper)
      */
     public void runNextTick(Runnable task) {
-        foliaLib.getImpl().runNextTick(wrappedTask -> task.run());
+        foliaLib.getScheduler().runNextTick(task);
     }
 
     /**
      * Run task asynchronously
      */
     public void runAsync(Runnable task) {
-        foliaLib.getImpl().runAsync(wrappedTask -> task.run());
+        foliaLib.getScheduler().runAsync(task);
     }
 
     /**
      * Run task at a specific location (uses RegionScheduler on Folia)
      */
     public void runAtLocation(Location location, Runnable task) {
-        foliaLib.getImpl().runAtLocation(location, wrappedTask -> task.run());
+        foliaLib.getScheduler().runAtLocation(location, task);
     }
 
     /**
      * Run task tied to an entity (uses EntityScheduler on Folia)
      */
     public void runAtEntity(Entity entity, Runnable task) {
-        foliaLib.getImpl().runAtEntity(entity, wrappedTask -> task.run());
+        foliaLib.getScheduler().runAtEntity(entity, task);
     }
 
     /**
-     * Run delayed task (ticks). Returns a CompletableFuture that completes when the task finishes.
+     * Run delayed task (ticks)
      */
-    public CompletableFuture<Void> runLater(Runnable task, long delayTicks) {
-        return foliaLib.getImpl().runLater(wrappedTask -> task.run(), delayTicks);
+    public void runLater(Runnable task, long delayTicks) {
+        foliaLib.getScheduler().runLater(task, delayTicks);
     }
 
     /**
-     * Run delayed task at location (ticks). Returns a CompletableFuture that completes when the task finishes.
+     * Run delayed task at location (ticks)
      */
-    public CompletableFuture<Void> runLaterAtLocation(Location location, Runnable task, long delayTicks) {
-        return foliaLib.getImpl().runAtLocationLater(location, wrappedTask -> task.run(), delayTicks);
+    public void runLaterAtLocation(Location location, Runnable task, long delayTicks) {
+        foliaLib.getScheduler().runAtLocationLater(location, task, delayTicks);
     }
 
     /**
-     * Run repeating timer task (ticks).
-     * Note: FoliaLib timer methods return void; the task runs until cancelled.
+     * Run repeating timer task (ticks)
      */
     public void runTimer(Runnable task, long delayTicks, long periodTicks) {
-        foliaLib.getImpl().runTimer(wrappedTask -> task.run(), delayTicks, periodTicks);
+        foliaLib.getScheduler().runTimer(task, delayTicks, periodTicks);
     }
 
     /**
-     * Run repeating timer task at location (ticks).
-     * Note: FoliaLib timer methods return void; the task runs until cancelled.
+     * Run repeating timer task at location (ticks)
      */
     public void runTimerAtLocation(Location location, Runnable task, long delayTicks, long periodTicks) {
-        foliaLib.getImpl().runAtLocationTimer(location, wrappedTask -> task.run(), delayTicks, periodTicks);
+        foliaLib.getScheduler().runAtLocationTimer(location, task, delayTicks, periodTicks);
     }
 
     /**
-     * Run timer with TimeUnit (for async operations).
-     * Note: FoliaLib timer methods return void; the task runs until cancelled.
+     * Run timer with TimeUnit (for async operations)
      */
     public void runTimerAsync(Runnable task, long delay, long period, TimeUnit unit) {
-        foliaLib.getImpl().runTimerAsync(wrappedTask -> task.run(), delay, period, unit);
+        foliaLib.getScheduler().runTimerAsync(task, delay, period, unit);
     }
 
     /**
      * Cancel all tasks for this plugin
      */
     public void cancelAllTasks() {
-        foliaLib.getImpl().cancelAllTasks();
+        foliaLib.getScheduler().cancelAllTasks();
     }
 }

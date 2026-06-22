@@ -28,7 +28,7 @@ jobs:
 
     - name: Build plugin
       run: |
-        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.github.TechnicallyCoded/
+        rm -rf $HOME/.gradle/caches/modules-2/files-2.1/com.tcoded/
         gradle fatJar --no-daemon
 
     - name: Download Folia 1.20.4
