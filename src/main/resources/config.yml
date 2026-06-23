@@ -71,3 +71,24 @@ checks:
       max-vl: 10
       setback-threshold: 3.0
       alert-threshold: 1.0
+
+# ==========================================
+# Authentication Module
+# ==========================================
+
+auth:
+  enabled: true
+  login-timeout: 120
+  same-ip-timeout: 5
+  auto-kick: true
+  restrict-movement: true
+  restrict-interaction: true
+  restrict-chat: true
+  restrict-commands: true
+  restrict-inventory: true
+  restrict-items: true
+  command-whitelist:
+    - "^/(login|l|register|reg|changepassword|changepwd|logout)$"
+  proxy:
+    enabled: false
+    type: auto
