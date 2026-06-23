@@ -60,6 +60,11 @@ public class CheckManager {
                 PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
                 if (data == null || data.hasBypass()) continue;
 
+                // Skip anti-cheat checks for unauthenticated players
+                if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(player.getUniqueId())) {
+                    continue;
+                }
+
                 // Use runAtEntity to ensure thread safety on Folia
                 plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                     for (Check check : checks) {
@@ -116,6 +121,11 @@ public class CheckManager {
     public void processPlayer(Player player) {
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
         if (data == null || data.hasBypass()) return;
+
+        // Skip anti-cheat checks for unauthenticated players
+        if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(player.getUniqueId())) {
+            return;
+        }
 
         for (Check check : checks) {
             if (check.isEnabled()) {

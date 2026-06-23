@@ -103,6 +103,19 @@ public class ANSACCommand implements CommandExecutor {
             Component.text("Server Type: ", NamedTextColor.YELLOW)
                 .append(Component.text(plugin.getSchedulerAdapter().isFolia() ? "Folia" : "Paper/Spigot", NamedTextColor.WHITE))
         );
+
+        // Auth module status
+        sender.sendMessage(Component.text("--- Auth Module ---", NamedTextColor.GOLD));
+        sender.sendMessage(
+            Component.text("Auth Enabled: ", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(plugin.getAuthService().isEnabled()), NamedTextColor.WHITE))
+        );
+        if (plugin.getAuthService().isEnabled()) {
+            sender.sendMessage(
+                Component.text("Auth Mode: ", NamedTextColor.YELLOW)
+                    .append(Component.text("Install-and-Play (bundled)", NamedTextColor.WHITE))
+            );
+        }
     }
 
     private void sendPlayerInfo(CommandSender sender, String playerName) {

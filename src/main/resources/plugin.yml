@@ -1,11 +1,31 @@
 name: ANSAC
 version: ${version}
 main: dev.ztros.ansac.ANSACPlugin
-description: 'Advanced Network Security Anti-Cheat for Folia'
+description: 'Advanced Network Security Anti-Cheat for Folia with built-in authentication'
 author: ZTROS-Team
 website: https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core
 folia-supported: true
 api-version: '1.21'
+
+commands:
+  ansac:
+    description: ANSAC anti-cheat commands
+    usage: /<command> [reload|status|info]
+  login:
+    description: Login to your account
+    usage: /<command> <password>
+    aliases: [l]
+  register:
+    description: Register a new account
+    usage: /<command> <password> <confirm>
+    aliases: [reg]
+  changepassword:
+    description: Change your password
+    usage: /<command> <old> <new>
+    aliases: [changepwd]
+  logout:
+    description: Logout from your account
+    usage: /<command>
 
 permissions:
   ansac.bypass:

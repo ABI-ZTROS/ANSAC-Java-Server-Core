@@ -1,6 +1,9 @@
 package dev.ztros.ansac;
 
 import com.tcoded.folialib.FoliaLib;
+import dev.ztros.ansac.auth.AuthCommand;
+import dev.ztros.ansac.auth.AuthListener;
+import dev.ztros.ansac.auth.AuthService;
 import dev.ztros.ansac.checks.CheckManager;
 import dev.ztros.ansac.config.ANSACConfig;
 import dev.ztros.ansac.listeners.PacketListener;
@@ -30,6 +33,9 @@ public class ANSACPlugin extends JavaPlugin {
     @Getter
     private ANSACConfig ansacConfig;
 
+    @Getter
+    private AuthService authService;
+
     @Override
     public void onEnable() {
         instance = this;
@@ -48,6 +54,17 @@ public class ANSACPlugin extends JavaPlugin {
         saveDefaultConfig();
         this.ansacConfig = new ANSACConfig(this);
 
+        // Initialize authentication module
+        this.authService = new AuthService(this);
+        if (authService.isEnabled()) {
+            getServer().getPluginManager().registerEvents(
+                new AuthListener(this, authService), this
+            );
+            getLogger().info("Authentication module enabled.");
+        } else {
+            getLogger().info("Authentication module disabled.");
+        }
+
         // Initialize managers
         this.playerDataManager = new PlayerDataManager(this);
         this.checkManager = new CheckManager(this);
@@ -62,11 +79,28 @@ public class ANSACPlugin extends JavaPlugin {
         // Register commands
         getCommand("ansac").setExecutor(new ANSACCommand(this));
 
+        // Register auth commands
+        if (authService.isEnabled()) {
+            var authCommand = new AuthCommand(this, authService);
+            var loginCmd = getCommand("login");
+            var registerCmd = getCommand("register");
+            var changepwdCmd = getCommand("changepassword");
+            var logoutCmd = getCommand("logout");
+            if (loginCmd != null) loginCmd.setExecutor(authCommand);
+            if (registerCmd != null) registerCmd.setExecutor(authCommand);
+            if (changepwdCmd != null) changepwdCmd.setExecutor(authCommand);
+            if (logoutCmd != null) logoutCmd.setExecutor(authCommand);
+        }
+
         getLogger().info("ANSAC has been enabled successfully!");
     }
 
     @Override
     public void onDisable() {
+        if (authService != null) {
+            authService.shutdown();
+        }
+
         if (playerDataManager != null) {
             playerDataManager.shutdown();
         }
@@ -82,6 +116,9 @@ public class ANSACPlugin extends JavaPlugin {
         reloadConfig();
         ansacConfig.load();
         checkManager.reload();
+        if (authService != null) {
+            authService.reload();
+        }
         getLogger().info("ANSAC configuration reloaded.");
     }
 }

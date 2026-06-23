@@ -27,6 +27,16 @@ public class PlayerListener implements Listener {
         plugin.getSchedulerAdapter().runNextTick(() -> {
             plugin.getPlayerDataManager().createPlayerData(event.getPlayer());
             plugin.getLogger().info("Tracking player: " + event.getPlayer().getName());
+
+            // Notify auth service
+            if (plugin.getAuthService().isEnabled()) {
+                String ip = event.getPlayer().getAddress().getAddress().getHostAddress();
+                plugin.getAuthService().handlePlayerJoin(
+                    event.getPlayer().getUniqueId(),
+                    event.getPlayer().getName(),
+                    ip
+                );
+            }
         });
     }
 
@@ -34,6 +44,11 @@ public class PlayerListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         plugin.getSchedulerAdapter().runNextTick(() -> {
             plugin.getPlayerDataManager().removePlayerData(event.getPlayer());
+
+            // Notify auth service
+            if (plugin.getAuthService().isEnabled()) {
+                plugin.getAuthService().handlePlayerQuit(event.getPlayer().getUniqueId());
+            }
         });
     }
 

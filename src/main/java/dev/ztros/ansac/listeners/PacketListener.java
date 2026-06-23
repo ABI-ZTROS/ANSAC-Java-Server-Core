@@ -41,6 +41,11 @@ public class PacketListener extends PacketListenerAbstract {
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
         if (data == null || data.hasBypass()) return;
 
+        // Skip packet checks for unauthenticated players
+        if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(player.getUniqueId())) {
+            return;
+        }
+
         // Handle flying packets (movement)
         if (isFlyingPacket(event)) {
             handleFlyingPacket(player, data, event);
