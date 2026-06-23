@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class LoginSession {
 
@@ -12,41 +14,30 @@ public class LoginSession {
 
     @Getter
     @Setter
-    private String playerName;
+    private volatile String playerName;
 
     @Getter
     @Setter
-    private String ip;
+    private volatile String ip;
+
+    @Getter
+    private volatile boolean authenticated;
 
     @Getter
     @Setter
-    private boolean authenticated;
+    private volatile boolean registered;
 
-    @Getter
-    @Setter
-    private boolean registered;
-
-    @Getter
-    @Setter
-    private long joinTime;
-
-    @Getter
-    @Setter
-    private long loginTime;
-
-    @Getter
-    @Setter
-    private int failedAttempts;
+    private final long joinTime;
+    private final AtomicLong loginTime = new AtomicLong(0);
+    private final AtomicInteger failedAttempts = new AtomicInteger(0);
 
     public LoginSession(UUID uuid, String playerName, String ip) {
         this.uuid = uuid;
         this.playerName = playerName;
         this.ip = ip;
         this.joinTime = System.currentTimeMillis();
-        this.loginTime = 0;
         this.authenticated = false;
         this.registered = false;
-        this.failedAttempts = 0;
     }
 
     public long getElapsedSeconds() {
@@ -55,10 +46,26 @@ public class LoginSession {
 
     public void markAuthenticated() {
         this.authenticated = true;
-        this.loginTime = System.currentTimeMillis();
+        this.loginTime.set(System.currentTimeMillis());
+    }
+
+    public long getLoginTime() {
+        return loginTime.get();
+    }
+
+    public void setLoginTime(long loginTime) {
+        this.loginTime.set(loginTime);
+    }
+
+    public int getFailedAttempts() {
+        return failedAttempts.get();
+    }
+
+    public void setFailedAttempts(int failedAttempts) {
+        this.failedAttempts.set(failedAttempts);
     }
 
     public void incrementFailedAttempts() {
-        this.failedAttempts++;
+        this.failedAttempts.incrementAndGet();
     }
 }
