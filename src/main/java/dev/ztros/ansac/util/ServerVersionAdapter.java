@@ -18,6 +18,7 @@ public final class ServerVersionAdapter {
 
     private static final boolean HAS_KICK_COMPONENT;
     private static final boolean HAS_JUMP_BOOST;
+    private static PotionEffectType JUMP_EFFECT_TYPE;
 
     private static Method KICK_COMPONENT_METHOD;
 
@@ -25,8 +26,6 @@ public final class ServerVersionAdapter {
         // Detect Bukkit API version
         String version = "";
         try {
-            Package pkg = ServerVersionAdapter.class.getPackage();
-            // Try to get version from Bukkit
             Class<?> bukkitClass = Class.forName("org.bukkit.Bukkit");
             Method getVersion = bukkitClass.getMethod("getVersion");
             version = (String) getVersion.invoke(null);
@@ -46,14 +45,26 @@ public final class ServerVersionAdapter {
         HAS_KICK_COMPONENT = hasKickComponent;
 
         // Detect PotionEffectType.JUMP_BOOST availability (renamed in 1.20.6+)
+        // Use reflection to avoid compile-time errors on either naming
+        PotionEffectType jumpType = null;
         boolean hasJumpBoost = false;
         try {
-            PotionEffectType.class.getField("JUMP_BOOST");
+            Field field = PotionEffectType.class.getField("JUMP_BOOST");
+            jumpType = (PotionEffectType) field.get(null);
             hasJumpBoost = true;
         } catch (NoSuchFieldException e) {
-            hasJumpBoost = false;
+            // Pre-1.20.6: try legacy JUMP field via reflection
+            try {
+                Field field = PotionEffectType.class.getField("JUMP");
+                jumpType = (PotionEffectType) field.get(null);
+            } catch (Exception ex) {
+                // Neither field found
+            }
+        } catch (Exception e) {
+            // Error accessing JUMP_BOOST
         }
         HAS_JUMP_BOOST = hasJumpBoost;
+        JUMP_EFFECT_TYPE = jumpType;
     }
 
     private ServerVersionAdapter() {}
@@ -88,17 +99,10 @@ public final class ServerVersionAdapter {
     /**
      * Get the JUMP_BOOST potion effect type.
      * Uses JUMP_BOOST on 1.20.6+, falls back to JUMP on older versions.
+     * All resolved via reflection at class load time to avoid compile-time errors.
      */
     public static PotionEffectType getJumpBoost() {
-        if (HAS_JUMP_BOOST) {
-            return PotionEffectType.JUMP_BOOST;
-        }
-        // Fallback for pre-1.20.6
-        try {
-            return PotionEffectType.JUMP;
-        } catch (Exception e) {
-            return null;
-        }
+        return JUMP_EFFECT_TYPE;
     }
 
     /**
