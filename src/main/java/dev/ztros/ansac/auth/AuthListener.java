@@ -1,6 +1,7 @@
 package dev.ztros.ansac.auth;
 
 import dev.ztros.ansac.ANSACPlugin;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -15,6 +16,8 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.*;
 
 public class AuthListener implements Listener {
+
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
 
     private final ANSACPlugin plugin;
     private final AuthService authService;
@@ -65,6 +68,9 @@ public class AuthListener implements Listener {
         }
 
         event.setCancelled(true);
+        event.getPlayer().sendMessage(MINI_MESSAGE.deserialize(
+                "<gray>[<aqua>ANSAC</gray>] <yellow>Please login first. Usage: <white>/register <password> <confirm><yellow> or <white>/login <password>"
+        ));
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)

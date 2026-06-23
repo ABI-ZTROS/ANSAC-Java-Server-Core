@@ -13,6 +13,8 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.logging.Level;
 
 public class AuthService {
 
@@ -40,6 +42,9 @@ public class AuthService {
 
         database.initialize().thenRun(() -> {
             plugin.getLogger().info("Authentication module initialized.");
+        }).exceptionally(ex -> {
+            plugin.getLogger().log(Level.SEVERE, "Failed to initialize auth database!", ex);
+            return null;
         });
     }
 
@@ -96,7 +101,15 @@ public class AuthService {
                 session.setRegistered(true);
                 sessionManager.markAuthenticated(uuid);
                 future.complete("<green>[ANSAC] <gray>Registration successful. You are now logged in.");
+            }).exceptionally(ex -> {
+                future.complete("<red>[ANSAC] <gray>Registration failed due to a database error. Please contact an admin.");
+                plugin.getLogger().log(Level.SEVERE, "Failed to save registration for " + playerName, ex);
+                return null;
             });
+        }).exceptionally(ex -> {
+            future.complete("<red>[ANSAC] <gray>Registration failed due to a database error. Please contact an admin.");
+            plugin.getLogger().log(Level.SEVERE, "Failed to check registration for " + playerName, ex);
+            return null;
         });
 
         return future;
@@ -147,6 +160,10 @@ public class AuthService {
                     future.complete("<red>[ANSAC] <gray>Incorrect password. Attempts remaining: <white>" + (5 - attempts));
                 }
             }
+        }).exceptionally(ex -> {
+            future.complete("<red>[ANSAC] <gray>Login failed due to a database error. Please contact an admin.");
+            plugin.getLogger().log(Level.SEVERE, "Failed to fetch password hash for login", ex);
+            return null;
         });
 
         return future;
@@ -183,7 +200,15 @@ public class AuthService {
 
             database.savePassword(uuid, name, newHash, ip).thenRun(() -> {
                 future.complete("<green>[ANSAC] <gray>Password changed successfully.");
+            }).exceptionally(ex -> {
+                future.complete("<red>[ANSAC] <gray>Password change failed due to a database error.");
+                plugin.getLogger().log(Level.SEVERE, "Failed to save new password", ex);
+                return null;
             });
+        }).exceptionally(ex -> {
+            future.complete("<red>[ANSAC] <gray>Password change failed due to a database error.");
+            plugin.getLogger().log(Level.SEVERE, "Failed to fetch password hash for change", ex);
+            return null;
         });
 
         return future;
