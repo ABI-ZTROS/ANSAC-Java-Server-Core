@@ -78,8 +78,8 @@ public class FlyCheck extends Check {
                 predicted = JUMP_VELOCITY;
 
                 // Jump boost potion
-                if (player.hasPotionEffect(PotionEffectType.JUMP)) {
-                    int level = player.getPotionEffect(PotionEffectType.JUMP).getAmplifier() + 1;
+                if (player.hasPotionEffect(PotionEffectType.JUMP_BOOST)) {
+                    int level = player.getPotionEffect(PotionEffectType.JUMP_BOOST).getAmplifier() + 1;
                     predicted += level * 0.1;
                 }
             }
