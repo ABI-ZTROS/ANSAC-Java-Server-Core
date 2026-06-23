@@ -24,11 +24,16 @@ repositories {
 dependencies {
     // Server API (provided at runtime) - Folia 1.21.4
     compileOnly 'dev.folia:folia-api:1.21.4-R0.1-SNAPSHOT'
-    compileOnly 'com.github.retrooper:packetevents-api:2.12.2'
-    compileOnly 'com.github.retrooper:packetevents-spigot:2.12.2'
+    implementation 'com.github.retrooper:packetevents-api:2.12.2'
+    implementation 'com.github.retrooper:packetevents-spigot:2.12.2'
 
     // FoliaLib - bundled into the plugin JAR via Shadow
     implementation 'com.tcoded:FoliaLib:0.5.1'
+
+    // Authentication & Database - bundled into the plugin JAR via Shadow
+    implementation 'org.mindrot:jbcrypt:0.4.4'
+    implementation 'com.zaxxer:HikariCP:5.1.0'
+    implementation 'org.xerial:sqlite-jdbc:3.45.2.0'
 
     // Lombok - compile time only
     compileOnly 'org.projectlombok:lombok:1.18.30'
@@ -48,6 +53,15 @@ shadowJar {
 
     // Relocate FoliaLib to prevent conflicts
     relocate 'com.tcoded.folialib', 'dev.ztros.ansac.lib.folialib'
+
+    // Relocate PacketEvents to prevent conflicts
+    relocate 'io.github.retrooper.packetevents', 'dev.ztros.ansac.lib.packetevents'
+    relocate 'com.github.retrooper.packetevents', 'dev.ztros.ansac.lib.packetevents'
+
+    // Relocate authentication & database libs to prevent conflicts
+    relocate 'org.mindrot.jbcrypt', 'dev.ztros.ansac.lib.jbcrypt'
+    relocate 'com.zaxxer.hikari', 'dev.ztros.ansac.lib.hikari'
+    relocate 'org.sqlite', 'dev.ztros.ansac.lib.sqlite'
 
     // Exclude unnecessary metadata
     exclude 'META-INF/**'

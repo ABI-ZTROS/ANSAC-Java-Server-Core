@@ -7,9 +7,6 @@ website: https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core
 folia-supported: true
 api-version: '1.21'
 
-softdepend:
-  - packetevents
-
 permissions:
   ansac.bypass:
     description: Bypass all ANSAC checks

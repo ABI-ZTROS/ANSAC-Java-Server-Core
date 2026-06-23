@@ -55,13 +55,9 @@ public class ANSACPlugin extends JavaPlugin {
         // Register listeners
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
 
-        // Register packet listener if PacketEvents is available
-        if (getServer().getPluginManager().getPlugin("packetevents") != null) {
-            new PacketListener(this).register();
-            getLogger().info("PacketEvents integration enabled.");
-        } else {
-            getLogger().warning("PacketEvents not found! Some checks will be disabled.");
-        }
+        // Register packet listener (PacketEvents is now bundled)
+        new PacketListener(this).register();
+        getLogger().info("PacketEvents integration enabled.");
 
         // Register commands
         getCommand("ansac").setExecutor(new ANSACCommand(this));
