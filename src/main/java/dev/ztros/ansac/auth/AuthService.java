@@ -7,6 +7,7 @@ import dev.ztros.ansac.auth.database.SQLiteDatabase;
 import dev.ztros.ansac.auth.proxy.ProxyManager;
 import dev.ztros.ansac.auth.session.LoginSession;
 import dev.ztros.ansac.auth.session.SessionManager;
+import dev.ztros.ansac.util.ServerVersionAdapter;
 import lombok.Getter;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
@@ -136,7 +137,7 @@ public class AuthService {
                     var player = plugin.getServer().getPlayer(uuid);
                     if (player != null && player.isOnline()) {
                         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-                            player.kick(MINI_MESSAGE.deserialize(
+                            ServerVersionAdapter.kickPlayer(player, MINI_MESSAGE.deserialize(
                                 "<red>[ANSAC] <gray>Too many failed login attempts."
                             ));
                         });

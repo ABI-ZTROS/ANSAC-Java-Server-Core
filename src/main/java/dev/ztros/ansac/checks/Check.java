@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.player.PlayerData;
+import dev.ztros.ansac.util.ServerVersionAdapter;
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -137,7 +138,7 @@ public abstract class Check {
         );
 
         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-            player.kick(kickMessage);
+            ServerVersionAdapter.kickPlayer(player, kickMessage);
         });
 
         plugin.getLogger().warning("[PUNISH] " + player.getName() + " was kicked for " + name + " (VL: " + vl + ")");

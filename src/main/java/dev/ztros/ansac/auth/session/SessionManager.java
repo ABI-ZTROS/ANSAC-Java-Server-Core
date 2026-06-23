@@ -3,6 +3,7 @@ package dev.ztros.ansac.auth.session;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.auth.AuthConfig;
 import dev.ztros.ansac.auth.database.AuthDatabase;
+import dev.ztros.ansac.util.ServerVersionAdapter;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
 import java.util.Map;
@@ -111,7 +112,7 @@ public class SessionManager {
                     var player = plugin.getServer().getPlayer(session.getUuid());
                     if (player != null && player.isOnline()) {
                         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-                            player.kick(MINI_MESSAGE.deserialize(
+                            ServerVersionAdapter.kickPlayer(player, MINI_MESSAGE.deserialize(
                                 "<red>[ANSAC] <gray>Login timed out. Please reconnect."
                             ));
                         });
