@@ -2,6 +2,7 @@ package dev.ztros.ansac;
 
 import com.tcoded.folialib.FoliaLib;
 import com.github.retrooper.packetevents.PacketEvents;
+import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
 import dev.ztros.ansac.auth.AuthCommand;
 import dev.ztros.ansac.auth.AuthListener;
 import dev.ztros.ansac.auth.AuthService;
@@ -36,6 +37,14 @@ public class ANSACPlugin extends JavaPlugin {
 
     @Getter
     private AuthService authService;
+
+    @Override
+    public void onLoad() {
+        // PacketEvents is bundled (shaded), so we must create and set the API instance ourselves
+        PacketEvents.setAPI(SpigotPacketEventsBuilder.build(this));
+        PacketEvents.getAPI().load();
+        getLogger().info("PacketEvents loaded (shaded mode).");
+    }
 
     @Override
     public void onEnable() {
@@ -73,8 +82,8 @@ public class ANSACPlugin extends JavaPlugin {
         // Register listeners
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
 
-        // Register packet listener (PacketEvents is bundled, initialize it first)
-        PacketEvents.getAPI().load();
+        // Initialize PacketEvents (load was already called in onLoad)
+        PacketEvents.getAPI().init();
         new PacketListener(this).register();
         getLogger().info("PacketEvents integration enabled.");
 
