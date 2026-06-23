@@ -32,14 +32,14 @@ jobs:
     - name: Build plugin
       run: gradle fatJar --no-daemon
 
-    - name: Download Folia 1.20.4
+    - name: Download Folia 1.21.4
       run: |
         mkdir -p server
         cd server
-        # Download Folia build matching the API version used in build.gradle (1.20.x series)
+        # Download Folia build matching the API version used in build.gradle (1.21.4)
         curl -o folia.jar -L \
-          -H "User-Agent: ANSAC-CI/1.0.0 (https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core)" \
-          "https://api.papermc.io/v2/projects/folia/versions/1.20.4/builds/latest/downloads/folia-1.20.4.jar"
+          -H "User-Agent: ANSAC-CI/1.1.0 (https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core)" \
+          "https://api.papermc.io/v2/projects/folia/versions/1.21.4/builds/latest/downloads/folia-1.21.4.jar"
         ls -la
 
     - name: Setup test server

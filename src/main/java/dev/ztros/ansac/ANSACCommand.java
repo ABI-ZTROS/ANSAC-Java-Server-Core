@@ -1,16 +1,24 @@
 package dev.ztros.ansac;
 
 import dev.ztros.ansac.player.PlayerData;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+/**
+ * ANSAC command handler.
+ * Uses Adventure Component API (required for Paper/Folia 1.21+).
+ */
 public class ANSACCommand implements CommandExecutor {
 
     private final ANSACPlugin plugin;
+    private final MiniMessage miniMessage = MiniMessage.miniMessage();
 
     public ANSACCommand(ANSACPlugin plugin) {
         this.plugin = plugin;
@@ -26,16 +34,16 @@ public class ANSACCommand implements CommandExecutor {
         switch (args[0].toLowerCase()) {
             case "reload":
                 if (!sender.hasPermission("ansac.command.reload")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    sender.sendMessage(Component.text("You don't have permission to use this command.", NamedTextColor.RED));
                     return true;
                 }
                 plugin.reload();
-                sender.sendMessage(ChatColor.GREEN + "ANSAC configuration reloaded successfully.");
+                sender.sendMessage(Component.text("ANSAC configuration reloaded successfully.", NamedTextColor.GREEN));
                 break;
 
             case "status":
                 if (!sender.hasPermission("ansac.command.status")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    sender.sendMessage(Component.text("You don't have permission to use this command.", NamedTextColor.RED));
                     return true;
                 }
                 sendStatus(sender);
@@ -43,11 +51,11 @@ public class ANSACCommand implements CommandExecutor {
 
             case "info":
                 if (!sender.hasPermission("ansac.admin")) {
-                    sender.sendMessage(ChatColor.RED + "You don't have permission to use this command.");
+                    sender.sendMessage(Component.text("You don't have permission to use this command.", NamedTextColor.RED));
                     return true;
                 }
                 if (args.length < 2) {
-                    sender.sendMessage(ChatColor.RED + "Usage: /ansac info <player>");
+                    sender.sendMessage(Component.text("Usage: /ansac info <player>", NamedTextColor.RED));
                     return true;
                 }
                 sendPlayerInfo(sender, args[1]);
@@ -62,36 +70,66 @@ public class ANSACCommand implements CommandExecutor {
     }
 
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(ChatColor.GOLD + "=== ANSAC Anti-Cheat ===");
-        sender.sendMessage(ChatColor.YELLOW + "/ansac reload" + ChatColor.GRAY + " - Reload configuration");
-        sender.sendMessage(ChatColor.YELLOW + "/ansac status" + ChatColor.GRAY + " - View plugin status");
-        sender.sendMessage(ChatColor.YELLOW + "/ansac info <player>" + ChatColor.GRAY + " - View player data");
+        sender.sendMessage(Component.text("=== ANSAC Anti-Cheat ===", NamedTextColor.GOLD));
+        sender.sendMessage(
+            Component.text("/ansac reload", NamedTextColor.YELLOW)
+                .append(Component.text(" - Reload configuration", NamedTextColor.GRAY))
+        );
+        sender.sendMessage(
+            Component.text("/ansac status", NamedTextColor.YELLOW)
+                .append(Component.text(" - View plugin status", NamedTextColor.GRAY))
+        );
+        sender.sendMessage(
+            Component.text("/ansac info <player>", NamedTextColor.YELLOW)
+                .append(Component.text(" - View player data", NamedTextColor.GRAY))
+        );
     }
 
     private void sendStatus(CommandSender sender) {
-        sender.sendMessage(ChatColor.GOLD + "=== ANSAC Status ===");
-        sender.sendMessage(ChatColor.YELLOW + "Version: " + ChatColor.WHITE + plugin.getDescription().getVersion());
-        sender.sendMessage(ChatColor.YELLOW + "Active Players: " + ChatColor.WHITE + plugin.getPlayerDataManager().getPlayerCount());
-        sender.sendMessage(ChatColor.YELLOW + "Checks Enabled: " + ChatColor.WHITE + plugin.getCheckManager().getEnabledChecksCount());
-        sender.sendMessage(ChatColor.YELLOW + "Server Type: " + ChatColor.WHITE + (plugin.getSchedulerAdapter().isFolia() ? "Folia" : "Paper/Spigot"));
+        sender.sendMessage(Component.text("=== ANSAC Status ===", NamedTextColor.GOLD));
+        sender.sendMessage(
+            Component.text("Version: ", NamedTextColor.YELLOW)
+                .append(Component.text(plugin.getDescription().getVersion(), NamedTextColor.WHITE))
+        );
+        sender.sendMessage(
+            Component.text("Active Players: ", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(plugin.getPlayerDataManager().getPlayerCount()), NamedTextColor.WHITE))
+        );
+        sender.sendMessage(
+            Component.text("Checks Enabled: ", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(plugin.getCheckManager().getEnabledChecksCount()), NamedTextColor.WHITE))
+        );
+        sender.sendMessage(
+            Component.text("Server Type: ", NamedTextColor.YELLOW)
+                .append(Component.text(plugin.getSchedulerAdapter().isFolia() ? "Folia" : "Paper/Spigot", NamedTextColor.WHITE))
+        );
     }
 
     private void sendPlayerInfo(CommandSender sender, String playerName) {
         Player player = Bukkit.getPlayer(playerName);
         if (player == null) {
-            sender.sendMessage(ChatColor.RED + "Player not found.");
+            sender.sendMessage(Component.text("Player not found.", NamedTextColor.RED));
             return;
         }
 
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
         if (data == null) {
-            sender.sendMessage(ChatColor.RED + "No data found for this player.");
+            sender.sendMessage(Component.text("No data found for this player.", NamedTextColor.RED));
             return;
         }
 
-        sender.sendMessage(ChatColor.GOLD + "=== Player Info: " + playerName + " ===");
-        sender.sendMessage(ChatColor.YELLOW + "Ping: " + ChatColor.WHITE + data.getPing() + "ms");
-        sender.sendMessage(ChatColor.YELLOW + "VL (Violation Level): " + ChatColor.WHITE + data.getTotalVL());
-        sender.sendMessage(ChatColor.YELLOW + "Checks Failed: " + ChatColor.WHITE + data.getFailedChecksCount());
+        sender.sendMessage(Component.text("=== Player Info: " + playerName + " ===", NamedTextColor.GOLD));
+        sender.sendMessage(
+            Component.text("Ping: ", NamedTextColor.YELLOW)
+                .append(Component.text(data.getPing() + "ms", NamedTextColor.WHITE))
+        );
+        sender.sendMessage(
+            Component.text("VL (Violation Level): ", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(data.getTotalVL()), NamedTextColor.WHITE))
+        );
+        sender.sendMessage(
+            Component.text("Checks Failed: ", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(data.getFailedChecksCount()), NamedTextColor.WHITE))
+        );
     }
 }

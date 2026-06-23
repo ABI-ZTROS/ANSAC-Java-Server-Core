@@ -3,13 +3,19 @@ package dev.ztros.ansac.checks;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.player.PlayerData;
 import lombok.Getter;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.entity.Player;
 
 /**
  * Base class for all anti-cheat checks.
  * Each check monitors a specific type of cheat behavior.
+ * Uses Adventure Component API for messaging (required for Paper/Folia 1.21+).
  */
 public abstract class Check {
+
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
 
     @Getter
     protected final ANSACPlugin plugin;
@@ -85,13 +91,15 @@ public abstract class Check {
     }
 
     /**
-     * Send alert to staff.
+     * Send alert to staff using Adventure Component API.
      * Uses runAtEntity for each staff player to ensure Folia thread safety.
      */
     protected void alert(Player player, int vl, String details) {
-        String message = String.format(
-            "§7[§cANSAC§7] §e%s §7failed §c%s §7(VL: §f%d§7) §8| §7%s",
-            player.getName(), name, vl, details
+        Component message = MINI_MESSAGE.deserialize(
+            "<gray>[<red>ANSAC</gray>] <yellow>" + player.getName() +
+            " <gray>failed <red>" + name +
+            " <gray>(VL: <white>" + vl +
+            "<gray>) <dark_gray>| <gray>" + details
         );
 
         // Use runAtEntity for each staff player to ensure Folia thread safety
@@ -107,22 +115,29 @@ public abstract class Check {
     }
 
     /**
-     * Setback player (teleport back to safe position)
+     * Setback player (teleport back to safe position).
+     * Uses teleportAsync() for Folia 1.21.4+ compatibility (Entity#teleport is deprecated).
      */
     protected void setback(Player player, PlayerData data) {
         if (data.getLastLocation() != null) {
             plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-                player.teleport(data.getLastLocation());
+                player.teleportAsync(data.getLastLocation());
             });
         }
     }
 
     /**
-     * Punish player (kick/ban)
+     * Punish player (kick) using Adventure Component API.
      */
     protected void punish(Player player, PlayerData data, int vl) {
+        Component kickMessage = MINI_MESSAGE.deserialize(
+            "<red>[ANSAC] <gray>You have been detected using cheats.\n" +
+            "<gray>Check: <white>" + name + "\n" +
+            "<gray>VL: <white>" + vl
+        );
+
         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-            player.kickPlayer("§c[ANSAC] §7You have been detected using cheats.\n§7Check: §f" + name + "\n§7VL: §f" + vl);
+            player.kick(kickMessage);
         });
 
         plugin.getLogger().warning("[PUNISH] " + player.getName() + " was kicked for " + name + " (VL: " + vl + ")");
