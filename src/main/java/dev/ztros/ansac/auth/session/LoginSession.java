@@ -23,6 +23,10 @@ public class LoginSession {
     @Getter
     private volatile boolean authenticated;
 
+    public void setAuthenticated(boolean authenticated) {
+        this.authenticated = authenticated;
+    }
+
     @Getter
     @Setter
     private volatile boolean registered;
