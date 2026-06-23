@@ -69,11 +69,9 @@ shadowJar {
     // Post-processing: Shadow merges all plugin.yml from dependencies (e.g. PacketEvents)
     // into one combined file, which confuses Folia. Replace it with our clean plugin.yml.
     doLast {
-        def cleanPluginYml = file(layout.buildDirectory.dir('resources/main').get().file('plugin.yml'))
+        def cleanPluginYml = file("${layout.buildDirectory.get()}/resources/main/plugin.yml")
         if (cleanPluginYml.exists()) {
-            ant.jar(destfile: archivePath, update: true) {
-                zipfileset(src: cleanPluginYml)
-            }
+            exec { commandLine 'jar', 'uf', archivePath, 'plugin.yml'; workingDir cleanPluginYml.parentFile }
             logger.lifecycle('Replaced merged plugin.yml with clean ANSAC plugin.yml')
         } else {
             logger.lifecycle('WARNING: Clean plugin.yml not found at ' + cleanPluginYml)
