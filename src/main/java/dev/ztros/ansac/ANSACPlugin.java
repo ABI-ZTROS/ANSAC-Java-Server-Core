@@ -1,6 +1,7 @@
 package dev.ztros.ansac;
 
 import com.tcoded.folialib.FoliaLib;
+import com.github.retrooper.packetevents.PacketEvents;
 import dev.ztros.ansac.auth.AuthCommand;
 import dev.ztros.ansac.auth.AuthListener;
 import dev.ztros.ansac.auth.AuthService;
@@ -72,7 +73,8 @@ public class ANSACPlugin extends JavaPlugin {
         // Register listeners
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
 
-        // Register packet listener (PacketEvents is now bundled)
+        // Register packet listener (PacketEvents is bundled, initialize it first)
+        PacketEvents.getAPI().load();
         new PacketListener(this).register();
         getLogger().info("PacketEvents integration enabled.");
 
@@ -97,6 +99,13 @@ public class ANSACPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Terminate PacketEvents
+        try {
+            PacketEvents.getAPI().terminate();
+        } catch (Exception e) {
+            // Ignore if not initialized
+        }
+
         if (authService != null) {
             authService.shutdown();
         }

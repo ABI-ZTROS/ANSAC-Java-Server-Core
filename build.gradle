@@ -63,6 +63,13 @@ shadowJar {
     relocate 'com.zaxxer.hikari', 'dev.ztros.ansac.lib.hikari'
     relocate 'org.sqlite', 'dev.ztros.ansac.lib.sqlite'
 
+    // Exclude all plugin.yml from dependencies (PacketEvents embeds one that causes Folia to fail)
+    // Then re-add our own plugin.yml explicitly
+    exclude 'plugin.yml'
+    from('src/main/resources') {
+        include 'plugin.yml'
+    }
+
     // Exclude unnecessary metadata
     exclude 'META-INF/**'
 }
