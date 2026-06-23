@@ -63,15 +63,22 @@ shadowJar {
     relocate 'com.zaxxer.hikari', 'dev.ztros.ansac.lib.hikari'
     relocate 'org.sqlite', 'dev.ztros.ansac.lib.sqlite'
 
-    // Exclude all plugin.yml from dependencies (PacketEvents embeds one that causes Folia to fail)
-    // Then re-add our own plugin.yml explicitly
-    exclude 'plugin.yml'
-    from('src/main/resources') {
-        include 'plugin.yml'
-    }
-
     // Exclude unnecessary metadata
     exclude 'META-INF/**'
+
+    // Post-processing: Shadow merges all plugin.yml from dependencies (e.g. PacketEvents)
+    // into one combined file, which confuses Folia. Replace it with our clean plugin.yml.
+    doLast {
+        def cleanPluginYml = layout.buildDirectory.file('resources/main/plugin.yml').get().asFile
+        if (cleanPluginYml.exists()) {
+            ant.jar(destfile: archivePath.get().asFile, update: true) {
+                zipfileset(src: cleanPluginYml)
+            }
+            logger.lifecycle('Replaced merged plugin.yml with clean ANSAC plugin.yml')
+        } else {
+            logger.lifecycle('WARNING: Clean plugin.yml not found at ' + cleanPluginYml)
+        }
+    }
 }
 
 // Alias fatJar to shadowJar for compatibility
