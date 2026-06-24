@@ -114,6 +114,13 @@ public class PlayerData {
     @Getter
     private final PingCompensator pingCompensator = new PingCompensator();
 
+    // Reach check tracking
+    @Getter @Setter
+    private int reachBuffer = 0;
+
+    @Getter @Setter
+    private int reachAngleBuffer = 0;
+
     // NoSlow check tracking
     @Getter @Setter
     private int noSlowBuffer = 0;
