@@ -11,6 +11,7 @@ import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.combat.KillAuraCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
 import dev.ztros.ansac.checks.packet.BadPacketsCheck;
+import dev.ztros.ansac.checks.packet.TimerCheck;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -77,10 +78,11 @@ public class PacketListener extends PacketListenerAbstract {
      * Updates TimerCheck flying packet data that was previously missing.
      */
     private void handleFlyingPacket(Player player, PlayerData data, PacketReceiveEvent event) {
-        // Update flying packet tracking for TimerCheck
-        long now = System.currentTimeMillis();
-        data.setLastFlyingPacket(now);
-        data.setFlyingPacketCount(data.getFlyingPacketCount() + 1);
+        // Pass flying packet to TimerCheck for timer speed detection
+        TimerCheck timerCheck = (TimerCheck) plugin.getCheckManager().getCheck("Timer");
+        if (timerCheck != null) {
+            timerCheck.onFlyingPacket(player, data);
+        }
 
         WrapperPlayClientPlayerFlying flying = new WrapperPlayClientPlayerFlying(event);
 
