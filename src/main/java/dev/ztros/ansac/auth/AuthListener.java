@@ -63,7 +63,11 @@ public class AuthListener implements Listener {
         Player player = event.getPlayer();
         if (authService.isAuthenticated(player.getUniqueId())) return;
 
-        if (authConfig.isCommandAllowed(event.getMessage())) {
+        String message = event.getMessage();
+        boolean allowed = authConfig.isCommandAllowed(message);
+        plugin.getLogger().info("[AuthListener] Command check: " + message + " allowed=" + allowed + " player=" + player.getName());
+
+        if (allowed) {
             return;
         }
 
@@ -71,6 +75,7 @@ public class AuthListener implements Listener {
         event.getPlayer().sendMessage(MINI_MESSAGE.deserialize(
                 "<gray>[<aqua>ANSAC</gray>] <yellow>Please login first. Usage: <white>/register <password> <confirm><yellow> or <white>/login <password>"
         ));
+        plugin.getLogger().info("[AuthListener] Blocked command for unauthenticated player: " + player.getName());
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
