@@ -3,6 +3,7 @@ package dev.ztros.ansac.checks;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.combat.KillAuraCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
+import dev.ztros.ansac.checks.movement.ElytraFlightCheck;
 import dev.ztros.ansac.checks.movement.FlyCheck;
 import dev.ztros.ansac.checks.movement.SpeedCheck;
 import dev.ztros.ansac.checks.packet.BadPacketsCheck;
@@ -38,6 +39,7 @@ public class CheckManager {
         // Movement checks
         checks.add(new SpeedCheck(plugin));
         checks.add(new FlyCheck(plugin));
+        checks.add(new ElytraFlightCheck(plugin));
 
         // Combat checks
         checks.add(new ReachCheck(plugin));

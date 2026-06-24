@@ -106,6 +106,16 @@ public class PlayerData {
     @Getter @Setter
     private long lastJumpTime = 0;
 
+    // Elytra tracking
+    @Getter @Setter
+    private int elytraHoverBuffer = 0;
+
+    @Getter @Setter
+    private int elytraStopBuffer = 0;
+
+    @Getter @Setter
+    private double lastGlideSpeed = 0;
+
     // Time-windowed click timestamps for CPS calculation
     @Getter
     private final List<Long> clickTimestamps = new CopyOnWriteArrayList<>();
