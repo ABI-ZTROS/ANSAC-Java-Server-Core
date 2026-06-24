@@ -100,6 +100,9 @@ public class PlayerData {
     @Getter @Setter
     private int rotationBuffer = 0;
 
+    @Getter @Setter
+    private long timerBalance = 0;
+
     // Time-windowed click timestamps for CPS calculation
     @Getter
     private final List<Long> clickTimestamps = new CopyOnWriteArrayList<>();

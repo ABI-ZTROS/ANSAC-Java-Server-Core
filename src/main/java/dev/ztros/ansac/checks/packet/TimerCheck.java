@@ -6,19 +6,22 @@ import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.entity.Player;
 
 /**
- * Timer check - detects game speed manipulation (speed hack).
- * Reference: GrimAC's 1.005 timer precision detection.
+ * Timer check - detects game speed manipulation (speed hack / slow motion).
  *
- * IMPORTANT: This check is driven by packet events, not by periodic process() calls.
- * The process() method is a no-op; actual detection happens in onFlyingPacket().
+ * Design: Cumulative balance approach (inspired by GrimAC).
+ * - Each expected tick adds +50ms to balance.
+ * - Each actual packet interval subtracts the real time from balance.
+ * - Positive balance = client is sending faster than expected (speed hack).
+ * - Negative balance = client is sending slower than expected (slow motion).
+ * - This naturally smooths out single-packet jitter.
  */
 public class TimerCheck extends Check {
 
-    private static final long EXPECTED_TICK_TIME = 50; // 20 TPS = 50ms per tick
-    private static final double MAX_TIMER_SPEED = 1.15; // 15% faster than normal (was 1.1, too strict)
-    private static final double MIN_TIMER_SPEED = 0.75; // 25% slower than normal (was 0.8)
-    private static final int SAMPLE_SIZE = 40; // Number of samples for averaging (was 20, too sensitive)
-    private static final long LAG_SPIKE_THRESHOLD = EXPECTED_TICK_TIME * 5; // Skip if > 250ms
+    private static final long EXPECTED_MS = 50L; // 20 TPS
+    private static final long BALANCE_THRESHOLD = 200L; // Flag if balance exceeds +/- 200ms
+    private static final long MAX_BALANCE = 500L; // Cap balance to prevent runaway
+    private static final long LAG_SPIKE_MS = 250L; // Reset on lag spike
+    private static final int MIN_PACKETS = 100; // Don't flag until 100 packets collected
 
     public TimerCheck(ANSACPlugin plugin) {
         super(plugin, "Timer", "Packet");
@@ -27,66 +30,77 @@ public class TimerCheck extends Check {
     @Override
     public void process(Player player, PlayerData data) {
         // Timer check is event-driven via onFlyingPacket()
-        // Periodic process() is intentionally a no-op
     }
 
     /**
      * Called from PacketListener when a flying packet is received.
-     * This is the actual timer detection logic.
      */
     public void onFlyingPacket(Player player, PlayerData data) {
         if (!isEnabled() || data.hasBypass()) return;
 
         long now = System.currentTimeMillis();
-        long lastFlying = data.getLastFlyingPacket();
+        long last = data.getLastFlyingPacket();
 
-        // First packet since join/reset
-        if (lastFlying == 0) {
+        // First packet since join / reset
+        if (last == 0) {
             data.setLastFlyingPacket(now);
             data.setFlyingPacketCount(0);
+            data.setTimerBalance(0);
             return;
         }
 
-        long timeDiff = now - lastFlying;
+        long diff = now - last;
 
-        // Skip if too much time has passed (lag spike, server freeze, etc.)
-        if (timeDiff > LAG_SPIKE_THRESHOLD) {
+        // Lag spike: reset everything
+        if (diff > LAG_SPIKE_MS) {
             data.setLastFlyingPacket(now);
             data.setFlyingPacketCount(0);
+            data.setTimerBalance(0);
             return;
         }
 
-        // Skip if timeDiff is unreasonably small (could be packet batching)
-        if (timeDiff < 5) {
+        // Ignore unreasonably small intervals (packet batching)
+        if (diff < 5) {
             return;
         }
 
-        // Calculate timer speed ratio
-        double timerSpeed = (double) EXPECTED_TICK_TIME / timeDiff;
+        // Update balance: expected - actual
+        // If client is speeding (sending more often), diff < 50, balance goes up
+        // If client is slowing (sending less often), diff > 50, balance goes down
+        long balance = data.getTimerBalance() + (EXPECTED_MS - diff);
 
-        // Check for speed timer (playing faster than normal)
-        if (timerSpeed > MAX_TIMER_SPEED) {
-            int count = data.getFlyingPacketCount();
-            // Only flag after enough consistent samples to avoid false positives
-            if (count >= SAMPLE_SIZE) {
-                double severity = timerSpeed / MAX_TIMER_SPEED;
-                flag(player, data, severity,
-                    String.format("Timer speed: %.3fx (expected: 1.0x)", timerSpeed));
-            }
+        // Clamp balance to prevent extreme runaway values
+        balance = Math.max(-MAX_BALANCE, Math.min(MAX_BALANCE, balance));
+        data.setTimerBalance(balance);
+
+        int count = data.getFlyingPacketCount() + 1;
+        data.setFlyingPacketCount(count);
+
+        // Only flag after enough packets to establish a trend
+        if (count < MIN_PACKETS) {
+            data.setLastFlyingPacket(now);
+            return;
         }
 
-        // Check for slow timer (playing slower than normal)
-        if (timerSpeed < MIN_TIMER_SPEED) {
-            int count = data.getFlyingPacketCount();
-            if (count >= SAMPLE_SIZE) {
-                double severity = MIN_TIMER_SPEED / timerSpeed;
-                flag(player, data, severity,
-                    String.format("Slow timer: %.3fx (expected: 1.0x)", timerSpeed));
-            }
+        // Speed timer: balance too positive (client sending faster than expected)
+        if (balance > BALANCE_THRESHOLD) {
+            double severity = balance / (double) BALANCE_THRESHOLD;
+            flag(player, data, severity,
+                String.format("Timer 加速: 累积偏移 +%dms (阈值: %dms, 样本: %d)",
+                    balance, BALANCE_THRESHOLD, count));
+            // Reset balance after flag to avoid repeated flags
+            data.setTimerBalance(0);
         }
 
-        // Update tracking
+        // Slow timer: balance too negative (client sending slower than expected)
+        if (balance < -BALANCE_THRESHOLD) {
+            double severity = Math.abs(balance) / (double) BALANCE_THRESHOLD;
+            flag(player, data, severity,
+                String.format("Timer 减速: 累积偏移 %dms (阈值: %dms, 样本: %d)",
+                    balance, BALANCE_THRESHOLD, count));
+            data.setTimerBalance(0);
+        }
+
         data.setLastFlyingPacket(now);
-        data.setFlyingPacketCount(data.getFlyingPacketCount() + 1);
     }
 }
