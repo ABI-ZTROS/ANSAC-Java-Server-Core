@@ -88,7 +88,7 @@ auth:
   restrict-inventory: true
   restrict-items: true
   command-whitelist:
-    - "^/(login|l|register|reg|changepassword|changepwd|logout)(\\s|$)"
+    - "^(login|l|register|reg|changepassword|changepwd|logout)(\\s|$)"
   proxy:
     enabled: false
     type: auto

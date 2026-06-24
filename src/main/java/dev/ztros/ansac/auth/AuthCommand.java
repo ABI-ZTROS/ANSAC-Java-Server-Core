@@ -25,6 +25,8 @@ public class AuthCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        plugin.getLogger().info("[AuthCommand] Command received: " + command.getName() + " from " + sender.getName() + " with args: " + String.join(" ", args));
+
         if (!(sender instanceof Player player)) {
             sender.sendMessage(miniMessage.deserialize("<red>[ANSAC] This command can only be used by players."));
             return true;
@@ -32,6 +34,7 @@ public class AuthCommand implements CommandExecutor {
 
         if (!authService.isEnabled()) {
             player.sendMessage(miniMessage.deserialize("<gray>[<aqua>ANSAC</gray>] <yellow>Authentication is disabled on this server."));
+            plugin.getLogger().info("[AuthCommand] Auth is disabled, rejecting command.");
             return true;
         }
 
@@ -40,13 +43,17 @@ public class AuthCommand implements CommandExecutor {
             case "register", "reg" -> handleRegister(player, args);
             case "changepassword", "changepwd" -> handleChangePassword(player, args);
             case "logout" -> handleLogout(player);
-            default -> player.sendMessage(miniMessage.deserialize("<red>[ANSAC] Unknown command."));
+            default -> {
+                player.sendMessage(miniMessage.deserialize("<red>[ANSAC] Unknown command."));
+                plugin.getLogger().warning("[AuthCommand] Unknown command: " + command.getName());
+            }
         }
 
         return true;
     }
 
     private void handleLogin(Player player, String[] args) {
+        plugin.getLogger().info("[AuthCommand] handleLogin called for " + player.getName());
         if (args.length < 1) {
             player.sendMessage(miniMessage.deserialize("<red>[ANSAC] Usage: /login <password>"));
             return;
@@ -55,15 +62,19 @@ public class AuthCommand implements CommandExecutor {
         String password = args[0];
         authService.login(player.getUniqueId(), password)
                 .orTimeout(10, TimeUnit.SECONDS)
-                .thenAccept(message -> sendMessageSync(player, message))
+                .thenAccept(message -> {
+                    plugin.getLogger().info("[AuthCommand] Login result for " + player.getName() + ": " + message);
+                    sendMessageSync(player, message);
+                })
                 .exceptionally(ex -> {
                     sendMessageSync(player, "<red>[ANSAC] <gray>Login request timed out or failed. Try again.");
-                    plugin.getLogger().log(Level.WARNING, "Login command failed for " + player.getName(), ex);
+                    plugin.getLogger().log(Level.WARNING, "[AuthCommand] Login command failed for " + player.getName(), ex);
                     return null;
                 });
     }
 
     private void handleRegister(Player player, String[] args) {
+        plugin.getLogger().info("[AuthCommand] handleRegister called for " + player.getName());
         if (args.length < 2) {
             player.sendMessage(miniMessage.deserialize("<red>[ANSAC] Usage: /register <password> <confirm>"));
             return;
@@ -73,10 +84,13 @@ public class AuthCommand implements CommandExecutor {
         String confirm = args[1];
         authService.register(player.getUniqueId(), player.getName(), password, confirm)
                 .orTimeout(10, TimeUnit.SECONDS)
-                .thenAccept(message -> sendMessageSync(player, message))
+                .thenAccept(message -> {
+                    plugin.getLogger().info("[AuthCommand] Register result for " + player.getName() + ": " + message);
+                    sendMessageSync(player, message);
+                })
                 .exceptionally(ex -> {
                     sendMessageSync(player, "<red>[ANSAC] <gray>Registration request timed out or failed. Try again.");
-                    plugin.getLogger().log(Level.WARNING, "Register command failed for " + player.getName(), ex);
+                    plugin.getLogger().log(Level.WARNING, "[AuthCommand] Register command failed for " + player.getName(), ex);
                     return null;
                 });
     }
@@ -94,7 +108,7 @@ public class AuthCommand implements CommandExecutor {
                 .thenAccept(message -> sendMessageSync(player, message))
                 .exceptionally(ex -> {
                     sendMessageSync(player, "<red>[ANSAC] <gray>Password change request timed out or failed. Try again.");
-                    plugin.getLogger().log(Level.WARNING, "ChangePassword command failed for " + player.getName(), ex);
+                    plugin.getLogger().log(Level.WARNING, "[AuthCommand] ChangePassword command failed for " + player.getName(), ex);
                     return null;
                 });
     }
@@ -104,7 +118,7 @@ public class AuthCommand implements CommandExecutor {
                 .thenAccept(message -> sendMessageSync(player, message))
                 .exceptionally(ex -> {
                     sendMessageSync(player, "<red>[ANSAC] <gray>Logout failed. Try again.");
-                    plugin.getLogger().log(Level.WARNING, "Logout command failed for " + player.getName(), ex);
+                    plugin.getLogger().log(Level.WARNING, "[AuthCommand] Logout command failed for " + player.getName(), ex);
                     return null;
                 });
     }
@@ -113,6 +127,9 @@ public class AuthCommand implements CommandExecutor {
         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
             if (player.isOnline()) {
                 player.sendMessage(miniMessage.deserialize(message));
+                plugin.getLogger().info("[AuthCommand] Message sent to " + player.getName() + ": " + message);
+            } else {
+                plugin.getLogger().warning("[AuthCommand] Player " + player.getName() + " is offline, message not sent.");
             }
         });
     }
