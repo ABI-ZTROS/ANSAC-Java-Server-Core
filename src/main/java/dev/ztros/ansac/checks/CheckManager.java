@@ -1,20 +1,32 @@
 package dev.ztros.ansac.checks;
 
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.checks.building.AirPlaceCheck;
 import dev.ztros.ansac.checks.building.FastBreakCheck;
 import dev.ztros.ansac.checks.building.ScaffoldCheck;
+import dev.ztros.ansac.checks.combat.AutoArmorCheck;
+import dev.ztros.ansac.checks.combat.AutoClickerCheck;
+import dev.ztros.ansac.checks.combat.AutoTrapCheck;
 import dev.ztros.ansac.checks.combat.BowAimbotCheck;
 import dev.ztros.ansac.checks.combat.CrystalAuraCheck;
 import dev.ztros.ansac.checks.combat.CriticalsCheck;
 import dev.ztros.ansac.checks.combat.HitboxExpandCheck;
 import dev.ztros.ansac.checks.combat.KillAuraCheck;
+import dev.ztros.ansac.checks.combat.MultiAuraCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
 import dev.ztros.ansac.checks.combat.VelocityCheck;
+import dev.ztros.ansac.checks.movement.AirJumpCheck;
+import dev.ztros.ansac.checks.movement.BlinkCheck;
 import dev.ztros.ansac.checks.movement.ElytraFlightCheck;
 import dev.ztros.ansac.checks.movement.FlyCheck;
+import dev.ztros.ansac.checks.movement.HighJumpCheck;
+import dev.ztros.ansac.checks.movement.JesusCheck;
+import dev.ztros.ansac.checks.movement.NoClipCheck;
 import dev.ztros.ansac.checks.movement.NoFallCheck;
 import dev.ztros.ansac.checks.movement.NoSlowCheck;
 import dev.ztros.ansac.checks.movement.SpeedCheck;
+import dev.ztros.ansac.checks.movement.SpiderCheck;
+import dev.ztros.ansac.checks.movement.StepCheck;
 import dev.ztros.ansac.checks.packet.BadPacketsCheck;
 import dev.ztros.ansac.checks.packet.TimerCheck;
 import dev.ztros.ansac.player.PlayerData;
@@ -51,6 +63,13 @@ public class CheckManager {
         checks.add(new ElytraFlightCheck(plugin));
         checks.add(new NoSlowCheck(plugin));
         checks.add(new NoFallCheck(plugin));
+        checks.add(new BlinkCheck(plugin));
+        checks.add(new JesusCheck(plugin));
+        checks.add(new SpiderCheck(plugin));
+        checks.add(new HighJumpCheck(plugin));
+        checks.add(new StepCheck(plugin));
+        checks.add(new NoClipCheck(plugin));
+        checks.add(new AirJumpCheck(plugin));
 
         // Combat checks
         checks.add(new ReachCheck(plugin));
@@ -60,10 +79,15 @@ public class CheckManager {
         checks.add(new HitboxExpandCheck(plugin));
         checks.add(new BowAimbotCheck(plugin));
         checks.add(new CrystalAuraCheck(plugin));
+        checks.add(new MultiAuraCheck(plugin));
+        checks.add(new AutoClickerCheck(plugin));
+        checks.add(new AutoArmorCheck(plugin));
+        checks.add(new AutoTrapCheck(plugin));
 
         // Building checks
         checks.add(new ScaffoldCheck(plugin));
         checks.add(new FastBreakCheck(plugin));
+        checks.add(new AirPlaceCheck(plugin));
 
         // Packet checks
         checks.add(new TimerCheck(plugin));

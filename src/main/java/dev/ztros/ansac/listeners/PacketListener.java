@@ -8,11 +8,14 @@ import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientInteractEntity;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying;
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.checks.combat.AutoClickerCheck;
 import dev.ztros.ansac.checks.combat.KillAuraCheck;
+import dev.ztros.ansac.checks.combat.MultiAuraCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
 import dev.ztros.ansac.checks.packet.BadPacketsCheck;
 import dev.ztros.ansac.checks.packet.TimerCheck;
 import dev.ztros.ansac.player.PlayerData;
+import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
@@ -155,6 +158,12 @@ public class PacketListener extends PacketListenerAbstract {
                     if (killAura != null) {
                         killAura.processAttack(player, data);
                     }
+
+                    // Process multi-aura check (multi-target attacks)
+                    MultiAuraCheck multiAura = (MultiAuraCheck) plugin.getCheckManager().getCheck("MultiAura");
+                    if (multiAura != null) {
+                        multiAura.processAttack(player, data, target);
+                    }
                 }
             });
         }
@@ -167,6 +176,11 @@ public class PacketListener extends PacketListenerAbstract {
         KillAuraCheck killAura = (KillAuraCheck) plugin.getCheckManager().getCheck("KillAura");
         if (killAura != null) {
             killAura.processSwing(player, data);
+        }
+
+        AutoClickerCheck autoClicker = (AutoClickerCheck) plugin.getCheckManager().getCheck("AutoClicker");
+        if (autoClicker != null) {
+            autoClicker.processClick(player, data);
         }
     }
 
@@ -190,6 +204,23 @@ public class PacketListener extends PacketListenerAbstract {
     private void handleBlockPlacement(Player player, PlayerData data, PacketReceiveEvent event) {
         data.setLastBlockPlaceTime(System.currentTimeMillis());
         data.setBlockPlaceCount(data.getBlockPlaceCount() + 1);
+
+        // Get block placement location from player's current position
+        Location placeLocation = player.getLocation().clone();
+
+        // Dispatch to AirPlace check
+        dev.ztros.ansac.checks.building.AirPlaceCheck airPlace =
+            (dev.ztros.ansac.checks.building.AirPlaceCheck) plugin.getCheckManager().getCheck("AirPlace");
+        if (airPlace != null) {
+            airPlace.processBlockPlace(player, data, placeLocation);
+        }
+
+        // Dispatch to AutoTrap check
+        dev.ztros.ansac.checks.combat.AutoTrapCheck autoTrap =
+            (dev.ztros.ansac.checks.combat.AutoTrapCheck) plugin.getCheckManager().getCheck("AutoTrap");
+        if (autoTrap != null) {
+            autoTrap.processBlockPlace(player, data, placeLocation);
+        }
     }
 
     /**

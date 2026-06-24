@@ -3,6 +3,7 @@ package dev.ztros.ansac.listeners;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.checks.CheckManager;
+import dev.ztros.ansac.checks.combat.AutoArmorCheck;
 import dev.ztros.ansac.checks.combat.BowAimbotCheck;
 import dev.ztros.ansac.checks.combat.CrystalAuraCheck;
 import dev.ztros.ansac.checks.combat.CriticalsCheck;
@@ -14,6 +15,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -137,6 +139,19 @@ public class PlayerListener implements Listener {
                 || event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION
                 || event.getCause() == EntityDamageEvent.DamageCause.FLY_INTO_WALL) {
             data.setLastKnockbackTime(System.currentTimeMillis());
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof org.bukkit.entity.Player player)) return;
+
+        PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+        if (data == null || data.hasBypass()) return;
+
+        AutoArmorCheck autoArmor = (AutoArmorCheck) plugin.getCheckManager().getCheck("AutoArmor");
+        if (autoArmor != null) {
+            autoArmor.processInventoryAction(player, data);
         }
     }
 }

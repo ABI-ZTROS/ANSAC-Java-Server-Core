@@ -83,6 +83,55 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    blink:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    jesus:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    spider:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    highjump:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    step:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    noclip:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    airjump:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
   combat:
     reach:
       enabled: true
@@ -133,6 +182,34 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    multiaura:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    autoclicker:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    autoarmor:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    autotrap:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
   building:
     scaffold:
       enabled: true
@@ -142,6 +219,13 @@ checks:
       alert-threshold: 1.0
 
     fastbreak:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    airplace:
       enabled: true
       punishable: true
       max-vl: 15
