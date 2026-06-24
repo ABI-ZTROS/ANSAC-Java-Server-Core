@@ -4,6 +4,7 @@ import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 /**
