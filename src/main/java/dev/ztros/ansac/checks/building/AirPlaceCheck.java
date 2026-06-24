@@ -120,7 +120,7 @@ public class AirPlaceCheck extends Check {
             || playerBlockType == Material.KELP_PLANT;
 
         // 检查玩家是否在梯子/脚手架上
-        boolean onLadder = player.isOnLadder() || player.isClimbing();
+        boolean onLadder = player.isClimbing();
 
         // 如果玩家在地面、水中或梯子上，属于正常放置
         if (onGround || inWater || onLadder) {

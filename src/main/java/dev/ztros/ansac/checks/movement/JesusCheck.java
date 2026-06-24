@@ -188,7 +188,7 @@ public class JesusCheck extends Check {
     private boolean hasFrostWalker(Player player) {
         ItemStack boots = player.getInventory().getBoots();
         if (boots == null) return false;
-        return boots.getEnchantments().stream()
+        return boots.getEnchantments().keySet().stream()
             .anyMatch(enchantment -> enchantment.getKey().getKey().equals("frost_walker"));
     }
 
