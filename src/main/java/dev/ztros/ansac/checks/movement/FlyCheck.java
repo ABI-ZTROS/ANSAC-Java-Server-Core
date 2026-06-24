@@ -3,23 +3,23 @@ package dev.ztros.ansac.checks.movement;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PlayerData;
-import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffectType;
 
 /**
  * Fly check - detects abnormal vertical movement and flight.
- * Reference: GrimAC's prediction engine approach.
+ *
+ * Design notes:
+ * - Creative/Spectator mode players are skipped entirely.
+ * - Players with active elytra, in vehicles, or with levitation are skipped.
+ * - The check looks for sustained impossible vertical motion, not single-tick anomalies.
+ * - A buffer counts consecutive violations; only sustained behavior triggers a flag.
  */
 public class FlyCheck extends Check {
 
-    private static final double GRAVITY = 0.08;
-    private static final double DRAG = 0.98;
-    private static final double JUMP_VELOCITY = 0.42;
-    private static final double LADDER_CLIMB = 0.1176;
-    private static final double WATER_ASCENT = 0.04;
-    private static final double LENIENCY = 0.08;
+    private static final double LENIENCY = 0.15;
+    private static final int BUFFER_MAX = 6; // Require 6 consecutive violations to flag
 
     public FlyCheck(ANSACPlugin plugin) {
         super(plugin, "Fly", "Movement");
@@ -27,102 +27,73 @@ public class FlyCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
-        // Skip creative, spectator, flying, vehicle, and elytra players
-        if (player.getGameMode().name().contains("CREATIVE") ||
-            player.getGameMode().name().contains("SPECTATOR") ||
-            player.isFlying() || player.isInsideVehicle() || player.isGliding()) return;
+        if (shouldSkip(player)) return;
 
         Location from = data.getLastLocation();
         Location to = data.getCurrentLocation();
-
         if (from == null || to == null) return;
 
         double deltaY = data.getVerticalDistance();
         boolean onGround = player.isOnGround();
 
-        // Skip if in special states (water, lava, climbing, sleeping, dead)
-        if (isInSpecialState(player)) return;
-
-        // Predict expected vertical movement
-        double expectedDeltaY = predictVerticalMovement(player, data, onGround);
-
-        // Account for ping
-        int ping = data.getPing();
-        double pingLeniency = (ping / 1000.0) * 0.1;
-
-        // Check for abnormal vertical movement
-        if (Math.abs(deltaY - expectedDeltaY) > LENIENCY + pingLeniency && Math.abs(deltaY) > 0.1) {
-            double severity = Math.abs(deltaY - expectedDeltaY) / LENIENCY;
-            flag(player, data, severity,
-                String.format("Fly: dy=%.3f expected=%.3f (ping: %dms)", deltaY, expectedDeltaY, ping));
-        }
-
-        // Check for impossible hover (staying at same Y without being on ground)
-        if (!onGround && Math.abs(deltaY) < 0.001 && !player.isInWater() && !player.isInLava()) {
-            // Player is hovering in mid-air
-            if (data.getLastDeltaY() != 0 && Math.abs(data.getLastDeltaY()) < 0.001) {
-                flag(player, data, 2.0, "Hover detection (impossible stationary Y)");
+        // Check 1: sustained hover (not on ground, not moving vertically, not in liquid)
+        if (!onGround && Math.abs(deltaY) < 0.001
+                && !player.isInWater() && !player.isInLava()
+                && !player.isClimbing()) {
+            int hoverBuffer = data.getHoverBuffer() + 1;
+            data.setHoverBuffer(hoverBuffer);
+            if (hoverBuffer >= BUFFER_MAX) {
+                flag(player, data, 1.5, "空中悬停（连续 " + hoverBuffer + " tick）");
             }
+            return;
+        } else {
+            data.setHoverBuffer(0);
         }
 
-        // Update lastMotionY for prediction engine
-        data.setLastMotionY(deltaY);
-        data.setLastDeltaY(deltaY);
-    }
-
-    /**
-     * Predict expected vertical movement based on player state
-     */
-    private double predictVerticalMovement(Player player, PlayerData data, boolean onGround) {
-        double predicted = 0.0;
-
-        if (onGround) {
-            // On ground - can jump
-            if (player.isSprinting() || player.isJumping()) {
-                predicted = JUMP_VELOCITY;
-
-                // Jump boost potion
-                PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
-                if (jumpBoost != null && player.hasPotionEffect(jumpBoost)) {
-                    int level = player.getPotionEffect(jumpBoost).getAmplifier() + 1;
-                    predicted += level * 0.1;
+        // Check 2: ascending while not on ground (no jump boost, no levitation, no climbing, not in liquid)
+        if (!onGround && deltaY > LENIENCY) {
+            boolean hasLevitation = player.hasPotionEffect(PotionEffectType.LEVITATION);
+            boolean hasJumpBoost = player.hasPotionEffect(org.bukkit.potion.PotionEffectType.JUMP);
+            if (!hasLevitation && !hasJumpBoost && !player.isClimbing()
+                    && !player.isInWater() && !player.isInLava()) {
+                int ascendBuffer = data.getAscendBuffer() + 1;
+                data.setAscendBuffer(ascendBuffer);
+                if (ascendBuffer >= BUFFER_MAX) {
+                    flag(player, data, deltaY / LENIENCY,
+                        String.format("空中异常上升: dy=%.3f (连续 %d tick)", deltaY, ascendBuffer));
                 }
+                return;
+            } else {
+                data.setAscendBuffer(0);
             }
         } else {
-            // In air - apply gravity using lastMotionY
-            double lastMotionY = data.getLastMotionY();
-            predicted = (lastMotionY - GRAVITY) * DRAG;
-
-            // Climbing
-            if (player.isClimbing()) {
-                if (player.isSneaking()) {
-                    predicted = -LADDER_CLIMB; // Descending ladder slowly
-                } else {
-                    predicted = LADDER_CLIMB; // Ascending ladder
-                }
-            }
-
-            // In water
-            if (player.isInWater()) {
-                if (player.isSneaking()) {
-                    predicted = -WATER_ASCENT; // Sinking
-                } else {
-                    predicted = WATER_ASCENT; // Rising
-                }
-            }
+            data.setAscendBuffer(0);
         }
 
-        return predicted;
+        // Check 3: falling too slowly (less than gravity)
+        if (!onGround && deltaY < -LENIENCY) {
+            // Normal gravity fall is about -0.08 per tick initially, accelerating
+            // If player is falling slower than -0.03 for multiple ticks, suspicious
+            if (deltaY > -0.03 && !player.isInWater() && !player.isInLava() && !player.isClimbing()) {
+                int fallBuffer = data.getFallBuffer() + 1;
+                data.setFallBuffer(fallBuffer);
+                if (fallBuffer >= BUFFER_MAX) {
+                    flag(player, data, 1.2,
+                        String.format("下落过慢: dy=%.3f (连续 %d tick)", deltaY, fallBuffer));
+                }
+                return;
+            } else {
+                data.setFallBuffer(0);
+            }
+        } else {
+            data.setFallBuffer(0);
+        }
     }
 
-    /**
-     * Check if player is in a special state that exempts from fly check
-     */
-    private boolean isInSpecialState(Player player) {
-        return player.isInWater()
-            || player.isInLava()
-            || player.isClimbing()
-            || player.isSleeping()
-            || player.isDead();
+    private boolean shouldSkip(Player player) {
+        String gm = player.getGameMode().name();
+        return gm.contains("CREATIVE") || gm.contains("SPECTATOR")
+            || player.isFlying() || player.isInsideVehicle() || player.isGliding()
+            || player.isSleeping() || player.isDead();
     }
 }

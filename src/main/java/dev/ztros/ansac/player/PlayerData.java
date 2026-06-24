@@ -7,10 +7,9 @@ import lombok.Setter;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
-import java.util.Collections;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Stores all anti-cheat related data for a player.
@@ -78,6 +77,33 @@ public class PlayerData {
     @Getter @Setter
     private long joinTime;
 
+    // --- Buffer fields for consecutive violation counting ---
+
+    @Getter @Setter
+    private int hoverBuffer = 0;
+
+    @Getter @Setter
+    private int ascendBuffer = 0;
+
+    @Getter @Setter
+    private int fallBuffer = 0;
+
+    @Getter @Setter
+    private int speedBuffer = 0;
+
+    @Getter @Setter
+    private int noSwingBuffer = 0;
+
+    @Getter @Setter
+    private int fastClickBuffer = 0;
+
+    @Getter @Setter
+    private int rotationBuffer = 0;
+
+    // Time-windowed click timestamps for CPS calculation
+    @Getter
+    private final List<Long> clickTimestamps = new CopyOnWriteArrayList<>();
+
     public PlayerData(Player player, ANSACPlugin plugin) {
         this.uuid = player.getUniqueId();
         this.player = player;
@@ -87,7 +113,8 @@ public class PlayerData {
         this.lastMoveTime = System.currentTimeMillis();
         this.lastAttackTime = 0;
         this.attackCount = 0;
-        this.lastFlyingPacket = System.currentTimeMillis();
+        this.lastSwingTime = 0;
+        this.lastFlyingPacket = 0;
         this.flyingPacketCount = 0;
         this.joinTime = System.currentTimeMillis();
     }
