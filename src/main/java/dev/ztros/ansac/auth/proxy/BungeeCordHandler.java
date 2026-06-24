@@ -38,7 +38,7 @@ public class BungeeCordHandler implements PluginMessageListener {
                 p.sendPluginMessage(plugin, "BungeeCord", payload);
             }
         } catch (IOException e) {
-            plugin.getLogger().warning("Failed to send BungeeCord login status: " + e.getMessage());
+            plugin.getLogger().warning("BungeeCord 发送登录状态失败：" + e.getMessage());
         }
     }
 }

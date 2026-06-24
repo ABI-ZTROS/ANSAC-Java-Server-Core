@@ -96,7 +96,7 @@ public class SessionManager {
         if (player != null && player.isOnline()) {
             plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                 player.sendMessage(MINI_MESSAGE.deserialize(
-                    "<gray>[<aqua>ANSAC</gray>] <yellow>Please login with <white>/login <password><yellow>."
+                    "<gray>[<aqua>ANSAC</gray>] <yellow>请使用 <white>/login <密码></white><yellow> 登录"
                 ));
             });
         }
@@ -113,10 +113,10 @@ public class SessionManager {
                     if (player != null && player.isOnline()) {
                         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                             ServerVersionAdapter.kickPlayer(player, MINI_MESSAGE.deserialize(
-                                "<red>[ANSAC] <gray>Login timed out. Please reconnect."
+                                "<red>[ANSAC] <gray>你因未及时登录已被踢出服务器。"
                             ));
                         });
-                        plugin.getLogger().info("Auto-kicked unauthenticated player: " + session.getPlayerName());
+                        plugin.getLogger().info("[SessionManager] 自动踢出 " + session.getPlayerName() + "（未及时登录）");
                     }
                 }
             }

@@ -98,7 +98,7 @@ public abstract class Check {
     protected void alert(Player player, int vl, String details) {
         Component message = MINI_MESSAGE.deserialize(
             "<gray>[<red>ANSAC</gray>] <yellow>" + player.getName() +
-            " <gray>failed <red>" + name +
+            " <gray>触发了 <red>" + name +
             " <gray>(VL: <white>" + vl +
             "<gray>) <dark_gray>| <gray>" + details
         );
@@ -112,7 +112,7 @@ public abstract class Check {
             }
         }
 
-        plugin.getLogger().info("[ALERT] " + player.getName() + " failed " + name + " (VL: " + vl + ") - " + details);
+        plugin.getLogger().info("[预警] " + player.getName() + " 触发了 " + name + " (VL: " + vl + ") - " + details);
     }
 
     /**
@@ -132,16 +132,16 @@ public abstract class Check {
      */
     protected void punish(Player player, PlayerData data, int vl) {
         Component kickMessage = MINI_MESSAGE.deserialize(
-            "<red>[ANSAC] <gray>You have been detected using cheats.\n" +
-            "<gray>Check: <white>" + name + "\n" +
-            "<gray>VL: <white>" + vl
+            "<red>[ANSAC] <gray>你因使用作弊程序被踢出服务器。\n" +
+            "<gray>检测项：<white>" + name + "\n" +
+            "<gray>违规等级：<white>" + vl
         );
 
         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
             ServerVersionAdapter.kickPlayer(player, kickMessage);
         });
 
-        plugin.getLogger().warning("[PUNISH] " + player.getName() + " was kicked for " + name + " (VL: " + vl + ")");
+        plugin.getLogger().warning("[处罚] " + player.getName() + " 因 " + name + " 被踢出 (VL: " + vl + ")");
     }
 
     /**

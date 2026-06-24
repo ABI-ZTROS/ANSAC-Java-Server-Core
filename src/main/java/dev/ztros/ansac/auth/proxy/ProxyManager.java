@@ -25,7 +25,7 @@ public class ProxyManager {
     private void autoDetect() {
         // Folia does not expose spigot() API, so we cannot detect BungeeCord from config.
         // Users should explicitly set proxy.type to "bungeecord" or "velocity" in config.yml.
-        plugin.getLogger().info("No proxy auto-detected. Set 'auth.proxy.type' explicitly in config.yml.");
+        plugin.getLogger().info("未检测到代理模式。请在 config.yml 中显式设置 'auth.proxy.type'。");
     }
 
     private void initBungeeCord() {
@@ -33,7 +33,7 @@ public class ProxyManager {
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, "BungeeCord");
         plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "BungeeCord", handler);
         this.activeHandler = handler;
-        plugin.getLogger().info("BungeeCord communication enabled.");
+        plugin.getLogger().info("BungeeCord 通信已启用。");
     }
 
     private void initVelocity() {
@@ -41,7 +41,7 @@ public class ProxyManager {
         plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, "velocity:main");
         plugin.getServer().getMessenger().registerIncomingPluginChannel(plugin, "velocity:main", handler);
         this.activeHandler = handler;
-        plugin.getLogger().info("Velocity communication enabled.");
+        plugin.getLogger().info("Velocity 通信已启用。");
     }
 
     public void sendLoginStatus(String playerName, boolean authenticated) {

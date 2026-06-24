@@ -47,7 +47,7 @@ public class CheckManager {
         checks.add(new TimerCheck(plugin));
         checks.add(new BadPacketsCheck(plugin));
 
-        plugin.getLogger().info("Registered " + checks.size() + " checks.");
+        plugin.getLogger().info("已注册 " + checks.size() + " 项检测。");
     }
 
     /**
@@ -72,7 +72,7 @@ public class CheckManager {
                             try {
                                 check.process(player, data);
                             } catch (Exception e) {
-                                plugin.getLogger().warning("Error in check " + check.getName() + ": " + e.getMessage());
+                                plugin.getLogger().warning("检测 " + check.getName() + " 出错：" + e.getMessage());
                             }
                         }
                     }
@@ -132,7 +132,7 @@ public class CheckManager {
                 try {
                     check.process(player, data);
                 } catch (Exception e) {
-                    plugin.getLogger().warning("Error in check " + check.getName() + ": " + e.getMessage());
+                    plugin.getLogger().warning("检测 " + check.getName() + " 出错：" + e.getMessage());
                 }
             }
         }
@@ -169,7 +169,7 @@ public class CheckManager {
         for (Check check : checks) {
             check.loadConfig();
         }
-        plugin.getLogger().info("Reloaded " + checks.size() + " checks.");
+        plugin.getLogger().info("已重载 " + checks.size() + " 项检测。");
     }
 
     /**

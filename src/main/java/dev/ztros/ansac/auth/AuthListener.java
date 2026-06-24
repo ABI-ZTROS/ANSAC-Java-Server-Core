@@ -65,7 +65,7 @@ public class AuthListener implements Listener {
 
         String message = event.getMessage();
         boolean allowed = authConfig.isCommandAllowed(message);
-        plugin.getLogger().info("[AuthListener] Command check: " + message + " allowed=" + allowed + " player=" + player.getName());
+        plugin.getLogger().info("[AuthListener] 命令检查：" + message + " 允许=" + allowed + " 玩家=" + player.getName());
 
         if (allowed) {
             return;
@@ -73,9 +73,9 @@ public class AuthListener implements Listener {
 
         event.setCancelled(true);
         event.getPlayer().sendMessage(MINI_MESSAGE.deserialize(
-                "<gray>[<aqua>ANSAC</gray>] <yellow>Please login first. Usage: <white>/register <password> <confirm><yellow> or <white>/login <password>"
+                "<gray>[<aqua>ANSAC</gray>] <yellow>请先登录。用法：<white>/register <密码> <确认密码><yellow> 或 <white>/login <密码>"
         ));
-        plugin.getLogger().info("[AuthListener] Blocked command for unauthenticated player: " + player.getName());
+        plugin.getLogger().info("[AuthListener] 已拦截未认证玩家的命令：" + player.getName());
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)

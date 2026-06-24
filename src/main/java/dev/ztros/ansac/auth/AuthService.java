@@ -41,9 +41,9 @@ public class AuthService {
         }
 
         database.initialize().thenRun(() -> {
-            plugin.getLogger().info("Authentication module initialized.");
+            plugin.getLogger().info("认证模块已初始化。");
         }).exceptionally(ex -> {
-            plugin.getLogger().log(Level.SEVERE, "Failed to initialize auth database!", ex);
+            plugin.getLogger().log(Level.SEVERE, "认证数据库初始化失败！", ex);
             return null;
         });
     }
@@ -70,29 +70,29 @@ public class AuthService {
         CompletableFuture<String> future = new CompletableFuture<>();
 
         if (password == null || password.length() < 4) {
-            future.complete("<red>[ANSAC] Password must be at least 4 characters.");
+            future.complete("<red>[ANSAC] 密码长度至少为 4 个字符。");
             return future;
         }
 
         if (!password.equals(confirmPassword)) {
-            future.complete("<red>[ANSAC] Passwords do not match.");
+            future.complete("<red>[ANSAC] 两次输入的密码不一致。");
             return future;
         }
 
         if (password.length() > 64) {
-            future.complete("<red>[ANSAC] Password is too long (max 64 characters).");
+            future.complete("<red>[ANSAC] 密码过长（最多 64 个字符）。");
             return future;
         }
 
         LoginSession session = sessionManager.getSession(uuid);
         if (session == null) {
-            future.complete("<red>[ANSAC] Session not found. Please reconnect.");
+            future.complete("<red>[ANSAC] 会话不存在，请重新连接。");
             return future;
         }
 
         database.isRegisteredByName(playerName).thenAccept(registered -> {
             if (registered) {
-                future.complete("<red>[ANSAC] You are already registered. Use <white>/login <password><red>.");
+                future.complete("<red>[ANSAC] 你已注册，请使用 <white>/login <密码><red>。");
                 return;
             }
 
@@ -100,15 +100,15 @@ public class AuthService {
             database.savePassword(uuid, playerName, hash, session.getIp()).thenRun(() -> {
                 session.setRegistered(true);
                 sessionManager.markAuthenticated(uuid);
-                future.complete("<green>[ANSAC] <gray>Registration successful. You are now logged in.");
+                future.complete("<green>[ANSAC] <gray>注册成功，已自动登录。");
             }).exceptionally(ex -> {
-                future.complete("<red>[ANSAC] <gray>Registration failed due to a database error. Please contact an admin.");
-                plugin.getLogger().log(Level.SEVERE, "Failed to save registration for " + playerName, ex);
+                future.complete("<red>[ANSAC] <gray>注册失败，数据库异常，请联系管理员。");
+                plugin.getLogger().log(Level.SEVERE, "注册信息保存失败：" + playerName, ex);
                 return null;
             });
         }).exceptionally(ex -> {
-            future.complete("<red>[ANSAC] <gray>Registration failed due to a database error. Please contact an admin.");
-            plugin.getLogger().log(Level.SEVERE, "Failed to check registration for " + playerName, ex);
+            future.complete("<red>[ANSAC] <gray>注册失败，数据库异常，请联系管理员。");
+            plugin.getLogger().log(Level.SEVERE, "注册检查失败：" + playerName, ex);
             return null;
         });
 
@@ -120,29 +120,29 @@ public class AuthService {
 
         LoginSession session = sessionManager.getSession(uuid);
         if (session == null) {
-            future.complete("<red>[ANSAC] Session not found. Please reconnect.");
+            future.complete("<red>[ANSAC] 会话不存在，请重新连接。");
             return future;
         }
 
         if (session.isAuthenticated()) {
-            future.complete("<yellow>[ANSAC] You are already logged in.");
+            future.complete("<yellow>[ANSAC] 你已经登录了。");
             return future;
         }
 
         if (!session.isRegistered()) {
-            future.complete("<red>[ANSAC] You are not registered. Use <white>/register <password> <confirm><red>.");
+            future.complete("<red>[ANSAC] 你尚未注册，请使用 <white>/register <密码> <确认密码><red>。");
             return future;
         }
 
         database.getPasswordHash(uuid).thenAccept(hashOpt -> {
             if (hashOpt.isEmpty()) {
-                future.complete("<red>[ANSAC] Account data not found. Please contact an admin.");
+                future.complete("<red>[ANSAC] 账户数据不存在，请联系管理员。");
                 return;
             }
 
             if (BCryptHasher.verify(password, hashOpt.get())) {
                 sessionManager.markAuthenticated(uuid);
-                future.complete("<green>[ANSAC] <gray>Login successful. Welcome back!");
+                future.complete("<green>[ANSAC] <gray>登录成功，欢迎回来！");
             } else {
                 session.incrementFailedAttempts();
                 int attempts = session.getFailedAttempts();
@@ -151,18 +151,18 @@ public class AuthService {
                     if (player != null && player.isOnline()) {
                         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                             ServerVersionAdapter.kickPlayer(player, MINI_MESSAGE.deserialize(
-                                "<red>[ANSAC] <gray>Too many failed login attempts."
+                                "<red>[ANSAC] <gray>登录失败次数过多，已被踢出服务器。"
                             ));
                         });
                     }
-                    future.complete("<red>[ANSAC] Too many failed login attempts.");
+                    future.complete("<red>[ANSAC] 登录失败次数过多，已被踢出服务器。");
                 } else {
-                    future.complete("<red>[ANSAC] <gray>Incorrect password. Attempts remaining: <white>" + (5 - attempts));
+                    future.complete("<red>[ANSAC] <gray>密码错误，剩余尝试次数：<white>" + (5 - attempts));
                 }
             }
         }).exceptionally(ex -> {
-            future.complete("<red>[ANSAC] <gray>Login failed due to a database error. Please contact an admin.");
-            plugin.getLogger().log(Level.SEVERE, "Failed to fetch password hash for login", ex);
+            future.complete("<red>[ANSAC] <gray>登录失败，数据库异常，请联系管理员。");
+            plugin.getLogger().log(Level.SEVERE, "获取密码哈希失败（登录）", ex);
             return null;
         });
 
@@ -173,23 +173,23 @@ public class AuthService {
         CompletableFuture<String> future = new CompletableFuture<>();
 
         if (newPassword == null || newPassword.length() < 4) {
-            future.complete("<red>[ANSAC] New password must be at least 4 characters.");
+            future.complete("<red>[ANSAC] 新密码长度至少为 4 个字符。");
             return future;
         }
 
         if (newPassword.length() > 64) {
-            future.complete("<red>[ANSAC] New password is too long (max 64 characters).");
+            future.complete("<red>[ANSAC] 新密码过长（最多 64 个字符）。");
             return future;
         }
 
         database.getPasswordHash(uuid).thenAccept(hashOpt -> {
             if (hashOpt.isEmpty()) {
-                future.complete("<red>[ANSAC] Account data not found.");
+                future.complete("<red>[ANSAC] 账户数据不存在。");
                 return;
             }
 
             if (!BCryptHasher.verify(oldPassword, hashOpt.get())) {
-                future.complete("<red>[ANSAC] Old password is incorrect.");
+                future.complete("<red>[ANSAC] 原密码错误。");
                 return;
             }
 
@@ -199,15 +199,15 @@ public class AuthService {
             String name = session != null ? session.getPlayerName() : "unknown";
 
             database.savePassword(uuid, name, newHash, ip).thenRun(() -> {
-                future.complete("<green>[ANSAC] <gray>Password changed successfully.");
+                future.complete("<green>[ANSAC] <gray>密码修改成功。");
             }).exceptionally(ex -> {
-                future.complete("<red>[ANSAC] <gray>Password change failed due to a database error.");
-                plugin.getLogger().log(Level.SEVERE, "Failed to save new password", ex);
+                future.complete("<red>[ANSAC] <gray>密码修改失败，数据库异常。");
+                plugin.getLogger().log(Level.SEVERE, "保存新密码失败", ex);
                 return null;
             });
         }).exceptionally(ex -> {
-            future.complete("<red>[ANSAC] <gray>Password change failed due to a database error.");
-            plugin.getLogger().log(Level.SEVERE, "Failed to fetch password hash for change", ex);
+            future.complete("<red>[ANSAC] <gray>密码修改失败，数据库异常。");
+            plugin.getLogger().log(Level.SEVERE, "获取密码哈希失败（修改密码）", ex);
             return null;
         });
 
@@ -219,23 +219,23 @@ public class AuthService {
 
         LoginSession session = sessionManager.getSession(uuid);
         if (session == null) {
-            future.complete("<red>[ANSAC] Session not found.");
+            future.complete("<red>[ANSAC] 会话不存在。");
             return future;
         }
 
         if (!session.isAuthenticated()) {
-            future.complete("<yellow>[ANSAC] You are not logged in.");
+            future.complete("<yellow>[ANSAC] 你尚未登录。");
             return future;
         }
 
         session.setAuthenticated(false);
-        future.complete("<yellow>[ANSAC] <gray>You have been logged out. Use <white>/login <password><gray> to log in again.");
+        future.complete("<yellow>[ANSAC] <gray>已登出，使用 <white>/login <密码><gray> 重新登录。");
         return future;
     }
 
     public void reload() {
         authConfig.load();
-        plugin.getLogger().info("Auth configuration reloaded.");
+        plugin.getLogger().info("认证配置已重载。");
     }
 
     public void shutdown() {
@@ -244,6 +244,6 @@ public class AuthService {
         if (proxyManager != null) {
             proxyManager.shutdown();
         }
-        plugin.getLogger().info("Authentication module shut down.");
+        plugin.getLogger().info("认证模块已关闭。");
     }
 }

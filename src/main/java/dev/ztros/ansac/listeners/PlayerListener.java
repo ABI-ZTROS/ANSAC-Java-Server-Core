@@ -26,7 +26,7 @@ public class PlayerListener implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         plugin.getSchedulerAdapter().runNextTick(() -> {
             plugin.getPlayerDataManager().createPlayerData(event.getPlayer());
-            plugin.getLogger().info("Tracking player: " + event.getPlayer().getName());
+            plugin.getLogger().info("开始追踪玩家：" + event.getPlayer().getName());
 
             // Notify auth service
             if (plugin.getAuthService().isEnabled()) {

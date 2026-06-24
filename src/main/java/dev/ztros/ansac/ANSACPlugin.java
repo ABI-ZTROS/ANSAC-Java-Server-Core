@@ -43,7 +43,7 @@ public class ANSACPlugin extends JavaPlugin {
         // PacketEvents is bundled (shaded), so we must create and set the API instance ourselves
         PacketEvents.setAPI(SpigotPacketEventsBuilder.build(this));
         PacketEvents.getAPI().load();
-        getLogger().info("PacketEvents loaded (shaded mode).");
+        getLogger().info("PacketEvents 已加载（内嵌模式）。");
     }
 
     @Override
@@ -51,8 +51,8 @@ public class ANSACPlugin extends JavaPlugin {
         instance = this;
 
         getLogger().info("========================================");
-        getLogger().info("  ANSAC - Advanced Network Security");
-        getLogger().info("  Anti-Cheat System for Folia");
+        getLogger().info("  ANSAC - 高级网络安全反作弊系统");
+        getLogger().info("  专为 Folia 设计的反作弊系统");
         getLogger().info("  Version: " + getDescription().getVersion());
         getLogger().info("========================================");
 
@@ -70,9 +70,9 @@ public class ANSACPlugin extends JavaPlugin {
             getServer().getPluginManager().registerEvents(
                 new AuthListener(this, authService), this
             );
-            getLogger().info("Authentication module enabled.");
+            getLogger().info("认证模块已启用。");
         } else {
-            getLogger().info("Authentication module disabled.");
+            getLogger().info("认证模块已关闭。");
         }
 
         // Initialize managers
@@ -85,7 +85,7 @@ public class ANSACPlugin extends JavaPlugin {
         // Initialize PacketEvents (load was already called in onLoad)
         PacketEvents.getAPI().init();
         new PacketListener(this).register();
-        getLogger().info("PacketEvents integration enabled.");
+        getLogger().info("PacketEvents 集成已启用。");
 
         // Register commands
         getCommand("ansac").setExecutor(new ANSACCommand(this));
@@ -103,7 +103,7 @@ public class ANSACPlugin extends JavaPlugin {
             if (logoutCmd != null) logoutCmd.setExecutor(authCommand);
         }
 
-        getLogger().info("ANSAC has been enabled successfully!");
+        getLogger().info("ANSAC 已成功启动！");
     }
 
     @Override
@@ -127,7 +127,7 @@ public class ANSACPlugin extends JavaPlugin {
             checkManager.shutdown();
         }
 
-        getLogger().info("ANSAC has been disabled.");
+        getLogger().info("ANSAC 已关闭。");
     }
 
     public void reload() {
@@ -137,6 +137,6 @@ public class ANSACPlugin extends JavaPlugin {
         if (authService != null) {
             authService.reload();
         }
-        getLogger().info("ANSAC configuration reloaded.");
+        getLogger().info("ANSAC 配置已重载。");
     }
 }

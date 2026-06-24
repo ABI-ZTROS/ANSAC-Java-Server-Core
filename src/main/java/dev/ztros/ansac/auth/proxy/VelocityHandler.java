@@ -39,7 +39,7 @@ public class VelocityHandler implements PluginMessageListener {
                 p.sendPluginMessage(plugin, "velocity:main", payload);
             }
         } catch (IOException e) {
-            plugin.getLogger().warning("Failed to send Velocity login status: " + e.getMessage());
+            plugin.getLogger().warning("Velocity 发送登录状态失败：" + e.getMessage());
         }
     }
 }

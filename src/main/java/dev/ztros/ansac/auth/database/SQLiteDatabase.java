@@ -48,9 +48,9 @@ public class SQLiteDatabase implements AuthDatabase {
             try (Connection conn = dataSource.getConnection();
                  PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.execute();
-                plugin.getLogger().info("Auth database initialized successfully.");
+                plugin.getLogger().info("认证数据库初始化完成。");
             } catch (SQLException e) {
-                plugin.getLogger().severe("Failed to initialize auth database: " + e.getMessage());
+                plugin.getLogger().severe("认证数据库初始化失败：" + e.getMessage());
                 e.printStackTrace();
             }
         });
@@ -69,7 +69,7 @@ public class SQLiteDatabase implements AuthDatabase {
                     }
                 }
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error fetching password hash: " + e.getMessage());
+                plugin.getLogger().severe("获取密码哈希失败：" + e.getMessage());
             }
             return Optional.empty();
         });
@@ -88,7 +88,7 @@ public class SQLiteDatabase implements AuthDatabase {
                     }
                 }
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error fetching password hash by name: " + e.getMessage());
+                plugin.getLogger().severe("通过用户名获取密码哈希失败：" + e.getMessage());
             }
             return Optional.empty();
         });
@@ -105,7 +105,7 @@ public class SQLiteDatabase implements AuthDatabase {
                     return rs.next();
                 }
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error checking registration: " + e.getMessage());
+                plugin.getLogger().severe("检查注册状态失败：" + e.getMessage());
             }
             return false;
         });
@@ -122,7 +122,7 @@ public class SQLiteDatabase implements AuthDatabase {
                     return rs.next();
                 }
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error checking registration by name: " + e.getMessage());
+                plugin.getLogger().severe("通过用户名检查注册状态失败：" + e.getMessage());
             }
             return false;
         });
@@ -149,7 +149,7 @@ public class SQLiteDatabase implements AuthDatabase {
                 stmt.setLong(6, now);
                 stmt.executeUpdate();
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error saving password: " + e.getMessage());
+                plugin.getLogger().severe("保存密码失败：" + e.getMessage());
             }
         });
     }
@@ -166,7 +166,7 @@ public class SQLiteDatabase implements AuthDatabase {
                 stmt.setString(3, uuid.toString());
                 stmt.executeUpdate();
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error updating login: " + e.getMessage());
+                plugin.getLogger().severe("更新登录信息失败：" + e.getMessage());
             }
         });
     }
@@ -184,7 +184,7 @@ public class SQLiteDatabase implements AuthDatabase {
                     }
                 }
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error fetching last IP: " + e.getMessage());
+                plugin.getLogger().severe("获取上次登录 IP 失败：" + e.getMessage());
             }
             return Optional.empty();
         });
@@ -199,7 +199,7 @@ public class SQLiteDatabase implements AuthDatabase {
                 stmt.setString(1, uuid.toString());
                 stmt.executeUpdate();
             } catch (SQLException e) {
-                plugin.getLogger().severe("Error removing registration: " + e.getMessage());
+                plugin.getLogger().severe("删除注册信息失败：" + e.getMessage());
             }
         });
     }
@@ -209,7 +209,7 @@ public class SQLiteDatabase implements AuthDatabase {
         return CompletableFuture.runAsync(() -> {
             if (dataSource != null && !dataSource.isClosed()) {
                 dataSource.close();
-                plugin.getLogger().info("Auth database connection closed.");
+                plugin.getLogger().info("认证数据库连接已关闭。");
             }
         });
     }
