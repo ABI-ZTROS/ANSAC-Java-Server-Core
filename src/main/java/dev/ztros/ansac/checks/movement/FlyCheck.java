@@ -27,7 +27,10 @@ public class FlyCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
-        if (player.isFlying() || player.isInsideVehicle() || player.isGliding()) return;
+        // Skip creative, spectator, flying, vehicle, and elytra players
+        if (player.getGameMode().name().contains("CREATIVE") ||
+            player.getGameMode().name().contains("SPECTATOR") ||
+            player.isFlying() || player.isInsideVehicle() || player.isGliding()) return;
 
         Location from = data.getLastLocation();
         Location to = data.getCurrentLocation();

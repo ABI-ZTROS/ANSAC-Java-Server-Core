@@ -33,8 +33,10 @@ public class SpeedCheck extends Check {
         double horizontalDist = data.getHorizontalDistance();
         double verticalDist = data.getVerticalDistance();
 
-        // Skip if player is flying, in vehicle, or teleporting
-        if (player.isFlying() || player.isInsideVehicle() || player.isGliding()) return;
+        // Skip creative, spectator, flying, vehicle, and elytra players
+        if (player.getGameMode().name().contains("CREATIVE") ||
+            player.getGameMode().name().contains("SPECTATOR") ||
+            player.isFlying() || player.isInsideVehicle() || player.isGliding()) return;
 
         // Calculate expected max speed
         double expectedSpeed = getExpectedSpeed(player, data);
