@@ -6,6 +6,7 @@ import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -90,14 +91,24 @@ public class PlayerListener implements Listener {
     public void onEntityDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof org.bukkit.entity.Player player)) return;
 
+        PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+        if (data == null) return;
+
+        // 记录伤害时间（Velocity 检测需要）
+        data.setLastDamageTime(System.currentTimeMillis());
+
+        // 判断是否为攻击伤害（玩家被另一个实体攻击）
+        if (event instanceof EntityDamageByEntityEvent) {
+            data.setLastDamageAttack(true);
+        } else {
+            data.setLastDamageAttack(false);
+        }
+
         // Wind charge damage or explosion = knockback
         if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION
                 || event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION
                 || event.getCause() == EntityDamageEvent.DamageCause.FLY_INTO_WALL) {
-            PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
-            if (data != null) {
-                data.setLastKnockbackTime(System.currentTimeMillis());
-            }
+            data.setLastKnockbackTime(System.currentTimeMillis());
         }
     }
 }

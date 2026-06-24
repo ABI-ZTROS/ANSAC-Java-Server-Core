@@ -148,6 +148,27 @@ public class PlayerData {
     @Getter @Setter
     private int blockPlaceCount = 0;
 
+    // Velocity check tracking
+    @Getter @Setter
+    private int velocityBuffer = 0;
+
+    @Getter @Setter
+    private long lastDamageTime = 0;
+
+    @Getter @Setter
+    private boolean lastDamageAttack = false;
+
+    // Scaffold check tracking
+    @Getter @Setter
+    private int scaffoldBuffer = 0;
+
+    // FastBreak check tracking
+    @Getter @Setter
+    private int fastBreakBuffer = 0;
+
+    @Getter @Setter
+    private long lastDigPacketTime = 0;
+
     // Time-windowed click timestamps for CPS calculation
     @Getter
     private final List<Long> clickTimestamps = new CopyOnWriteArrayList<>();
