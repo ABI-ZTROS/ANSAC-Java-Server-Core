@@ -6,9 +6,11 @@ import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.util.Vector;
 
 /**
  * Bukkit event listener for player-related events.
@@ -67,10 +69,32 @@ public class PlayerListener implements Listener {
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(event.getPlayer());
         if (data == null) return;
 
+        // Detect sudden velocity changes (wind charge, explosion knockback, etc.)
+        Vector velocity = event.getPlayer().getVelocity();
+        double velLen = velocity.length();
+        if (velLen > 1.5) {
+            data.setLastKnockbackTime(System.currentTimeMillis());
+        }
+
         // Update location data
         data.updateLocation(to);
 
         // Process movement checks
         plugin.getCheckManager().processPlayer(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.Player player)) return;
+
+        // Wind charge damage or explosion = knockback
+        if (event.getCause() == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION
+                || event.getCause() == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION
+                || event.getCause() == EntityDamageEvent.DamageCause.FLY_INTO_WALL) {
+            PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+            if (data != null) {
+                data.setLastKnockbackTime(System.currentTimeMillis());
+            }
+        }
     }
 }

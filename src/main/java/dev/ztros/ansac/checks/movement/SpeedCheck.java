@@ -63,6 +63,13 @@ public class SpeedCheck extends Check {
             expected += 0.5;
         }
 
+        // Wind Charge / explosion knockback: exempt for 1 second after sudden velocity change
+        long now = System.currentTimeMillis();
+        if ((now - data.getLastKnockbackTime()) < 1000L) {
+            data.setSpeedBuffer(0);
+            return;
+        }
+
         if (horizontalDist > expected + LENIENCY) {
             int buffer = data.getSpeedBuffer() + 1;
             data.setSpeedBuffer(buffer);

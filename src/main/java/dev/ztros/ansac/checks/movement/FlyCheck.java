@@ -51,6 +51,10 @@ public class FlyCheck extends Check {
         }
         boolean recentlyJumped = (now - data.getLastJumpTime()) < (JUMP_EXEMPT_TICKS * 50L);
 
+        // --- Wind Charge / explosion knockback detection ---
+        // Wind charge gives a sudden velocity boost; exempt for a short time
+        boolean recentKnockback = (now - data.getLastKnockbackTime()) < 1000L; // 1 second
+
         // --- Elytra / Firework rocket check ---
         // Player might be using firework with elytra (gives upward boost)
         boolean hasElytra = player.getInventory().getChestplate() != null
@@ -69,7 +73,8 @@ public class FlyCheck extends Check {
                 && !player.isClimbing()
                 && !nearGround
                 && !recentlyJumped
-                && !usingFirework) {
+                && !usingFirework
+                && !recentKnockback) {
             int hoverBuffer = data.getHoverBuffer() + 1;
             data.setHoverBuffer(hoverBuffer);
             if (hoverBuffer >= BUFFER_MAX) {
@@ -81,9 +86,9 @@ public class FlyCheck extends Check {
         }
 
         // --- Check 2: ascending while not on ground ---
-        // Skip if recently jumped, has jump boost, levitation, climbing, in liquid, near ground, or using firework
+        // Skip if recently jumped, has jump boost, levitation, climbing, in liquid, near ground, using firework, or recent knockback
         if (!onGround && deltaY > LENIENCY) {
-            if (recentlyJumped || usingFirework || nearGround) {
+            if (recentlyJumped || usingFirework || nearGround || recentKnockback) {
                 data.setAscendBuffer(0);
             } else {
                 PotionEffectType levitation = ServerVersionAdapter.getLevitation();
@@ -113,7 +118,7 @@ public class FlyCheck extends Check {
             // Normal gravity: starts at ~-0.08 and accelerates to ~-3.92
             // If falling slower than -0.03 (and not in liquid/climbing), suspicious
             if (deltaY > -0.03 && !player.isInWater() && !player.isInLava()
-                    && !player.isClimbing() && !recentlyJumped && !usingFirework) {
+                    && !player.isClimbing() && !recentlyJumped && !usingFirework && !recentKnockback) {
                 int fallBuffer = data.getFallBuffer() + 1;
                 data.setFallBuffer(fallBuffer);
                 if (fallBuffer >= BUFFER_MAX) {

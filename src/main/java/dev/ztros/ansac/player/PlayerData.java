@@ -106,6 +106,10 @@ public class PlayerData {
     @Getter @Setter
     private long lastJumpTime = 0;
 
+    // Knockback tracking (wind charge, explosions, etc.)
+    @Getter @Setter
+    private long lastKnockbackTime = 0;
+
     // Elytra tracking
     @Getter @Setter
     private int elytraHoverBuffer = 0;
