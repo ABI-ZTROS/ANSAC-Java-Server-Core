@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks.combat;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -42,6 +43,12 @@ public class ReachCheck extends Check {
     public void processAttack(Player player, PlayerData data, Entity target) {
         if (!isEnabled() || data.hasBypass()) return;
 
+        // Ping compensation: skip check if latency is too high or spiking
+        if (data.getPingCompensator().shouldSkipCheck()) {
+            data.setLastAttackTime(System.currentTimeMillis());
+            return;
+        }
+
         Location playerLoc = player.getLocation();
         Location targetLoc = target.getLocation();
 
@@ -50,9 +57,6 @@ public class ReachCheck extends Check {
             Math.pow(playerLoc.getX() - targetLoc.getX(), 2) +
             Math.pow(playerLoc.getZ() - targetLoc.getZ(), 2)
         );
-
-        // Calculate 3D distance
-        double distance = playerLoc.distance(targetLoc);
 
         // Account for eye height
         double eyeHeightDiff = Math.abs(
@@ -66,19 +70,24 @@ public class ReachCheck extends Check {
         // Determine max allowed reach
         double maxReach = player.getGameMode().name().contains("CREATIVE") ? CREATIVE_REACH : MAX_REACH;
 
-        // Account for ping
-        int ping = data.getPing();
-        maxReach += ping * PING_FACTOR;
+        // Apply ping-compensated reach multiplier
+        maxReach = data.getPingCompensator().getCompensatedSpeed(
+            maxReach, PingCompensator.COMPENSATION_REACH);
 
         // Account for client-server desync (target may have moved)
         maxReach += 0.3; // Extra leniency for movement desync
 
+        // Ping-compensated leniency
+        double compensatedLeniency = data.getPingCompensator().getCompensatedThreshold(
+            LENIENCY, PingCompensator.COMPENSATION_REACH);
+
         // Check if reach exceeds limit
-        if (effectiveReach > maxReach + LENIENCY) {
+        if (effectiveReach > maxReach + compensatedLeniency) {
             double severity = effectiveReach / maxReach;
             flag(player, data, severity,
-                String.format("Reach: %.2f / %.2f (target: %s, ping: %dms)",
-                    effectiveReach, maxReach, target.getName(), ping));
+                String.format("攻击距离异常: %.2f / %.2f (目标: %s, 延迟 %s)",
+                    effectiveReach, maxReach, target.getName(),
+                    data.getPingCompensator().getPingStatus()));
         }
 
         // Track attack

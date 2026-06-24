@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -50,6 +51,14 @@ public class ElytraFlightCheck extends Check {
     public void process(Player player, PlayerData data) {
         if (!isEnabled() || data.hasBypass()) return;
 
+        // Ping compensation: skip check if latency is too high or spiking
+        if (data.getPingCompensator().shouldSkipCheck()) {
+            data.setElytraHoverBuffer(0);
+            data.setElytraStopBuffer(0);
+            data.setLastGlideSpeed(0);
+            return;
+        }
+
         // Only check when player is actually gliding
         if (!player.isGliding()) {
             // Reset buffers when not gliding
@@ -66,14 +75,27 @@ public class ElytraFlightCheck extends Check {
         double horizontalSpeed = data.getHorizontalDistance();
         double verticalSpeed = data.getVerticalDistance();
 
+        // Ping-compensated thresholds
+        double compensatedHoverThreshold = data.getPingCompensator().getCompensatedThreshold(
+            HOVER_SPEED_THRESHOLD, PingCompensator.COMPENSATION_ELYTRA);
+        int compensatedHoverBuffer = data.getPingCompensator().getCompensatedBuffer(
+            HOVER_BUFFER_MAX, PingCompensator.COMPENSATION_ELYTRA);
+        int compensatedStopBuffer = data.getPingCompensator().getCompensatedBuffer(
+            STOP_BUFFER_MAX, PingCompensator.COMPENSATION_ELYTRA);
+        double compensatedMaxSpeed = data.getPingCompensator().getCompensatedSpeed(
+            MAX_GLIDE_SPEED, PingCompensator.COMPENSATION_ELYTRA);
+        double compensatedFireworkSpeed = data.getPingCompensator().getCompensatedSpeed(
+            FIREWORK_MAX_SPEED, PingCompensator.COMPENSATION_ELYTRA);
+
         // --- Check 1: Elytra hover (gliding but not moving) ---
-        if (horizontalSpeed < HOVER_SPEED_THRESHOLD && Math.abs(verticalSpeed) < 0.05) {
+        if (horizontalSpeed < compensatedHoverThreshold && Math.abs(verticalSpeed) < 0.05) {
             int buffer = data.getElytraHoverBuffer() + 1;
             data.setElytraHoverBuffer(buffer);
-            if (buffer >= HOVER_BUFFER_MAX) {
+            if (buffer >= compensatedHoverBuffer) {
                 flag(player, data, 1.5,
                     "鞘翅空中悬停（连续 " + buffer + " tick，水平速度: "
-                    + String.format("%.3f", horizontalSpeed) + "）");
+                    + String.format("%.3f", horizontalSpeed)
+                    + "，延迟 " + data.getPingCompensator().getPingStatus() + "）");
             }
         } else {
             data.setElytraHoverBuffer(0);
@@ -81,19 +103,20 @@ public class ElytraFlightCheck extends Check {
 
         // --- Check 2: Instant stop (was flying fast, suddenly stopped without collision) ---
         double lastSpeed = data.getLastGlideSpeed();
-        if (lastSpeed > MAX_GLIDE_SPEED * 0.5) { // Was moving at decent speed
+        if (lastSpeed > compensatedMaxSpeed * 0.5) { // Was moving at decent speed
             if (horizontalSpeed < STOP_SPEED_THRESHOLD) {
                 // Check if player hit something (wall, ground, block)
                 if (!didCollide(player)) {
                     int buffer = data.getElytraStopBuffer() + 1;
                     data.setElytraStopBuffer(buffer);
-                    if (buffer >= STOP_BUFFER_MAX) {
+                    if (buffer >= compensatedStopBuffer) {
                         flag(player, data, 1.8,
                             "鞘翅瞬间停止（从 "
                             + String.format("%.2f", lastSpeed)
                             + " 突然降至 "
                             + String.format("%.3f", horizontalSpeed)
-                            + "，未检测到碰撞，连续 " + buffer + " tick）");
+                            + "，未检测到碰撞，连续 " + buffer + " tick，延迟 "
+                            + data.getPingCompensator().getPingStatus() + "）");
                     }
                 } else {
                     data.setElytraStopBuffer(0);
@@ -109,14 +132,15 @@ public class ElytraFlightCheck extends Check {
         // 正常上限 1.5 格/刻（0度俯角），烟花加速上限 1.675 格/刻
         // Account for firework boost: if last speed was high, exempt for a few ticks
         boolean recentlyBoosted = lastSpeed > BOOST_DECEL_EXEMPT;
-        double effectiveMax = recentlyBoosted ? FIREWORK_MAX_SPEED : MAX_GLIDE_SPEED;
+        double effectiveMax = recentlyBoosted ? compensatedFireworkSpeed : compensatedMaxSpeed;
 
         if (horizontalSpeed > effectiveMax) {
             double severity = horizontalSpeed / effectiveMax;
             flag(player, data, severity,
-                String.format("鞘翅速度异常: %.3f 格/刻 (上限: %.2f, %s)",
+                String.format("鞘翅速度异常: %.3f 格/刻 (上限: %.2f, %s, 延迟 %s)",
                     horizontalSpeed, effectiveMax,
-                    recentlyBoosted ? "烟花加速中" : "正常滑翔"));
+                    recentlyBoosted ? "烟花加速中" : "正常滑翔",
+                    data.getPingCompensator().getPingStatus()));
         }
 
         // Update last glide speed

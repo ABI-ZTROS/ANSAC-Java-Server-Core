@@ -69,6 +69,9 @@ public class PlayerListener implements Listener {
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(event.getPlayer());
         if (data == null) return;
 
+        // Update ping sample for latency compensation
+        data.getPingCompensator().addPingSample(data.getPing());
+
         // Detect sudden velocity changes (wind charge, explosion knockback, etc.)
         Vector velocity = event.getPlayer().getVelocity();
         double velLen = velocity.length();

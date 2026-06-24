@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks.combat;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.entity.Player;
 
@@ -55,8 +56,24 @@ public class KillAuraCheck extends Check {
     public void processAttack(Player player, PlayerData data) {
         if (!isEnabled() || data.hasBypass()) return;
 
+        // Ping compensation: skip check if latency is too high or spiking
+        if (data.getPingCompensator().shouldSkipCheck()) {
+            data.setNoSwingBuffer(0);
+            data.setFastClickBuffer(0);
+            data.setLastAttackTime(System.currentTimeMillis());
+            return;
+        }
+
         long now = System.currentTimeMillis();
         long lastAttack = data.getLastAttackTime();
+
+        // Ping-compensated thresholds
+        int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
+            BUFFER_MAX, PingCompensator.COMPENSATION_KILLAURA);
+        double compensatedMaxCps = data.getPingCompensator().getCompensatedSpeed(
+            MAX_CPS, PingCompensator.COMPENSATION_KILLAURA);
+        long compensatedMinInterval = (long) data.getPingCompensator().getCompensatedThreshold(
+            MIN_CLICK_INTERVAL, PingCompensator.COMPENSATION_KILLAURA);
 
         // --- Check 1: Attack without recent arm swing ---
         long lastSwing = data.getLastSwingTime();
@@ -64,9 +81,10 @@ public class KillAuraCheck extends Check {
             // No swing within 150ms before this attack
             int noSwingBuffer = data.getNoSwingBuffer() + 1;
             data.setNoSwingBuffer(noSwingBuffer);
-            if (noSwingBuffer >= BUFFER_MAX) {
+            if (noSwingBuffer >= compensatedBuffer) {
                 flag(player, data, 1.0,
-                    "攻击无挥臂动作 (连续 " + noSwingBuffer + " 次)");
+                    "攻击无挥臂动作 (连续 " + noSwingBuffer + " 次，延迟 "
+                    + data.getPingCompensator().getPingStatus() + ")");
             }
         } else {
             data.setNoSwingBuffer(0);
@@ -75,12 +93,13 @@ public class KillAuraCheck extends Check {
         // --- Check 2: Inhuman attack interval ---
         if (lastAttack > 0) {
             long interval = now - lastAttack;
-            if (interval > 0 && interval < MIN_CLICK_INTERVAL) {
+            if (interval > 0 && interval < compensatedMinInterval) {
                 int fastBuffer = data.getFastClickBuffer() + 1;
                 data.setFastClickBuffer(fastBuffer);
-                if (fastBuffer >= BUFFER_MAX) {
+                if (fastBuffer >= compensatedBuffer) {
                     flag(player, data, 1.2,
-                        String.format("攻击间隔过短: %dms (连续 %d 次)", interval, fastBuffer));
+                        String.format("攻击间隔过短: %dms (连续 %d 次，延迟 %s)",
+                            interval, fastBuffer, data.getPingCompensator().getPingStatus()));
                 }
             } else {
                 data.setFastClickBuffer(0);
@@ -92,9 +111,10 @@ public class KillAuraCheck extends Check {
         long cutoff = now - CPS_WINDOW_MS;
         data.getClickTimestamps().removeIf(t -> t < cutoff);
         int cps = data.getClickTimestamps().size();
-        if (cps > MAX_CPS) {
-            flag(player, data, cps / MAX_CPS,
-                String.format("战斗点击频率过高: %d CPS (上限 %.0f)", cps, MAX_CPS));
+        if (cps > compensatedMaxCps) {
+            flag(player, data, cps / compensatedMaxCps,
+                String.format("战斗点击频率过高: %d CPS (上限 %.0f，延迟 %s)",
+                    cps, compensatedMaxCps, data.getPingCompensator().getPingStatus()));
         }
 
         data.setLastAttackTime(now);

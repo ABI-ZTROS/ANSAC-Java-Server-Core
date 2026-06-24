@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
@@ -46,6 +47,14 @@ public class FlyCheck extends Check {
     public void process(Player player, PlayerData data) {
         if (shouldSkip(player)) return;
 
+        // Ping compensation: skip check if latency is too high or spiking
+        if (data.getPingCompensator().shouldSkipCheck()) {
+            data.setHoverBuffer(0);
+            data.setAscendBuffer(0);
+            data.setFallBuffer(0);
+            return;
+        }
+
         Location from = data.getLastLocation();
         Location to = data.getCurrentLocation();
         if (from == null || to == null) return;
@@ -76,6 +85,10 @@ public class FlyCheck extends Check {
         double distToGround = distanceToGround(player);
         boolean nearGround = distToGround >= 0 && distToGround < 1.5;
 
+        // Ping-compensated buffer
+        int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
+            BUFFER_MAX, PingCompensator.COMPENSATION_FLY);
+
         // --- Check 1: sustained hover ---
         // Not on ground, not moving vertically, not in liquid, not climbing, not near ground
         if (!onGround && Math.abs(deltaY) < 0.001
@@ -87,8 +100,10 @@ public class FlyCheck extends Check {
                 && !recentKnockback) {
             int hoverBuffer = data.getHoverBuffer() + 1;
             data.setHoverBuffer(hoverBuffer);
-            if (hoverBuffer >= BUFFER_MAX) {
-                flag(player, data, 1.5, "空中悬停（连续 " + hoverBuffer + " tick）");
+            if (hoverBuffer >= compensatedBuffer) {
+                flag(player, data, 1.5,
+                    "空中悬停（连续 " + hoverBuffer + " tick，延迟 "
+                    + data.getPingCompensator().getPingStatus() + "）");
             }
             return;
         } else {
@@ -110,9 +125,10 @@ public class FlyCheck extends Check {
                         && !player.isInWater() && !player.isInLava()) {
                     int ascendBuffer = data.getAscendBuffer() + 1;
                     data.setAscendBuffer(ascendBuffer);
-                    if (ascendBuffer >= BUFFER_MAX) {
+                    if (ascendBuffer >= compensatedBuffer) {
                         flag(player, data, deltaY / LENIENCY,
-                            String.format("空中异常上升: dy=%.3f (连续 %d tick)", deltaY, ascendBuffer));
+                            String.format("空中异常上升: dy=%.3f (连续 %d tick, 延迟 %s)",
+                                deltaY, ascendBuffer, data.getPingCompensator().getPingStatus()));
                     }
                     return;
                 } else {
@@ -132,9 +148,10 @@ public class FlyCheck extends Check {
                     && !player.isClimbing() && !recentlyJumped && !usingFirework && !recentKnockback) {
                 int fallBuffer = data.getFallBuffer() + 1;
                 data.setFallBuffer(fallBuffer);
-                if (fallBuffer >= BUFFER_MAX) {
+                if (fallBuffer >= compensatedBuffer) {
                     flag(player, data, 1.2,
-                        String.format("下落过慢: dy=%.3f (连续 %d tick)", deltaY, fallBuffer));
+                        String.format("下落过慢: dy=%.3f (连续 %d tick, 延迟 %s)",
+                            deltaY, fallBuffer, data.getPingCompensator().getPingStatus()));
                 }
                 return;
             } else {

@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
@@ -65,11 +66,17 @@ public class SpeedCheck extends Check {
             return;
         }
 
+        // Ping compensation: skip check if latency is too high or spiking
+        if (data.getPingCompensator().shouldSkipCheck()) {
+            data.setSpeedBuffer(0);
+            return;
+        }
+
         double expected = getExpectedMaxSpeed(player);
 
-        // Account for ping (higher ping = more leniency)
-        int ping = data.getPing();
-        expected *= 1.0 + (ping / 1000.0) * 0.3; // was 0.5, too generous for hackers
+        // Apply ping-compensated speed multiplier
+        expected = data.getPingCompensator().getCompensatedSpeed(
+            expected, PingCompensator.COMPENSATION_SPEED);
 
         // Recent damage = possible knockback, add leniency
         if (player.getNoDamageTicks() > 0) {
@@ -83,14 +90,22 @@ public class SpeedCheck extends Check {
             return;
         }
 
-        if (horizontalDist > expected + LENIENCY) {
+        // Ping-compensated leniency and buffer
+        double compensatedLeniency = data.getPingCompensator().getCompensatedThreshold(
+            LENIENCY, PingCompensator.COMPENSATION_SPEED);
+        int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
+            BUFFER_MAX, PingCompensator.COMPENSATION_SPEED);
+
+        int ping = data.getPingCompensator().getAveragePing();
+
+        if (horizontalDist > expected + compensatedLeniency) {
             int buffer = data.getSpeedBuffer() + 1;
             data.setSpeedBuffer(buffer);
-            if (buffer >= BUFFER_MAX) {
+            if (buffer >= compensatedBuffer) {
                 double severity = horizontalDist / expected;
                 flag(player, data, severity,
-                    String.format("速度异常: %.3f / %.3f (连续 %d tick, 延迟 %dms)",
-                        horizontalDist, expected, buffer, ping));
+                    String.format("速度异常: %.3f / %.3f (连续 %d tick, 延迟 %s)",
+                        horizontalDist, expected, buffer, data.getPingCompensator().getPingStatus()));
             }
         } else {
             data.setSpeedBuffer(0);

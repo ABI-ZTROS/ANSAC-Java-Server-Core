@@ -110,6 +110,10 @@ public class PlayerData {
     @Getter @Setter
     private long lastKnockbackTime = 0;
 
+    // Ping compensation
+    @Getter
+    private final PingCompensator pingCompensator = new PingCompensator();
+
     // Elytra tracking
     @Getter @Setter
     private int elytraHoverBuffer = 0;

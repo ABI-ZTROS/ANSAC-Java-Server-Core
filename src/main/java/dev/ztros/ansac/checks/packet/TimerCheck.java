@@ -2,6 +2,7 @@ package dev.ztros.ansac.checks.packet;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.entity.Player;
 
@@ -42,6 +43,14 @@ public class TimerCheck extends Check {
      */
     public void onFlyingPacket(Player player, PlayerData data) {
         if (!isEnabled() || data.hasBypass()) return;
+
+        // Ping compensation: skip check if latency is too high or spiking
+        if (data.getPingCompensator().shouldSkipCheck()) {
+            data.setLastFlyingPacket(System.currentTimeMillis());
+            data.setFlyingPacketCount(0);
+            data.setTimerBalance(0);
+            return;
+        }
 
         long now = System.currentTimeMillis();
         long last = data.getLastFlyingPacket();
@@ -87,22 +96,32 @@ public class TimerCheck extends Check {
             return;
         }
 
+        // Ping-compensated thresholds
+        long compensatedThreshold = (long) data.getPingCompensator().getCompensatedThreshold(
+            BALANCE_THRESHOLD, PingCompensator.COMPENSATION_TIMER);
+        long compensatedMaxBalance = (long) data.getPingCompensator().getCompensatedThreshold(
+            MAX_BALANCE, PingCompensator.COMPENSATION_TIMER);
+
+        // Re-clamp with compensated max balance
+        balance = Math.max(-compensatedMaxBalance, Math.min(compensatedMaxBalance, balance));
+        data.setTimerBalance(balance);
+
         // Speed timer: balance too positive (client sending faster than expected)
-        if (balance > BALANCE_THRESHOLD) {
-            double severity = balance / (double) BALANCE_THRESHOLD;
+        if (balance > compensatedThreshold) {
+            double severity = balance / (double) compensatedThreshold;
             flag(player, data, severity,
-                String.format("Timer 加速: 累积偏移 +%dms (阈值: %dms, 样本: %d)",
-                    balance, BALANCE_THRESHOLD, count));
+                String.format("Timer 加速: 累积偏移 +%dms (阈值: %dms, 样本: %d, 延迟 %s)",
+                    balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
             // Reset balance after flag to avoid repeated flags
             data.setTimerBalance(0);
         }
 
         // Slow timer: balance too negative (client sending slower than expected)
-        if (balance < -BALANCE_THRESHOLD) {
-            double severity = Math.abs(balance) / (double) BALANCE_THRESHOLD;
+        if (balance < -compensatedThreshold) {
+            double severity = Math.abs(balance) / (double) compensatedThreshold;
             flag(player, data, severity,
-                String.format("Timer 减速: 累积偏移 %dms (阈值: %dms, 样本: %d)",
-                    balance, BALANCE_THRESHOLD, count));
+                String.format("Timer 减速: 累积偏移 %dms (阈值: %dms, 样本: %d, 延迟 %s)",
+                    balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
             data.setTimerBalance(0);
         }
 
