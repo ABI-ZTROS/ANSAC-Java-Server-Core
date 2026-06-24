@@ -8,6 +8,11 @@ import org.bukkit.entity.Player;
 /**
  * Timer check - detects game speed manipulation (speed hack / slow motion).
  *
+ * 参考: GrimAC TimerA (drift=120ms), TimerLimit (ping-abuse-limit=1000ms)
+ *   GrimAC 精度: 1.005 timer (0.5% 偏差可检测)
+ *   System.currentTimeMillis() 精度: 1-15ms (取决于操作系统)
+ *   正常客户端飞行包间隔: ~50ms (20 TPS), 实际波动 40-60ms
+ *
  * Design: Cumulative balance approach (inspired by GrimAC).
  * - Each expected tick adds +50ms to balance.
  * - Each actual packet interval subtracts the real time from balance.

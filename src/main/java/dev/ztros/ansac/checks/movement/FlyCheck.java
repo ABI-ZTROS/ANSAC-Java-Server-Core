@@ -14,6 +14,13 @@ import org.bukkit.util.Vector;
 /**
  * Fly check - detects abnormal vertical movement and flight.
  *
+ * 物理参考数据（Minecraft 1.21.x, minecraft.wiki）:
+ *   跳跃初速: 0.42 格/刻 (Y轴)
+ *   重力公式: v(t) = 0.98 * (v(t-1) - 0.08), 即每刻先减 0.08 再乘 0.98
+ *   终端速度: 3.92 格/刻 (78.4 m/s), 实际约 3.709 格/刻
+ *   跳跃提升: 初速 + 0.1 * 等级
+ *   风弹击退: ~6格高度, 2.5格水平
+ *
  * Design notes:
  * - Creative/Spectator mode players are skipped entirely.
  * - Players in vehicles, sleeping, or dead are skipped.

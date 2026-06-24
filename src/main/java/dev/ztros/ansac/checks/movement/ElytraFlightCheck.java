@@ -12,6 +12,14 @@ import org.bukkit.util.Vector;
 /**
  * ElytraFlight check - detects illegal elytra flight hacks.
  *
+ * 物理参考数据（Minecraft 1.21.x, minecraft.wiki）:
+ *   鞘翅 0度俯角水平速度: 1.5 格/刻 (30 m/s)
+ *   鞘翅 30度上仰最小速度: 0.36 格/刻 (7.2 m/s)
+ *   鞘翅 52度俯冲速度: 3.365 格/刻 (67.3 m/s)
+ *   烟花火箭加速: 1.675 格/刻 (33.5 m/s)
+ *   鞘翅水平摩擦: 0.99
+ *   最佳滑翔比: ~10:1 (水平/高度)
+ *
  * Detects:
  * 1. Elytra hover: player is gliding but not moving horizontally (hovering in place).
  * 2. Instant stop: player was gliding at high speed and instantly stopped without

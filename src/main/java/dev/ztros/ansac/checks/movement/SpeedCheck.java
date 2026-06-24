@@ -11,6 +11,16 @@ import org.bukkit.potion.PotionEffectType;
 /**
  * Speed check - detects abnormal horizontal movement speed.
  *
+ * 物理参考数据（Minecraft 1.21.x, minecraft.wiki）:
+ *   行走速度: 0.21585 格/刻 (4.317 m/s), 公式: 0.098 / (1 - 0.546)
+ *   疾跑速度: 0.2806 格/刻 (5.612 m/s), 加速度比行走快 30%
+ *   疾跑跳跃: 0.35635 格/刻 (7.127 m/s)
+ *   冰面倍率: 9.27x | 蓝冰倍率: 16.85x
+ *   速度药水: 基础速度 * (1 + 0.2 * 等级)
+ *   灵魂疾行: 疾跑 ~0.394 + 0.03 * (等级-1) 格/刻
+ *   海豚恩典: 水中速度 * 5.0
+ *   潜行: 速度 * 0.3 | 使用物品: 速度 * 0.2 | 蜘蛛网: 速度 * 0.05
+ *
  * Design notes:
  * - Creative/Spectator mode players are skipped entirely.
  * - Uses a buffer system: requires multiple consecutive violations to flag.

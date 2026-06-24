@@ -8,6 +8,13 @@ import org.bukkit.entity.Player;
 /**
  * KillAura check - detects automated combat (aimbot/clicker).
  *
+ * CPS 参考（cpsmeter.com）:
+ *   普通点击: 6-7 CPS
+ *   Jitter 点击: 12-16 CPS (最高约 18 CPS)
+ *   Butterfly 点击: 15-25 CPS (最高约 28 CPS 短爆发)
+ *   Drag 点击: 30-100+ CPS (依赖硬件)
+ *   正常人类持续稳定极限: ~14-16 CPS
+ *
  * Design notes:
  * - processSwing() ONLY records swing timestamps, NEVER flags.
  * - processAttack() checks for suspicious attack patterns.

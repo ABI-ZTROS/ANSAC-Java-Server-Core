@@ -1,29 +1,49 @@
 # ==========================================
-# ANSAC - Advanced Network Security Anti-Cheat
-# Configuration File
+# ANSAC - 高级网络安全反作弊系统
+# 配置文件
 # ==========================================
+#
+# 物理参考数据（Minecraft 1.21.x）:
+#   行走速度: 0.21585 格/刻 (4.317 m/s)
+#   疾跑速度: 0.2806 格/刻 (5.612 m/s)
+#   疾跑跳跃: 0.35635 格/刻 (7.127 m/s)
+#   跳跃初速: 0.42 格/刻 (Y轴)
+#   重力: 每刻先减 0.08, 再乘 0.98
+#   终端速度: 3.92 格/刻 (78.4 m/s)
+#   冰面倍率: 9.27x | 蓝冰倍率: 16.85x
+#   速度药水: 基础速度 * (1 + 0.2 * 等级)
+#   跳跃提升: 初速 + 0.1 * 等级
+#   灵魂疾行: 疾跑 ~0.394 + 0.03 * (等级-1) 格/刻
+#   海豚恩典: 水中速度 * 5.0
+#   鞘翅滑翔: 1.5 格/刻 (0度俯角, 30 m/s)
+#   鞘翅烟花: 1.675 格/刻 (33.5 m/s)
+#   鞘翅最小: 0.36 格/刻 (30度上仰, 7.2 m/s)
+#   鞘翅摩擦: 0.99 (水平)
+#   风弹击退: ~6格高度, 2.5格水平
+#   正常人类CPS极限: ~16 CPS (持续稳定)
+#   GrimAC Timer drift: 120ms
 
 settings:
-  # Enable debug logging
+  # 启用调试日志
   debug: false
 
-  # Enable alert messages to staff
+  # 启用管理员预警消息
   alerts-enabled: true
 
-  # Enable punishments (kick/ban)
+  # 启用处罚（踢出/封禁）
   punishments-enabled: true
 
-  # Violation decay interval in seconds
+  # 违规等级衰减间隔（秒）
   violation-decay-interval: 30
 
-  # Violation decay factor (0.0 - 1.0, higher = slower decay)
+  # 违规等级衰减因子 (0.0 - 1.0, 越高衰减越慢)
   violation-decay-factor: 0.9
 
-  # Ping check interval in seconds
+  # 延迟检测间隔（秒）
   ping-check-interval: 5
 
 # ==========================================
-# Check Configurations
+# 检测配置
 # ==========================================
 
 checks:
@@ -36,6 +56,13 @@ checks:
       alert-threshold: 1.0
 
     fly:
+      enabled: true
+      punishable: true
+      max-vl: 20
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    elytraflight:
       enabled: true
       punishable: true
       max-vl: 20
@@ -73,7 +100,7 @@ checks:
       alert-threshold: 1.0
 
 # ==========================================
-# Authentication Module
+# 认证模块
 # ==========================================
 
 auth:
