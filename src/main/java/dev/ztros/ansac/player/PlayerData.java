@@ -169,6 +169,33 @@ public class PlayerData {
     @Getter @Setter
     private long lastDigPacketTime = 0;
 
+    // Criticals check tracking
+    @Getter
+    private final List<Long> critAttackTimestamps = new CopyOnWriteArrayList<>();
+
+    @Getter
+    private final List<Long> critSuccessTimestamps = new CopyOnWriteArrayList<>();
+
+    @Getter @Setter
+    private int critPacketBuffer = 0;
+
+    @Getter @Setter
+    private int critRateBuffer = 0;
+
+    // HitboxExpand check tracking
+    @Getter @Setter
+    private int hitboxExpandBuffer = 0;
+
+    // BowAimbot check tracking
+    @Getter @Setter
+    private int bowAimbotBuffer = 0;
+
+    @Getter @Setter
+    private float lastBowPitch = 0;
+
+    @Getter @Setter
+    private int bowChargeTicks = 0;
+
     // Time-windowed click timestamps for CPS calculation
     @Getter
     private final List<Long> clickTimestamps = new CopyOnWriteArrayList<>();

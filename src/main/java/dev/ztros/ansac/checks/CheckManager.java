@@ -3,6 +3,10 @@ package dev.ztros.ansac.checks;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.building.FastBreakCheck;
 import dev.ztros.ansac.checks.building.ScaffoldCheck;
+import dev.ztros.ansac.checks.combat.BowAimbotCheck;
+import dev.ztros.ansac.checks.combat.CrystalAuraCheck;
+import dev.ztros.ansac.checks.combat.CriticalsCheck;
+import dev.ztros.ansac.checks.combat.HitboxExpandCheck;
 import dev.ztros.ansac.checks.combat.KillAuraCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
 import dev.ztros.ansac.checks.combat.VelocityCheck;
@@ -52,6 +56,10 @@ public class CheckManager {
         checks.add(new ReachCheck(plugin));
         checks.add(new KillAuraCheck(plugin));
         checks.add(new VelocityCheck(plugin));
+        checks.add(new CriticalsCheck(plugin));
+        checks.add(new HitboxExpandCheck(plugin));
+        checks.add(new BowAimbotCheck(plugin));
+        checks.add(new CrystalAuraCheck(plugin));
 
         // Building checks
         checks.add(new ScaffoldCheck(plugin));

@@ -1,6 +1,12 @@
 package dev.ztros.ansac.listeners;
 
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.checks.CheckManager;
+import dev.ztros.ansac.checks.combat.BowAimbotCheck;
+import dev.ztros.ansac.checks.combat.CrystalAuraCheck;
+import dev.ztros.ansac.checks.combat.CriticalsCheck;
+import dev.ztros.ansac.checks.combat.HitboxExpandCheck;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
@@ -100,6 +106,28 @@ public class PlayerListener implements Listener {
         // 判断是否为攻击伤害（玩家被另一个实体攻击）
         if (event instanceof EntityDamageByEntityEvent) {
             data.setLastDamageAttack(true);
+
+            // 分发到 Criticals 检测（被攻击者视角）
+            EntityDamageByEntityEvent damageByEntity = (EntityDamageByEntityEvent) event;
+            if (damageByEntity.getDamager() instanceof org.bukkit.entity.Player attacker) {
+                PlayerData attackerData = plugin.getPlayerDataManager().getPlayerData(attacker);
+                if (attackerData != null) {
+                    CriticalsCheck critCheck = (CriticalsCheck) plugin.getCheckManager().getCheck("Criticals");
+                    if (critCheck != null) {
+                        critCheck.processAttack(attacker, attackerData, damageByEntity);
+                    }
+
+                    HitboxExpandCheck hitboxCheck = (HitboxExpandCheck) plugin.getCheckManager().getCheck("HitboxExpand");
+                    if (hitboxCheck != null) {
+                        hitboxCheck.processAttack(attacker, attackerData, player);
+                    }
+
+                    CrystalAuraCheck crystalCheck = (CrystalAuraCheck) plugin.getCheckManager().getCheck("CrystalAura");
+                    if (crystalCheck != null) {
+                        crystalCheck.processAttack(attacker, attackerData, player);
+                    }
+                }
+            }
         } else {
             data.setLastDamageAttack(false);
         }

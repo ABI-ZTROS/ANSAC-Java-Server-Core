@@ -105,6 +105,34 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    criticals:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    hitboxexpand:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    bowaimbot:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    crystalaura:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
   building:
     scaffold:
       enabled: true
