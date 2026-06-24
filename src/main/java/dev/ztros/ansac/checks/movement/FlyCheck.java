@@ -12,6 +12,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Fly check - detects abnormal vertical movement and flight.
  *
@@ -28,6 +31,7 @@ import org.bukkit.util.Vector;
  * - Normal jumping, falling, climbing, swimming, and elytra gliding are exempted.
  * - Uses a buffer system to avoid false positives from single-tick anomalies.
  * - Ground proximity check prevents edge-standing false positives.
+ * - Layer 2: Sustained abnormal altitude detection for non-elytra flight cheats.
  */
 public class FlyCheck extends Check {
 
@@ -38,6 +42,13 @@ public class FlyCheck extends Check {
     private static final double GRAVITY_INITIAL = 0.08;        // 初始重力减速
     private static final double GRAVITY_MULTIPLIER = 0.98;     // 重力乘数
     private static final double TERMINAL_VELOCITY = 3.92;      // 终端速度
+
+    // Sustained altitude detection thresholds
+    private static final double ALTITUDE_HEIGHT_THRESHOLD = 30.0; // 30格高于起始地面
+    private static final int ALTITUDE_DURATION_TICKS = 60;        // 3秒持续高海拔
+    private static final double ALTITUDE_NO_FALL_THRESHOLD = -0.05; // deltaY > -0.05 视为无明显下落
+
+    private final ConcurrentHashMap<UUID, AltitudeTracker> altitudeTrackers = new ConcurrentHashMap<>();
 
     public FlyCheck(ANSACPlugin plugin) {
         super(plugin, "Fly", "Movement");
@@ -160,6 +171,116 @@ public class FlyCheck extends Check {
         } else {
             data.setFallBuffer(0);
         }
+
+        // --- Check 4: Sustained abnormal altitude (non-elytra flight) ---
+        checkSustainedAltitude(player, data, deltaY, onGround, usingFirework, recentKnockback, recentlyJumped);
+    }
+
+    /**
+     * Sustained altitude detection layer - detects non-elytra flight cheats.
+     * Monitors players who remain at abnormally high altitude for extended periods
+     * without showing natural falling behavior.
+     */
+    private void checkSustainedAltitude(Player player, PlayerData data, double deltaY,
+                                          boolean onGround, boolean usingFirework,
+                                          boolean recentKnockback, boolean recentlyJumped) {
+        UUID uuid = player.getUniqueId();
+
+        // Exemptions
+        if (onGround || usingFirework || recentKnockback || recentlyJumped) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        // Exempt: elytra gliding
+        if (player.isGliding()) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        // Exempt: levitation or jump boost + slow falling combination
+        PotionEffectType levitation = ServerVersionAdapter.getLevitation();
+        boolean hasLevitation = levitation != null && player.hasPotionEffect(levitation);
+        PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
+        boolean hasJumpBoost = jumpBoost != null && player.hasPotionEffect(jumpBoost);
+        // Slow Falling is available since 1.13, use name-based lookup for compatibility
+        PotionEffectType slowFalling = getPotionEffectTypeByName("SLOW_FALLING");
+        boolean hasSlowFalling = slowFalling != null && player.hasPotionEffect(slowFalling);
+
+        if (hasLevitation || (hasJumpBoost && hasSlowFalling)) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        // Exempt: in liquid (swimming/water climbing)
+        if (player.isInWater() || player.isInLava()) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        // Exempt: climbing (ladders, vines, etc.)
+        if (player.isClimbing()) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        // Exempt: The End dimension (natural high platforms)
+        if (player.getWorld().getEnvironment().name().contains("THE_END")) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        // Exempt: riding entity (horses, striders, etc.)
+        if (player.isInsideVehicle()) {
+            resetAltitudeTracker(uuid);
+            return;
+        }
+
+        AltitudeTracker tracker = altitudeTrackers.computeIfAbsent(uuid, k -> new AltitudeTracker());
+
+        // Initialize start altitude if not set
+        if (!tracker.hasStartAltitude) {
+            tracker.startAltitudeY = player.getLocation().getY();
+            tracker.hasStartAltitude = true;
+        }
+
+        double currentY = player.getLocation().getY();
+        double heightAboveStart = currentY - tracker.startAltitudeY;
+
+        // Check if player is at abnormally high altitude
+        if (heightAboveStart > ALTITUDE_HEIGHT_THRESHOLD) {
+            // Check if there's no significant falling trend
+            if (deltaY > ALTITUDE_NO_FALL_THRESHOLD) {
+                tracker.highAltitudeTicks++;
+            } else {
+                // Player is falling - reset
+                tracker.highAltitudeTicks = 0;
+            }
+        } else {
+            // Not high enough - reset
+            tracker.highAltitudeTicks = 0;
+        }
+
+        if (tracker.highAltitudeTicks > ALTITUDE_DURATION_TICKS) {
+            double severity = heightAboveStart / ALTITUDE_HEIGHT_THRESHOLD;
+            flag(player, data, severity,
+                String.format("持续异常高度: 高于起点 %.1f 格 (持续 %d tick, 延迟 %s)",
+                    heightAboveStart, tracker.highAltitudeTicks,
+                    data.getPingCompensator().getPingStatus()));
+            // Reset after flagging to avoid spam
+            resetAltitudeTracker(uuid);
+        }
+    }
+
+    private void resetAltitudeTracker(UUID uuid) {
+        altitudeTrackers.remove(uuid);
+    }
+
+    /**
+     * Clean up tracker when player disconnects.
+     */
+    public void onPlayerQuit(UUID uuid) {
+        altitudeTrackers.remove(uuid);
     }
 
     private boolean shouldSkip(Player player) {
@@ -184,5 +305,34 @@ public class FlyCheck extends Check {
             }
         }
         return -1;
+    }
+
+    /**
+     * Get a PotionEffectType by name, returning null if not found.
+     * Used for effects not yet in ServerVersionAdapter.
+     */
+    private static PotionEffectType getPotionEffectTypeByName(String name) {
+        try {
+            return PotionEffectType.getByName(name);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Internal tracker for sustained altitude detection.
+     * Monitors how long a player remains at abnormally high altitude
+     * without natural falling behavior.
+     */
+    private static class AltitudeTracker {
+        int highAltitudeTicks;      // 连续高海拔 tick 数
+        double startAltitudeY;     // 开始高海拔的 Y 坐标
+        boolean hasStartAltitude;   // 是否已记录起始高度
+
+        AltitudeTracker() {
+            this.highAltitudeTicks = 0;
+            this.startAltitudeY = 0.0;
+            this.hasStartAltitude = false;
+        }
     }
 }

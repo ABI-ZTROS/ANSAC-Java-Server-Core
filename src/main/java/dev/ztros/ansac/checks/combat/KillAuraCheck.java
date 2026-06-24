@@ -4,7 +4,12 @@ import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * KillAura check - detects automated combat (aimbot/clicker).
@@ -22,6 +27,7 @@ import org.bukkit.entity.Player;
  * - Clicker detection: CPS during actual combat (attacks with entities).
  * - No-swing detection: attack without recent arm swing.
  * - Inhuman consistency: attack intervals too uniform (bots have near-perfect timing).
+ * - Pattern analysis: attack interval consistency and target switching detection.
  */
 public class KillAuraCheck extends Check {
 
@@ -29,6 +35,15 @@ public class KillAuraCheck extends Check {
     private static final double MAX_CPS = 16.0; // 正常人类极限（之前 18 太宽松）
     private static final int CPS_WINDOW_MS = 1000;
     private static final int BUFFER_MAX = 3; // Require 3 consecutive violations
+
+    // Pattern detection thresholds
+    private static final int PATTERN_INTERVAL_SAMPLE_SIZE = 10; // 最近10次攻击间隔
+    private static final double PATTERN_INTERVAL_STD_DEV_THRESHOLD = 20.0; // 标准差 < 20ms 可疑
+    private static final int PATTERN_INTERVAL_BUFFER_MAX = 3; // 间隔一致性 buffer
+    private static final long TARGET_SWITCH_WINDOW_MS = 100; // 100ms 内切换目标
+    private static final int TARGET_SWITCH_BUFFER_MAX = 3; // 目标切换 buffer
+
+    private final ConcurrentHashMap<UUID, PatternTracker> patternTrackers = new ConcurrentHashMap<>();
 
     public KillAuraCheck(ANSACPlugin plugin) {
         super(plugin, "KillAura", "Combat");
@@ -52,8 +67,17 @@ public class KillAuraCheck extends Check {
     /**
      * Process attack event (called from packet listener).
      * This is where actual killaura detection happens.
+     * Backward-compatible overload without target entity (target switching detection skipped).
      */
     public void processAttack(Player player, PlayerData data) {
+        processAttack(player, data, null);
+    }
+
+    /**
+     * Process attack event with target entity information.
+     * Enables full pattern analysis including target switching detection.
+     */
+    public void processAttack(Player player, PlayerData data, Entity target) {
         if (!isEnabled() || data.hasBypass()) return;
 
         // Ping compensation: skip check if latency is too high or spiking
@@ -117,6 +141,123 @@ public class KillAuraCheck extends Check {
                     cps, compensatedMaxCps, data.getPingCompensator().getPingStatus()));
         }
 
+        // --- Check 4 & 5: Pattern analysis (attack interval consistency & target switching) ---
+        checkAttackPatterns(player, data, now, lastAttack, target);
+
         data.setLastAttackTime(now);
+    }
+
+    /**
+     * Pattern analysis layer - detects automated attack patterns.
+     * Check 4: Attack interval consistency (standard deviation too low = bot-like timing).
+     * Check 5: Target switching detection (rapid target changes = KillAura signature).
+     */
+    private void checkAttackPatterns(Player player, PlayerData data, long now, long lastAttack, Entity target) {
+        UUID uuid = player.getUniqueId();
+        PatternTracker tracker = patternTrackers.computeIfAbsent(uuid, k -> new PatternTracker());
+
+        // Record attack interval
+        if (lastAttack > 0) {
+            long interval = now - lastAttack;
+            if (interval > 0) {
+                tracker.attackIntervals.add(interval);
+                // Keep only recent intervals
+                while (tracker.attackIntervals.size() > PATTERN_INTERVAL_SAMPLE_SIZE + 5) {
+                    tracker.attackIntervals.remove(0);
+                }
+            }
+        }
+
+        // --- Check 4: Attack interval consistency ---
+        // If we have enough samples, check standard deviation
+        if (tracker.attackIntervals.size() >= PATTERN_INTERVAL_SAMPLE_SIZE) {
+            // Get the most recent N intervals
+            int size = tracker.attackIntervals.size();
+            CopyOnWriteArrayList<Long> recentIntervals = new CopyOnWriteArrayList<>(
+                tracker.attackIntervals.subList(size - PATTERN_INTERVAL_SAMPLE_SIZE, size));
+
+            double stdDev = calculateStandardDeviation(recentIntervals);
+
+            if (stdDev < PATTERN_INTERVAL_STD_DEV_THRESHOLD && stdDev > 0) {
+                tracker.intervalConsistencyBuffer++;
+                if (tracker.intervalConsistencyBuffer >= PATTERN_INTERVAL_BUFFER_MAX) {
+                    flag(player, data, 1.3,
+                        String.format("攻击间隔过于规律: 标准差=%.1fms (连续 %d 次, 延迟 %s)",
+                            stdDev, tracker.intervalConsistencyBuffer,
+                            data.getPingCompensator().getPingStatus()));
+                    tracker.intervalConsistencyBuffer = 0;
+                }
+            } else {
+                tracker.intervalConsistencyBuffer = 0;
+            }
+        }
+
+        // --- Check 5: Target switching detection ---
+        // Only check if target entity is available
+        if (target != null) {
+            int currentEntityId = target.getEntityId();
+            if (tracker.lastAttackEntityId != -1 && currentEntityId != -1
+                    && tracker.lastAttackEntityId != currentEntityId) {
+                // Entity ID changed - check if it happened within the switch window
+                long timeSinceLastAttack = lastAttack > 0 ? now - lastAttack : 0;
+                if (timeSinceLastAttack > 0 && timeSinceLastAttack <= TARGET_SWITCH_WINDOW_MS) {
+                    tracker.targetSwitchBuffer++;
+                    if (tracker.targetSwitchBuffer >= TARGET_SWITCH_BUFFER_MAX) {
+                        flag(player, data, 1.1,
+                            String.format("可疑目标切换: %d -> %d (间隔 %dms, 连续 %d 次, 延迟 %s)",
+                                tracker.lastAttackEntityId, currentEntityId,
+                                timeSinceLastAttack, tracker.targetSwitchBuffer,
+                                data.getPingCompensator().getPingStatus()));
+                        tracker.targetSwitchBuffer = 0;
+                    }
+                } else {
+                    tracker.targetSwitchBuffer = 0;
+                }
+            } else {
+                tracker.targetSwitchBuffer = 0;
+            }
+
+            tracker.lastAttackEntityId = currentEntityId;
+        }
+    }
+
+    /**
+     * Calculate the standard deviation of a list of attack intervals.
+     */
+    private double calculateStandardDeviation(CopyOnWriteArrayList<Long> intervals) {
+        if (intervals.size() < 2) return 0;
+
+        double sum = 0;
+        for (long interval : intervals) {
+            sum += interval;
+        }
+        double mean = sum / intervals.size();
+
+        double variance = 0;
+        for (long interval : intervals) {
+            double diff = interval - mean;
+            variance += diff * diff;
+        }
+        variance /= intervals.size();
+
+        return Math.sqrt(variance);
+    }
+
+    /**
+     * Clean up tracker when player disconnects.
+     */
+    public void onPlayerQuit(UUID uuid) {
+        patternTrackers.remove(uuid);
+    }
+
+    /**
+     * Internal tracker for attack pattern analysis.
+     * Monitors attack interval consistency and target switching behavior.
+     */
+    private static class PatternTracker {
+        CopyOnWriteArrayList<Long> attackIntervals = new CopyOnWriteArrayList<>(); // 攻击间隔记录
+        int lastAttackEntityId = -1;       // 上次攻击的实体ID
+        int intervalConsistencyBuffer = 0; // 攻击间隔一致性 buffer
+        int targetSwitchBuffer = 0;        // 目标切换 buffer
     }
 }

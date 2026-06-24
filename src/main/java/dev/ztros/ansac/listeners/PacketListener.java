@@ -156,7 +156,7 @@ public class PacketListener extends PacketListenerAbstract {
                     // Process killaura check
                     KillAuraCheck killAura = (KillAuraCheck) plugin.getCheckManager().getCheck("KillAura");
                     if (killAura != null) {
-                        killAura.processAttack(player, data);
+                        killAura.processAttack(player, data, target);
                     }
 
                     // Process multi-aura check (multi-target attacks)

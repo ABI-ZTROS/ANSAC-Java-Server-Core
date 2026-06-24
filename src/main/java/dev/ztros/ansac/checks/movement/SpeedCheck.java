@@ -9,6 +9,9 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffectType;
 
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Speed check - detects abnormal horizontal movement speed.
  *
@@ -27,6 +30,7 @@ import org.bukkit.potion.PotionEffectType;
  * - Uses a buffer system: requires multiple consecutive violations to flag.
  * - Accounts for common legitimate speed sources: sprint, jump, ice, speed potion, soul speed, dolphin's grace.
  * - Knockback and teleport are handled via recent-damage and position-jump detection.
+ * - Layer 2: Strafe detection - detects players maintaining abnormally consistent high speed over time.
  */
 public class SpeedCheck extends Check {
 
@@ -40,6 +44,13 @@ public class SpeedCheck extends Check {
     private static final double DOLPHIN_GRACE_MULTIPLIER = 5.0; // 海豚恩典倍率
     private static final double LENIENCY = 0.05;              // 缩小容差
     private static final int BUFFER_MAX = 10;                  // 增加缓冲
+
+    // Strafe detection thresholds
+    private static final int STRAFE_HIGH_SPEED_THRESHOLD_TICKS = 40; // 2秒持续高速
+    private static final double STRAFE_SPEED_RATIO = 0.9;  // 高速判定: expected * 0.9
+    private static final double STRAFE_AVG_SPEED_RATIO = 0.95; // 平均速度判定: expected * 0.95
+
+    private final ConcurrentHashMap<UUID, StrafeTracker> strafeTrackers = new ConcurrentHashMap<>();
 
     public SpeedCheck(ANSACPlugin plugin) {
         super(plugin, "Speed", "Movement");
@@ -57,12 +68,14 @@ public class SpeedCheck extends Check {
         double teleportCheck = from.distanceSquared(to);
         if (teleportCheck > 16.0) { // 4 blocks squared
             data.setSpeedBuffer(0);
+            resetStrafeTracker(player.getUniqueId());
             return;
         }
 
         double horizontalDist = data.getHorizontalDistance();
         if (horizontalDist < 0.05) {
             data.setSpeedBuffer(0);
+            resetStrafeTracker(player.getUniqueId());
             return;
         }
 
@@ -87,6 +100,7 @@ public class SpeedCheck extends Check {
         long now = System.currentTimeMillis();
         if ((now - data.getLastKnockbackTime()) < 1000L) {
             data.setSpeedBuffer(0);
+            resetStrafeTracker(player.getUniqueId());
             return;
         }
 
@@ -98,6 +112,7 @@ public class SpeedCheck extends Check {
 
         int ping = data.getPingCompensator().getAveragePing();
 
+        // --- Layer 1: Single-tick speed check (original) ---
         if (horizontalDist > expected + compensatedLeniency) {
             int buffer = data.getSpeedBuffer() + 1;
             data.setSpeedBuffer(buffer);
@@ -110,6 +125,55 @@ public class SpeedCheck extends Check {
         } else {
             data.setSpeedBuffer(0);
         }
+
+        // --- Layer 2: Strafe detection (sustained high speed) ---
+        checkStrafe(player, data, horizontalDist, expected);
+    }
+
+    /**
+     * Strafe detection layer - detects players maintaining abnormally consistent high speed.
+     * Strafe cheats adjust direction each tick to maintain constant speed, resulting in
+     * very little natural variation. Normal players have speed fluctuations.
+     */
+    private void checkStrafe(Player player, PlayerData data, double horizontalDist, double expected) {
+        UUID uuid = player.getUniqueId();
+        StrafeTracker tracker = strafeTrackers.computeIfAbsent(uuid, k -> new StrafeTracker());
+
+        tracker.tickCount++;
+        tracker.totalDistance += horizontalDist;
+
+        if (horizontalDist > expected * STRAFE_SPEED_RATIO) {
+            tracker.highSpeedTicks++;
+        } else {
+            tracker.highSpeedTicks = 0;
+            // Reset accumulated data when speed drops below threshold
+            tracker.totalDistance = 0;
+            tracker.tickCount = 0;
+            return;
+        }
+
+        if (tracker.highSpeedTicks > STRAFE_HIGH_SPEED_THRESHOLD_TICKS) {
+            double avgSpeed = tracker.totalDistance / tracker.tickCount;
+            if (avgSpeed > expected * STRAFE_AVG_SPEED_RATIO) {
+                double severity = avgSpeed / expected;
+                flag(player, data, severity,
+                    String.format("持续高速移动(Strafe检测): 平均速度=%.3f / 预期=%.3f (持续 %d tick, 延迟 %s)",
+                        avgSpeed, expected, tracker.highSpeedTicks, data.getPingCompensator().getPingStatus()));
+                // Reset after flagging to avoid spam
+                resetStrafeTracker(uuid);
+            }
+        }
+    }
+
+    private void resetStrafeTracker(UUID uuid) {
+        strafeTrackers.remove(uuid);
+    }
+
+    /**
+     * Clean up tracker when player disconnects.
+     */
+    public void onPlayerQuit(UUID uuid) {
+        strafeTrackers.remove(uuid);
     }
 
     private boolean shouldSkip(Player player) {
@@ -181,5 +245,22 @@ public class SpeedCheck extends Check {
         Location loc = player.getLocation().clone().subtract(0, 1, 0);
         String type = loc.getBlock().getType().name();
         return type.contains("BLUE_ICE");
+    }
+
+    /**
+     * Internal tracker for Strafe detection.
+     * Monitors sustained high-speed movement patterns that indicate
+     * direction-adjustment cheats (Strafe).
+     */
+    private static class StrafeTracker {
+        int highSpeedTicks;   // 连续高速 tick 数
+        double totalDistance;  // 累计距离
+        int tickCount;         // 总 tick 数
+
+        StrafeTracker() {
+            this.highSpeedTicks = 0;
+            this.totalDistance = 0.0;
+            this.tickCount = 0;
+        }
     }
 }
