@@ -61,6 +61,21 @@ public class PacketListener extends PacketListenerAbstract {
         if (event.getPacketType() == PacketType.Play.Client.ANIMATION) {
             handleArmAnimation(player, data);
         }
+
+        // Handle player digging (block break)
+        if (event.getPacketType() == PacketType.Play.Client.PLAYER_DIGGING) {
+            handlePlayerDigging(player, data, event);
+        }
+
+        // Handle use item (eating, drinking, blocking)
+        if (event.getPacketType() == PacketType.Play.Client.USE_ITEM) {
+            handleUseItem(player, data, event);
+        }
+
+        // Handle block placement
+        if (event.getPacketType() == PacketType.Play.Client.PLAYER_BLOCK_PLACEMENT) {
+            handleBlockPlacement(player, data, event);
+        }
     }
 
     /**
@@ -153,6 +168,28 @@ public class PacketListener extends PacketListenerAbstract {
         if (killAura != null) {
             killAura.processSwing(player, data);
         }
+    }
+
+    /**
+     * Handle player digging packet for future FastBreak/NoSlow checks.
+     */
+    private void handlePlayerDigging(Player player, PlayerData data, PacketReceiveEvent event) {
+        data.setLastDiggingTime(System.currentTimeMillis());
+    }
+
+    /**
+     * Handle use item packet for NoSlow check enhancement.
+     */
+    private void handleUseItem(Player player, PlayerData data, PacketReceiveEvent event) {
+        data.setLastUseItemTime(System.currentTimeMillis());
+    }
+
+    /**
+     * Handle block placement for future Scaffold checks.
+     */
+    private void handleBlockPlacement(Player player, PlayerData data, PacketReceiveEvent event) {
+        data.setLastBlockPlaceTime(System.currentTimeMillis());
+        data.setBlockPlaceCount(data.getBlockPlaceCount() + 1);
     }
 
     /**

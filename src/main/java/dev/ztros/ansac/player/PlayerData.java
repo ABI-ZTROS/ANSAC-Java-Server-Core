@@ -114,6 +114,17 @@ public class PlayerData {
     @Getter
     private final PingCompensator pingCompensator = new PingCompensator();
 
+    // NoSlow check tracking
+    @Getter @Setter
+    private int noSlowBuffer = 0;
+
+    // NoFall check tracking
+    @Getter @Setter
+    private double lastGroundY = Double.MIN_VALUE;
+
+    @Getter @Setter
+    private int noFallBuffer = 0;
+
     // Elytra tracking
     @Getter @Setter
     private int elytraHoverBuffer = 0;
@@ -123,6 +134,19 @@ public class PlayerData {
 
     @Getter @Setter
     private double lastGlideSpeed = 0;
+
+    // Block interaction tracking (for future Scaffold/FastBreak checks)
+    @Getter @Setter
+    private long lastDiggingTime = 0;
+
+    @Getter @Setter
+    private long lastUseItemTime = 0;
+
+    @Getter @Setter
+    private long lastBlockPlaceTime = 0;
+
+    @Getter @Setter
+    private int blockPlaceCount = 0;
 
     // Time-windowed click timestamps for CPS calculation
     @Getter

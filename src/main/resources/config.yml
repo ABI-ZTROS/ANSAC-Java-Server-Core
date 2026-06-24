@@ -69,6 +69,20 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    noslow:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    nofall:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
   combat:
     reach:
       enabled: true
