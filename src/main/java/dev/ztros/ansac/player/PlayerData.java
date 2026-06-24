@@ -103,6 +103,9 @@ public class PlayerData {
     @Getter @Setter
     private long timerBalance = 0;
 
+    @Getter @Setter
+    private long lastJumpTime = 0;
+
     // Time-windowed click timestamps for CPS calculation
     @Getter
     private final List<Long> clickTimestamps = new CopyOnWriteArrayList<>();
