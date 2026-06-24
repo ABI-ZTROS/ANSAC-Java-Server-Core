@@ -3,6 +3,7 @@ package dev.ztros.ansac.checks.movement;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PlayerData;
+import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffectType;
@@ -97,13 +98,15 @@ public class SpeedCheck extends Check {
         }
 
         // Dolphin's Grace (water sprinting)
-        if (player.hasPotionEffect(PotionEffectType.DOLPHINS_GRACE)) {
+        PotionEffectType dolphinsGrace = ServerVersionAdapter.getDolphinsGrace();
+        if (dolphinsGrace != null && player.hasPotionEffect(dolphinsGrace)) {
             speed *= 2.5;
         }
 
         // Soul Speed
-        if (player.hasPotionEffect(PotionEffectType.SOUL_SPEED)) {
-            int level = player.getPotionEffect(PotionEffectType.SOUL_SPEED).getAmplifier() + 1;
+        PotionEffectType soulSpeed = ServerVersionAdapter.getSoulSpeed();
+        if (soulSpeed != null && player.hasPotionEffect(soulSpeed)) {
+            int level = player.getPotionEffect(soulSpeed).getAmplifier() + 1;
             speed *= (1.0 + SOUL_SPEED_MULTIPLIER * level);
         }
 

@@ -19,6 +19,9 @@ public final class ServerVersionAdapter {
     private static final boolean HAS_KICK_COMPONENT;
     private static final boolean HAS_JUMP_BOOST;
     private static PotionEffectType JUMP_EFFECT_TYPE;
+    private static PotionEffectType SOUL_SPEED_TYPE;
+    private static PotionEffectType DOLPHINS_GRACE_TYPE;
+    private static PotionEffectType LEVITATION_TYPE;
 
     private static Method KICK_COMPONENT_METHOD;
 
@@ -65,6 +68,36 @@ public final class ServerVersionAdapter {
         }
         HAS_JUMP_BOOST = hasJumpBoost;
         JUMP_EFFECT_TYPE = jumpType;
+
+        // Detect SOUL_SPEED availability (added in 1.16)
+        PotionEffectType soulSpeedType = null;
+        try {
+            Field field = PotionEffectType.class.getField("SOUL_SPEED");
+            soulSpeedType = (PotionEffectType) field.get(null);
+        } catch (Exception e) {
+            // Not available on older versions
+        }
+        SOUL_SPEED_TYPE = soulSpeedType;
+
+        // Detect DOLPHINS_GRACE availability (added in 1.13)
+        PotionEffectType dolphinsGraceType = null;
+        try {
+            Field field = PotionEffectType.class.getField("DOLPHINS_GRACE");
+            dolphinsGraceType = (PotionEffectType) field.get(null);
+        } catch (Exception e) {
+            // Not available on older versions
+        }
+        DOLPHINS_GRACE_TYPE = dolphinsGraceType;
+
+        // Detect LEVITATION availability (added in 1.9)
+        PotionEffectType levitationType = null;
+        try {
+            Field field = PotionEffectType.class.getField("LEVITATION");
+            levitationType = (PotionEffectType) field.get(null);
+        } catch (Exception e) {
+            // Not available on older versions
+        }
+        LEVITATION_TYPE = levitationType;
     }
 
     private ServerVersionAdapter() {}
@@ -117,5 +150,17 @@ public final class ServerVersionAdapter {
      */
     public static boolean hasJumpBoost() {
         return HAS_JUMP_BOOST;
+    }
+
+    public static PotionEffectType getSoulSpeed() {
+        return SOUL_SPEED_TYPE;
+    }
+
+    public static PotionEffectType getDolphinsGrace() {
+        return DOLPHINS_GRACE_TYPE;
+    }
+
+    public static PotionEffectType getLevitation() {
+        return LEVITATION_TYPE;
     }
 }

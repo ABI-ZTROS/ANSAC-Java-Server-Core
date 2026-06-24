@@ -3,6 +3,7 @@ package dev.ztros.ansac.checks.movement;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PlayerData;
+import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffectType;
@@ -52,8 +53,10 @@ public class FlyCheck extends Check {
 
         // Check 2: ascending while not on ground (no jump boost, no levitation, no climbing, not in liquid)
         if (!onGround && deltaY > LENIENCY) {
-            boolean hasLevitation = player.hasPotionEffect(PotionEffectType.LEVITATION);
-            boolean hasJumpBoost = player.hasPotionEffect(org.bukkit.potion.PotionEffectType.JUMP);
+            PotionEffectType levitation = ServerVersionAdapter.getLevitation();
+            boolean hasLevitation = levitation != null && player.hasPotionEffect(levitation);
+            PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
+            boolean hasJumpBoost = jumpBoost != null && player.hasPotionEffect(jumpBoost);
             if (!hasLevitation && !hasJumpBoost && !player.isClimbing()
                     && !player.isInWater() && !player.isInLava()) {
                 int ascendBuffer = data.getAscendBuffer() + 1;
