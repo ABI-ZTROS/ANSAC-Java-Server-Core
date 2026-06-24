@@ -19,13 +19,16 @@ import org.bukkit.potion.PotionEffectType;
  */
 public class SpeedCheck extends Check {
 
-    private static final double BASE_WALK = 0.215;
-    private static final double BASE_SPRINT = 0.280;
-    private static final double BASE_SPRINT_JUMP = 0.327;
-    private static final double ICE_MULTIPLIER = 2.5;
-    private static final double SOUL_SPEED_MULTIPLIER = 1.3; // per level
-    private static final double LENIENCY = 0.25; // was 0.15, too strict
-    private static final int BUFFER_MAX = 5; // Require 5 consecutive violations
+    private static final double BASE_WALK = 0.21585;       // 精确值
+    private static final double BASE_SPRINT = 0.2806;       // 精确值
+    private static final double BASE_SPRINT_JUMP = 0.35635; // 精确值
+    private static final double ICE_MULTIPLIER = 9.27;       // 冰面倍率（普通冰/浮冰/霜冰）
+    private static final double BLUE_ICE_MULTIPLIER = 16.85; // 蓝冰倍率
+    private static final double SOUL_SPEED_BASE = 0.406;     // 灵魂疾行基础增加量（格/刻）
+    private static final double SOUL_SPEED_PER_LEVEL = 0.03; // 灵魂疾行每级额外增加
+    private static final double DOLPHIN_GRACE_MULTIPLIER = 5.0; // 海豚恩典倍率
+    private static final double LENIENCY = 0.05;              // 缩小容差
+    private static final int BUFFER_MAX = 10;                  // 增加缓冲
 
     public SpeedCheck(ANSACPlugin plugin) {
         super(plugin, "Speed", "Movement");
@@ -98,41 +101,43 @@ public class SpeedCheck extends Check {
             speed = player.isOnGround() ? BASE_SPRINT : BASE_SPRINT_JUMP;
         }
 
-        // Speed potion
+        // Speed potion: 基础速度 * (1 + 0.2 * level)
         if (player.hasPotionEffect(PotionEffectType.SPEED)) {
             int level = player.getPotionEffect(PotionEffectType.SPEED).getAmplifier() + 1;
             speed *= (1.0 + 0.2 * level);
         }
 
-        // Dolphin's Grace (water sprinting)
+        // Dolphin's Grace: 正常游泳 * 5.0（仅水中生效）
         PotionEffectType dolphinsGrace = ServerVersionAdapter.getDolphinsGrace();
-        if (dolphinsGrace != null && player.hasPotionEffect(dolphinsGrace)) {
-            speed *= 2.5;
+        if (dolphinsGrace != null && player.hasPotionEffect(dolphinsGrace) && player.isInWater()) {
+            speed *= DOLPHIN_GRACE_MULTIPLIER;
         }
 
-        // Soul Speed
+        // Soul Speed: speed += SOUL_SPEED_BASE + SOUL_SPEED_PER_LEVEL * (level - 1)
         PotionEffectType soulSpeed = ServerVersionAdapter.getSoulSpeed();
         if (soulSpeed != null && player.hasPotionEffect(soulSpeed)) {
             int level = player.getPotionEffect(soulSpeed).getAmplifier() + 1;
-            speed *= (1.0 + SOUL_SPEED_MULTIPLIER * level);
+            speed += SOUL_SPEED_BASE + SOUL_SPEED_PER_LEVEL * (level - 1);
         }
 
-        // Ice / packed ice / blue ice
-        if (isOnIce(player)) {
+        // Ice / packed ice / frosted ice: 区分普通冰和蓝冰
+        if (isOnBlueIce(player)) {
+            speed *= BLUE_ICE_MULTIPLIER;
+        } else if (isOnIce(player)) {
             speed *= ICE_MULTIPLIER;
         }
 
-        // Sneaking
+        // Sneaking: 速度 * 0.3
         if (player.isSneaking()) {
             speed *= 0.3;
         }
 
-        // Blocking
-        if (player.isBlocking()) {
+        // Blocking / Using item: 速度 * 0.2
+        if (player.isBlocking() || player.isHandRaised()) {
             speed *= 0.2;
         }
 
-        // Cobweb
+        // Cobweb: 速度 * 0.05
         if (player.getLocation().getBlock().getType().name().contains("COBWEB")) {
             speed *= 0.05;
         }
@@ -143,6 +148,13 @@ public class SpeedCheck extends Check {
     private boolean isOnIce(Player player) {
         Location loc = player.getLocation().clone().subtract(0, 1, 0);
         String type = loc.getBlock().getType().name();
-        return type.contains("ICE");
+        // 匹配 ICE, PACKED_ICE, FROSTED_ICE，但不匹配 BLUE_ICE
+        return type.contains("ICE") && !type.contains("BLUE");
+    }
+
+    private boolean isOnBlueIce(Player player) {
+        Location loc = player.getLocation().clone().subtract(0, 1, 0);
+        String type = loc.getBlock().getType().name();
+        return type.contains("BLUE_ICE");
     }
 }

@@ -18,7 +18,7 @@ import org.bukkit.entity.Player;
 public class KillAuraCheck extends Check {
 
     private static final long MIN_CLICK_INTERVAL = 45; // ms
-    private static final double MAX_CPS = 18.0;
+    private static final double MAX_CPS = 16.0; // 正常人类极限（之前 18 太宽松）
     private static final int CPS_WINDOW_MS = 1000;
     private static final int BUFFER_MAX = 3; // Require 3 consecutive violations
 

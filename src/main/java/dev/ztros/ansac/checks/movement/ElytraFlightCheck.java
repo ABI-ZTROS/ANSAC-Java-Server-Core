@@ -24,8 +24,11 @@ import org.bukkit.util.Vector;
 public class ElytraFlightCheck extends Check {
 
     private static final int HOVER_BUFFER_MAX = 10;    // 10 ticks of hovering before flag
-    private static final double HOVER_SPEED_THRESHOLD = 0.08; // Horizontal speed below this = hovering
-    private static final double MAX_GLIDE_SPEED = 1.5;   // Max horizontal speed while gliding (blocks/tick)
+    private static final double HOVER_SPEED_THRESHOLD = 0.15; // 悬停阈值（最小滑翔速度 0.36，但开始/结束有过渡）
+    private static final double MAX_GLIDE_SPEED = 1.5;   // 0度俯角水平速度上限（30 m/s）
+    private static final double FIREWORK_MAX_SPEED = 1.675;  // 烟花火箭加速上限（33.5 m/s）
+    private static final double MIN_GLIDE_SPEED = 0.36;      // 30度上仰最小速度（7.2 m/s）
+    private static final double GLIDE_FRICTION = 0.99;        // 鞘翅水平摩擦
     private static final double MIN_DECEL_RATE = 0.005; // Minimum deceleration rate when not boosting
     private static final int STOP_BUFFER_MAX = 5;       // 5 ticks of instant stop before flag
     private static final double STOP_SPEED_THRESHOLD = 0.05; // Speed below this = stopped
@@ -95,12 +98,10 @@ public class ElytraFlightCheck extends Check {
         }
 
         // --- Check 3: Elytra speed hack (moving too fast horizontally) ---
-        // Normal max glide speed is about 0.6-0.9 blocks/tick depending on pitch angle
-        // With firework rockets, speed can temporarily spike to ~1.5 blocks/tick
-        // With trident riptide, speed can spike higher
+        // 正常上限 1.5 格/刻（0度俯角），烟花加速上限 1.675 格/刻
         // Account for firework boost: if last speed was high, exempt for a few ticks
         boolean recentlyBoosted = lastSpeed > BOOST_DECEL_EXEMPT;
-        double effectiveMax = recentlyBoosted ? MAX_GLIDE_SPEED * 2.0 : MAX_GLIDE_SPEED;
+        double effectiveMax = recentlyBoosted ? FIREWORK_MAX_SPEED : MAX_GLIDE_SPEED;
 
         if (horizontalSpeed > effectiveMax) {
             double severity = horizontalSpeed / effectiveMax;

@@ -18,10 +18,10 @@ import org.bukkit.entity.Player;
 public class TimerCheck extends Check {
 
     private static final long EXPECTED_MS = 50L; // 20 TPS
-    private static final long BALANCE_THRESHOLD = 200L; // Flag if balance exceeds +/- 200ms
-    private static final long MAX_BALANCE = 500L; // Cap balance to prevent runaway
+    private static final long BALANCE_THRESHOLD = 120L; // 参考 GrimAC TimerA drift=120ms
+    private static final long MAX_BALANCE = 600L; // 参考 GrimAC NegativeTimer drift=1200ms 的一半
     private static final long LAG_SPIKE_MS = 250L; // Reset on lag spike
-    private static final int MIN_PACKETS = 100; // Don't flag until 100 packets collected
+    private static final int MIN_PACKETS = 60; // 约 3 秒样本（之前 100 太保守）
 
     public TimerCheck(ANSACPlugin plugin) {
         super(plugin, "Timer", "Packet");

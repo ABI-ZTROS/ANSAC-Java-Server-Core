@@ -26,7 +26,10 @@ public class FlyCheck extends Check {
     private static final double LENIENCY = 0.15;
     private static final int BUFFER_MAX = 8; // Was 6, increase for more leniency
     private static final double JUMP_INITIAL_VELOCITY = 0.42; // Normal jump initial dy
-    private static final int JUMP_EXEMPT_TICKS = 15; // Exempt for 15 ticks after jump start
+    private static final int JUMP_EXEMPT_TICKS = 20;          // 增加到 20 tick（跳跃上升约 0.7 秒）
+    private static final double GRAVITY_INITIAL = 0.08;        // 初始重力减速
+    private static final double GRAVITY_MULTIPLIER = 0.98;     // 重力乘数
+    private static final double TERMINAL_VELOCITY = 3.92;      // 终端速度
 
     public FlyCheck(ANSACPlugin plugin) {
         super(plugin, "Fly", "Movement");
@@ -114,10 +117,11 @@ public class FlyCheck extends Check {
         }
 
         // --- Check 3: falling too slowly ---
+        // 正常下落第一刻: deltaY ≈ -0.08 * 0.98 = -0.0784
+        // 之后加速到 -3.92（终端速度）
+        // 如果 deltaY > -0.05（绝对值太小），持续多 tick 才可疑
         if (!onGround && deltaY < -LENIENCY) {
-            // Normal gravity: starts at ~-0.08 and accelerates to ~-3.92
-            // If falling slower than -0.03 (and not in liquid/climbing), suspicious
-            if (deltaY > -0.03 && !player.isInWater() && !player.isInLava()
+            if (deltaY > -0.05 && !player.isInWater() && !player.isInLava()
                     && !player.isClimbing() && !recentlyJumped && !usingFirework && !recentKnockback) {
                 int fallBuffer = data.getFallBuffer() + 1;
                 data.setFallBuffer(fallBuffer);
