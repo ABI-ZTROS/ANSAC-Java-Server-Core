@@ -179,7 +179,7 @@ public class BurrowCheck extends Check {
 
         // Thin plants
         if (type == Material.SUGAR_CANE || type == Material.BAMBOO
-                || type == Material.BAMBOO_SAPLING || type == Material.SAPLING) {
+                || type == Material.BAMBOO_SAPLING || name.contains("SAPLING")) {
             return false;
         }
 

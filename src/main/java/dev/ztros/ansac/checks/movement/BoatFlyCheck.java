@@ -8,7 +8,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Vehicle;
+import org.bukkit.entity.Entity;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -68,13 +68,13 @@ public class BoatFlyCheck extends Check {
         }
 
         // 检查载具是否是 Boat
-        Vehicle vehicle = player.getVehicle();
-        if (vehicle == null) {
+        org.bukkit.entity.Entity vehicleEntity = player.getVehicle();
+        if (vehicleEntity == null) {
             resetTracker(player.getUniqueId());
             return;
         }
 
-        String vehicleType = vehicle.getType().name();
+        String vehicleType = vehicleEntity.getType().name();
         if (!vehicleType.contains("BOAT")) {
             resetTracker(player.getUniqueId());
             return;
