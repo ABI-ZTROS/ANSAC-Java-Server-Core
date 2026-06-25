@@ -35,7 +35,7 @@ public class PunishmentEntry {
     private final long banTime;
 
     @Getter
-    private final long durationMinutes;
+    private final long durationSeconds;
 
     @Getter
     @Setter
@@ -46,7 +46,7 @@ public class PunishmentEntry {
 
     public PunishmentEntry(UUID uuid, String playerName, String reason,
                            String checkName, int vl, String operator,
-                           long banTime, long durationMinutes, String ip) {
+                           long banTime, long durationSeconds, String ip) {
         this.uuid = uuid;
         this.playerName = playerName;
         this.reason = reason;
@@ -54,7 +54,7 @@ public class PunishmentEntry {
         this.vl = vl;
         this.operator = operator;
         this.banTime = banTime;
-        this.durationMinutes = durationMinutes;
+        this.durationSeconds = durationSeconds;
         this.active = true;
         this.ip = ip;
     }
@@ -63,7 +63,7 @@ public class PunishmentEntry {
      * Check if this ban is permanent.
      */
     public boolean isPermanent() {
-        return durationMinutes <= 0;
+        return durationSeconds < 0;
     }
 
     /**
@@ -72,7 +72,7 @@ public class PunishmentEntry {
      */
     public long getExpiryTime() {
         if (isPermanent()) return -1;
-        return banTime + (durationMinutes * 60_000L);
+        return banTime + (durationSeconds * 1000L);
     }
 
     /**
@@ -95,7 +95,7 @@ public class PunishmentEntry {
             String.valueOf(vl),
             operator,
             String.valueOf(banTime),
-            String.valueOf(durationMinutes),
+            String.valueOf(durationSeconds),
             String.valueOf(active),
             ip != null ? ip : ""
         };
@@ -113,12 +113,12 @@ public class PunishmentEntry {
         int vl = Integer.parseInt(parts[4]);
         String operator = parts[5];
         long banTime = Long.parseLong(parts[6]);
-        long durationMinutes = Long.parseLong(parts[7]);
+        long durationSeconds = Long.parseLong(parts[7]);
         boolean active = Boolean.parseBoolean(parts[8]);
         String ip = parts.length > 9 ? parts[9] : null;
 
         PunishmentEntry entry = new PunishmentEntry(
-            uuid, playerName, reason, checkName, vl, operator, banTime, durationMinutes, ip
+            uuid, playerName, reason, checkName, vl, operator, banTime, durationSeconds, ip
         );
         entry.setActive(active);
         return entry;

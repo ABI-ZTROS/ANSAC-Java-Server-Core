@@ -38,8 +38,8 @@ public class PunishmentManager {
     private List<String> banMessageTemplate;
     private List<String> kickMessageTemplate;
 
-    // Config values
-    private long autoBanDuration;
+    // Config values (stored in seconds internally; config file uses minutes for user convenience)
+    private long autoBanDurationSeconds;
     private boolean autoBanEnabled;
 
     private final File punishmentsFile;
@@ -59,7 +59,7 @@ public class PunishmentManager {
         var config = plugin.getConfig();
         String path = "punishments";
         this.autoBanEnabled = config.getBoolean(path + ".auto-ban-enabled", false);
-        this.autoBanDuration = config.getLong(path + ".auto-ban-duration", 1440);
+        this.autoBanDurationSeconds = config.getLong(path + ".auto-ban-duration", 1440) * 60;
         this.banMessageTemplate = config.getStringList(path + ".ban-message");
         this.kickMessageTemplate = config.getStringList(path + ".kick-message");
 
@@ -156,33 +156,35 @@ public class PunishmentManager {
     /**
      * Ban a player with given parameters.
      * If player is online, kicks them with the ban screen.
+     * @param durationSeconds -1 for permanent, otherwise seconds
      */
-    public void ban(Player player, String reason, long durationMinutes,
+    public void ban(Player player, String reason, long durationSeconds,
                     String operator, String checkName, int vl) {
-        ban(player.getUniqueId(), player.getName(), reason, durationMinutes,
+        ban(player.getUniqueId(), player.getName(), reason, durationSeconds,
             operator, checkName, vl, getPlayerIp(player));
     }
 
     /**
      * Ban an offline player by name.
+     * @param durationSeconds -1 for permanent, otherwise seconds
      */
-    public void banOffline(String playerName, String reason, long durationMinutes, String operator) {
+    public void banOffline(String playerName, String reason, long durationSeconds, String operator) {
         UUID uuid = resolveUuid(playerName);
         if (uuid == null) {
             plugin.getLogger().warning("无法解析玩家 " + playerName + " 的 UUID，封禁失败。");
             return;
         }
-        ban(uuid, playerName, reason, durationMinutes, operator, null, 0, null);
+        ban(uuid, playerName, reason, durationSeconds, operator, null, 0, null);
     }
 
-    private void ban(UUID uuid, String playerName, String reason, long durationMinutes,
+    private void ban(UUID uuid, String playerName, String reason, long durationSeconds,
                      String operator, String checkName, int vl, String ip) {
         // Remove any existing ban first
         activeBans.remove(uuid);
 
         PunishmentEntry entry = new PunishmentEntry(
             uuid, playerName, reason, checkName, vl, operator,
-            System.currentTimeMillis(), durationMinutes, ip
+            System.currentTimeMillis(), durationSeconds, ip
         );
         activeBans.put(uuid, entry);
         nameToUuid.put(playerName.toLowerCase(), uuid);
@@ -198,7 +200,7 @@ public class PunishmentManager {
         }
 
         plugin.getLogger().warning("[封禁] " + playerName + " 被 " + operator + " 封禁"
-            + (durationMinutes > 0 ? " (" + formatDuration(durationMinutes) + ")" : " (永久)")
+            + (durationSeconds >= 0 ? " (" + formatDuration(durationSeconds) + ")" : " (永久)")
             + " | 原因: " + reason);
     }
 
@@ -239,7 +241,7 @@ public class PunishmentManager {
         PunishmentType type = (check != null) ? check.getPunishmentType() : PunishmentType.KICK;
 
         if (type == PunishmentType.BAN && autoBanEnabled) {
-            ban(player, reason, autoBanDuration, "ANSAC-自动", checkName, vl);
+            ban(player, reason, autoBanDurationSeconds, "ANSAC-自动", checkName, vl);
         } else {
             kick(player, reason, "ANSAC-自动", checkName, vl);
         }
@@ -336,9 +338,9 @@ public class PunishmentManager {
     private String replaceVariables(String text, PunishmentEntry entry) {
         String dateStr = DATE_FORMAT.format(new Date(entry.getBanTime()));
         String expiryStr = entry.isPermanent() ? "永久" : DATE_FORMAT.format(new Date(entry.getExpiryTime()));
-        String durationStr = entry.isPermanent() ? "永久" : formatDuration(entry.getDurationMinutes());
+        String durationStr = entry.isPermanent() ? "永久" : formatDuration(entry.getDurationSeconds());
         String remainingStr = entry.isPermanent() ? "永久" : formatDuration(
-            Math.max(0, (entry.getExpiryTime() - System.currentTimeMillis()) / 60_000L)
+            Math.max(0, (entry.getExpiryTime() - System.currentTimeMillis()) / 1000L)
         );
 
         return text
@@ -379,17 +381,19 @@ public class PunishmentManager {
         return null;
     }
 
-    private String formatDuration(long minutes) {
-        if (minutes <= 0) return "永久";
+    private String formatDuration(long seconds) {
+        if (seconds < 0) return "永久";
+        if (seconds < 60) return seconds + "秒";
+        long minutes = seconds / 60;
         if (minutes < 60) return minutes + "分钟";
-        if (minutes < 1440) {
-            long h = minutes / 60;
+        long hours = minutes / 60;
+        if (hours < 24) {
             long m = minutes % 60;
-            return h + "小时" + (m > 0 ? m + "分钟" : "");
+            return hours + "小时" + (m > 0 ? m + "分钟" : "");
         }
-        long d = minutes / 1440;
-        long h = (minutes % 1440) / 60;
-        return d + "天" + (h > 0 ? h + "小时" : "");
+        long days = hours / 24;
+        long h = hours % 24;
+        return days + "天" + (h > 0 ? h + "小时" : "");
     }
 
     // ============================================================

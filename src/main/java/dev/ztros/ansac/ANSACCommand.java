@@ -116,8 +116,11 @@ public class ANSACCommand implements CommandExecutor {
                 .append(Component.text(" - 查看玩家数据", NamedTextColor.GRAY))
         );
         sender.sendMessage(
-            Component.text("/ansac ban <玩家> [时长(分钟)] [原因]", NamedTextColor.YELLOW)
-                .append(Component.text(" - 封禁玩家 (-1=永久)", NamedTextColor.GRAY))
+            Component.text("/ansac ban <玩家> [时长] [原因]", NamedTextColor.YELLOW)
+                .append(Component.text(" - 封禁玩家 (forever=永久)", NamedTextColor.GRAY))
+        );
+        sender.sendMessage(
+            Component.text("  时长: 10s/20s/1min/30min/1h/8h/24h/3d/7d/15d/30d/180d/360d/3600d", NamedTextColor.GRAY)
         );
         sender.sendMessage(
             Component.text("/ansac kick <玩家> [原因]", NamedTextColor.YELLOW)
@@ -200,43 +203,87 @@ public class ANSACCommand implements CommandExecutor {
 
     private void handleBan(CommandSender sender, String[] args) {
         if (args.length < 2) {
-            sender.sendMessage(Component.text("用法：/ansac ban <玩家> [时长(分钟)] [原因]", NamedTextColor.RED));
-            sender.sendMessage(Component.text("时长为 -1 表示永久封禁。", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("用法：/ansac ban <玩家> [时长] [原因]", NamedTextColor.RED));
+            sender.sendMessage(Component.text("时长支持: 10s, 20s, 1min, 30min, 1h, 8h, 24h, 3d, 7d, 15d, 30d, 180d, 360d, 3600d, forever", NamedTextColor.GRAY));
             return;
         }
 
         String targetName = args[1];
-        long duration = -1;
+        long durationSeconds = -1;
         String reason = "违反服务器规则";
 
         if (args.length >= 3) {
-            try {
-                duration = Long.parseLong(args[2]);
-            } catch (NumberFormatException e) {
+            long parsed = parseDuration(args[2]);
+            if (parsed != Long.MIN_VALUE) {
+                durationSeconds = parsed;
+                if (args.length >= 4) {
+                    reason = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
+                }
+            } else {
                 // Third arg is part of reason, not duration
-                duration = -1;
+                durationSeconds = -1;
                 reason = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
             }
         }
 
-        if (args.length >= 4 && duration != -1) {
-            reason = String.join(" ", java.util.Arrays.copyOfRange(args, 3, args.length));
-        }
-
         String operator = sender instanceof Player ? sender.getName() : "CONSOLE";
 
+        String durationLabel = durationSeconds >= 0 ? formatDurationLabel(durationSeconds) : "永久";
         Player target = Bukkit.getPlayerExact(targetName);
         if (target != null && target.isOnline()) {
-            plugin.getPunishmentManager().ban(target, reason, duration, operator, null, 0);
+            plugin.getPunishmentManager().ban(target, reason, durationSeconds, operator, null, 0);
             sender.sendMessage(Component.text("已封禁玩家 " + targetName
-                + (duration > 0 ? " (" + duration + "分钟)" : " (永久)")
+                + " (" + durationLabel + ")"
                 + " | 原因: " + reason, NamedTextColor.GREEN));
         } else {
-            plugin.getPunishmentManager().banOffline(targetName, reason, duration, operator);
+            plugin.getPunishmentManager().banOffline(targetName, reason, durationSeconds, operator);
             sender.sendMessage(Component.text("已封禁离线玩家 " + targetName
-                + (duration > 0 ? " (" + duration + "分钟)" : " (永久)")
+                + " (" + durationLabel + ")"
                 + " | 原因: " + reason, NamedTextColor.GREEN));
         }
+    }
+
+    /**
+     * Parse duration string to seconds.
+     * Supports: 10s, 20s, 1min, 30min, 1h, 8h, 24h, 3d, 7d, 15d, 30d, 180d, 360d, 3600d, forever
+     * Also supports raw numbers (treated as minutes for backward compatibility).
+     * Returns Long.MIN_VALUE if parsing fails.
+     */
+    private long parseDuration(String input) {
+        String s = input.trim().toLowerCase();
+        if (s.equals("forever") || s.equals("perm") || s.equals("permanent")) {
+            return -1;
+        }
+        // Number + unit
+        if (s.matches("\\d+s")) {
+            return Long.parseLong(s.substring(0, s.length() - 1));
+        }
+        if (s.matches("\\d+min")) {
+            return Long.parseLong(s.substring(0, s.length() - 3)) * 60;
+        }
+        if (s.matches("\\d+h")) {
+            return Long.parseLong(s.substring(0, s.length() - 1)) * 3600;
+        }
+        if (s.matches("\\d+d")) {
+            return Long.parseLong(s.substring(0, s.length() - 1)) * 86400;
+        }
+        // Raw number: treat as minutes for backward compatibility
+        try {
+            return Long.parseLong(s) * 60;
+        } catch (NumberFormatException e) {
+            return Long.MIN_VALUE;
+        }
+    }
+
+    private String formatDurationLabel(long seconds) {
+        if (seconds < 0) return "永久";
+        if (seconds < 60) return seconds + "秒";
+        long minutes = seconds / 60;
+        if (minutes < 60) return minutes + "分钟";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + "小时";
+        long days = hours / 24;
+        return days + "天";
     }
 
     private void handleKick(CommandSender sender, String[] args) {
@@ -288,7 +335,7 @@ public class ANSACCommand implements CommandExecutor {
             String info = entry.getPlayerName()
                 + " | 原因: " + entry.getReason()
                 + " | 操作者: " + entry.getOperator()
-                + " | 时长: " + (entry.isPermanent() ? "永久" : entry.getDurationMinutes() + "分钟")
+                + " | 时长: " + (entry.isPermanent() ? "永久" : formatDurationLabel(entry.getDurationSeconds()))
                 + " | 剩余: " + (entry.isPermanent() ? "永久" : formatRemaining(entry));
             sender.sendMessage(Component.text(info, NamedTextColor.YELLOW));
         }
@@ -297,9 +344,12 @@ public class ANSACCommand implements CommandExecutor {
     private String formatRemaining(PunishmentEntry entry) {
         long remainingMs = entry.getExpiryTime() - System.currentTimeMillis();
         if (remainingMs <= 0) return "已过期";
-        long minutes = remainingMs / 60_000L;
+        long seconds = remainingMs / 1000L;
+        if (seconds < 60) return seconds + "秒";
+        long minutes = seconds / 60;
         if (minutes < 60) return minutes + "分钟";
-        if (minutes < 1440) return (minutes / 60) + "小时" + (minutes % 60) + "分钟";
-        return (minutes / 1440) + "天" + ((minutes % 1440) / 60) + "小时";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + "小时" + (minutes % 60) + "分钟";
+        return (hours / 24) + "天" + ((hours % 24) > 0 ? (hours % 24) + "小时" : "");
     }
 }
