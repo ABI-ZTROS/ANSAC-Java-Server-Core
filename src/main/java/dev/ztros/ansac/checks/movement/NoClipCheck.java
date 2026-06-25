@@ -5,10 +5,9 @@ import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
+import org.bukkit.util.BoundingBox;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -288,151 +287,50 @@ public class NoClipCheck extends Check {
 
     /**
      * Check if a block should be treated as solid for collision purposes.
-     * This excludes passable blocks that players can legitimately be inside.
+     * Uses the block's actual collision shape (via getBoundingBox()) rather
+     * than a hardcoded block name list. This naturally handles ALL non-full-height
+     * blocks (slabs, stairs, dirt path, farmland, soul sand, fences, walls, etc.)
+     * without needing to enumerate them.
+     *
+     * Only truly passable blocks (air, water, signs, torches, etc.) are excluded.
+     * Blocks with non-full bounding boxes (e.g. 15/16 height dirt path) will
+     * still be checked but won't overlap with the player's feet-level AABB
+     * during normal standing — handled by blockOverlapsBoundingBox().
      */
     private boolean isSolidForCollision(Block block) {
-        Material type = block.getType();
-        String name = type.name();
-
-        // Non-solid and passable blocks: player can be inside these
-        if (!type.isSolid()) {
+        // Must be collidable (has collision at all)
+        if (!block.isCollidable()) {
             return false;
         }
 
-        // Explicitly passable blocks that are technically "solid" in the API
-        // but players can walk through or interact with:
-        if (name.contains("SIGN") || name.contains("WALL_SIGN")) {
-            return false; // Signs are passable
-        }
-        if (type == Material.TORCH || type == Material.SOUL_TORCH
-                || type == Material.REDSTONE_TORCH) {
-            return false; // Torches are passable
-        }
-        if (name.contains("BUTTON")) {
-            return false; // Buttons are passable
-        }
-        if (name.contains("PRESSURE_PLATE")) {
-            return false; // Pressure plates are passable
-        }
-        if (name.contains("RAIL")) {
-            return false; // Rails are passable
-        }
-        if (name.contains("CARPET")) {
-            return false; // Carpets are passable
-        }
-        if (name.contains("FLOWER") || name.contains("TALL_GRASS")
-                || name.contains("FERN") || name.contains("BUSH")) {
-            return false; // Plants are passable
-        }
-        if (name.contains("MUSHROOM")) {
-            return false; // Mushrooms are passable
-        }
-        if (name.contains("DEAD_BUSH") || name.contains("SEAGRASS")
-                || name.contains("KELP")) {
-            return false; // Decorative vegetation
-        }
-        if (type == Material.SUGAR_CANE || type == Material.BAMBOO
-                || type == Material.BAMBOO_SAPLING) {
-            return false; // Thin plants
-        }
-        if (name.contains("CORAL") && !name.contains("BLOCK")) {
-            return false; // Coral fans/plants are passable
-        }
-        if (name.contains("DOOR") || name.contains("TRAPDOOR")
-                || name.contains("FENCE_GATE")) {
-            return false; // Openable blocks can be passed through when open
-        }
-        if (name.contains("WATER") || name.contains("LAVA")) {
-            return false; // Liquids
-        }
-        if (type == Material.POWDER_SNOW) {
-            return false; // Player can sink into powder snow
-        }
-        if (type == Material.COBWEB) {
-            return false; // Cobweb slows but doesn't block
-        }
-        if (name.contains("SAPLING") || name.contains("LEAVES")) {
-            return false; // Passable foliage
-        }
-        if (name.contains("SLAB") && !name.contains("DOUBLE")) {
-            return false; // Single slabs are 0.5 height, player can stand on top
-        }
-        if (name.contains("STAIRS")) {
-            return false; // Stairs have complex collision shapes
-        }
-        if (name.contains("WALL") || name.contains("FENCE")) {
-            // Walls and fences have 1.5 block height collision but
-            // players can't normally be inside them; however, they have
-            // irregular hitboxes that can cause false positives at edges
-            return false;
-        }
-        // Non-full-height solid blocks that players can stand on
-        if (type == Material.DIRT_PATH || name.equals("GRASS_PATH")) {
-            return false; // Dirt path is 15/16 height
-        }
-        if (type == Material.FARMLAND) {
-            return false; // Farmland is 15/16 height
-        }
-        if (type == Material.SOUL_SAND) {
-            return false; // Soul sand is 14/16 height
-        }
-        if (type == Material.MUD) {
-            return false; // Mud is slightly lower than full block
-        }
-        if (name.contains("IRON_BARS") || name.contains("GLASS_PANE")
-                || name.contains("CHAIN")) {
-            return false; // Thin blocks with irregular hitboxes
-        }
-        if (name.contains("END_ROD") || name.contains("LIGHTNING_ROD")
-                || name.contains("POINTED_DRIPSTONE")) {
-            return false; // Thin decorative blocks
-        }
-        if (name.contains("LADDER") || name.contains("VINE")) {
-            return false; // Climbable blocks
-        }
-        if (name.contains("SCAFFOLDING")) {
-            return false; // Player can climb through scaffolding
-        }
-        if (name.contains("PISTON") && name.contains("HEAD")) {
-            return false; // Piston heads can push players
-        }
-        if (type == Material.BREWING_STAND || type == Material.CAULDRON
-                || type == Material.CAMPFIRE || type == Material.FURNACE
-                || type == Material.BLAST_FURNACE || type == Material.SMOKER) {
-            return false; // Multi-block structures with non-full hitboxes
-        }
-        if (name.contains("BED") || name.contains("SKULL")
-                || name.contains("HEAD") || name.contains("CHEST")
-                || name.contains("ENDER_CHEST") || name.contains("BARREL")
-                || name.contains("SHULKER_BOX") || name.contains("HOPPER")
-                || name.contains("DISPENSER") || name.contains("DROPPER")
-                || name.contains("CRAFTING") || name.contains("ENCHANTING")
-                || name.contains("GRINDSTONE") || name.contains("STONECUTTER")
-                || name.contains("SMITHING") || name.contains("LOOM")) {
-            return false; // Interactive blocks with non-full hitboxes
-        }
-
-        return true;
+        // Must have a non-empty bounding box
+        BoundingBox box = block.getBoundingBox();
+        return box != null && box.getVolumeX() > 0
+            && box.getVolumeY() > 0 && box.getVolumeZ() > 0;
     }
 
     /**
-     * Check if a block's bounding box actually overlaps with the player's bounding box.
-     * A block at position (x, y, z) occupies the space from (x, y, z) to (x+1, y+1, z+1).
+     * Check if a block's actual collision shape overlaps with the player's bounding box.
+     * Uses Block#getBoundingBox() which returns the REAL collision shape accounting for
+     * slab heights, stair steps, fence widths, etc. — not an assumed 1x1x1 cube.
+     *
+     * This eliminates the need for any hardcoded block exemptions. Non-full-height blocks
+     * (dirt path 15/16, slabs 1/2, soul sand 14/16, farmland 15/16, etc.) have their
+     * true bounding boxes checked directly, so a player standing on top of them won't
+     * have overlapping AABBs.
+     *
+     * For blocks with multiple collision boxes (stairs, fences), getBoundingBox() returns
+     * the overall bounding envelope. If needed, getCollisionShape().getBoundingBoxes()
+     * can be used for per-component checks, but the envelope is sufficient here since
+     * we're checking if the player's center/body area overlaps with ANY part of the block.
      */
     private boolean blockOverlapsBoundingBox(Block block,
             double bbMinX, double bbMaxX, double bbMinY, double bbMaxY,
             double bbMinZ, double bbMaxZ) {
-        double blockMinX = block.getX();
-        double blockMaxX = block.getX() + 1.0;
-        double blockMinY = block.getY();
-        double blockMaxY = block.getY() + 1.0;
-        double blockMinZ = block.getZ();
-        double blockMaxZ = block.getZ() + 1.0;
-
-        // AABB overlap test
-        return bbMinX < blockMaxX && bbMaxX > blockMinX
-            && bbMinY < blockMaxY && bbMaxY > blockMinY
-            && bbMinZ < blockMaxZ && bbMaxZ > blockMinZ;
+        BoundingBox playerBox = new BoundingBox(bbMinX, bbMinY, bbMinZ,
+            bbMaxX, bbMaxY, bbMaxZ);
+        BoundingBox blockBox = block.getBoundingBox();
+        return playerBox.overlaps(blockBox);
     }
 
     /**
