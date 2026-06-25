@@ -5,7 +5,9 @@ import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.Openable;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BoundingBox;
 
@@ -293,26 +295,89 @@ public class NoClipCheck extends Check {
 
     /**
      * Check if a block should be treated as solid for collision purposes.
-     * Uses the block's actual collision shape (via getBoundingBox()) rather
-     * than a hardcoded block name list. This naturally handles ALL non-full-height
-     * blocks (slabs, stairs, dirt path, farmland, soul sand, fences, walls, etc.)
-     * without needing to enumerate them.
      *
-     * Only truly passable blocks (air, water, signs, torches, etc.) are excluded.
-     * Blocks with non-full bounding boxes (e.g. 15/16 height dirt path) will
-     * still be checked but won't overlap with the player's feet-level AABB
-     * during normal standing — handled by blockOverlapsBoundingBox().
+     * Three-layer approach:
+     * 1. Bukkit API: block.isCollidable() filters out most passable blocks
+     *    (air, water, plants, signs, torches, buttons, rails, etc.)
+     * 2. Wiki-based whitelist: covers collidable blocks that players can
+     *    legitimately pass through (open doors, climbable blocks, portals, etc.)
+     *    Data sourced from minecraft.wiki Hitbox page and #climbable tag.
+     * 3. Dynamic AABB: block.getBoundingBox() provides real collision shapes
+     *    for partial blocks (slabs, stairs, snow, dirt path, etc.)
      */
     private boolean isSolidForCollision(Block block) {
-        // Must be collidable (has collision at all)
+        // Layer 1: Bukkit API - blocks with no collision at all
         if (!block.isCollidable()) {
             return false;
         }
 
-        // Must have a non-empty bounding box
+        // Layer 2: Wiki-based whitelist for collidable-but-passable blocks
+        if (isExemptByWikiData(block)) {
+            return false;
+        }
+
+        // Layer 3: Must have a non-empty bounding box
         BoundingBox box = block.getBoundingBox();
         return box != null && box.getWidthX() > 0
             && box.getHeight() > 0 && box.getWidthZ() > 0;
+    }
+
+    /**
+     * Wiki-based block exemption whitelist.
+     * Sources: minecraft.wiki Hitbox page, Block tag #climbable,
+     *          Block states (Openable), and collision exceptions.
+     *
+     * Covers all blocks that ARE collidable but players can legitimately
+     * be inside or pass through.
+     */
+    private boolean isExemptByWikiData(Block block) {
+        Material type = block.getType();
+        String name = type.name();
+
+        // --- Climbable blocks (minecraft:climbable tag) ---
+        // Players can stand inside these; being inside is normal behaviour.
+        // Source: minecraft.wiki/w/Block_tag_(Java_Edition)#climbable
+        if (name.contains("LADDER")
+                || name.contains("VINE")
+                || name.equals("SCAFFOLDING")) {
+            return true;
+        }
+
+        // --- Open doors / trapdoors / fence gates ---
+        // When open, their collision box is empty or minimal.
+        // Source: minecraft.wiki/w/Hitbox
+        try {
+            Openable openable = (Openable) block.getBlockData();
+            if (openable.isOpen()) {
+                return true;
+            }
+        } catch (ClassCastException ignored) {
+            // Not an openable block
+        }
+
+        // --- Portals & special pass-through blocks ---
+        // Source: minecraft.wiki/w/End_Portal, minecraft.wiki/w/Nether_Portal
+        if (type == Material.END_PORTAL
+                || type == Material.NETHER_PORTAL
+                || type == Material.END_GATEWAY) {
+            return true;
+        }
+
+        // --- Powder snow ---
+        // Players can sink into powder snow; being inside is normal.
+        // Source: minecraft.wiki/w/Powder_Snow
+        if (type == Material.POWDER_SNOW) {
+            return true;
+        }
+
+        // --- Cobweb ---
+        // Players can move through cobweb (just slowly).
+        // Source: minecraft.wiki/w/Cobweb
+        if (type == Material.COBWEB) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
