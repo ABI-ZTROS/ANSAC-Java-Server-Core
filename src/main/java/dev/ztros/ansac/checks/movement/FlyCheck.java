@@ -6,11 +6,8 @@ import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.util.Vector;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,36 +15,38 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Fly check - detects abnormal vertical movement and flight.
  *
- * 物理参考数据（Minecraft 1.21.x, minecraft.wiki）:
- *   跳跃初速: 0.42 格/刻 (Y轴)
- *   重力公式: v(t) = 0.98 * (v(t-1) - 0.08), 即每刻先减 0.08 再乘 0.98
- *   终端速度: 3.92 格/刻 (78.4 m/s), 实际约 3.709 格/刻
- *   跳跃提升: 初速 + 0.1 * 等级
- *   风弹击退: ~6格高度, 2.5格水平
+ * Physics-based prediction model (Minecraft 1.21.x):
+ *   Gravity: v(t) = (v(t-1) - 0.08) * 0.98
+ *   Jump initial velocity: 0.42 blocks/tick
+ *   Terminal velocity: -3.92 blocks/tick
+ *   Normal jump apex at ~5-6 ticks, total cycle ~10-12 ticks
+ *   Jump Boost: +0.1 * level to initial velocity
  *
- * Design notes:
- * - Creative/Spectator mode players are skipped entirely.
- * - Players in vehicles, sleeping, or dead are skipped.
- * - Normal jumping, falling, climbing, swimming, and elytra gliding are exempted.
- * - Uses a buffer system to avoid false positives from single-tick anomalies.
- * - Ground proximity check prevents edge-standing false positives.
- * - Layer 2: Sustained abnormal altitude detection for non-elytra flight cheats.
+ * Key design: physics-based jump tracking eliminates false positives from
+ * normal jumping, sprint-jumping, and jump-boosted movement.
+ * Jump cycles are tracked precisely using state transitions.
  */
 public class FlyCheck extends Check {
 
-    private static final double LENIENCY = 0.15;
-    private static final int BUFFER_MAX = 8; // Was 6, increase for more leniency
-    private static final double JUMP_INITIAL_VELOCITY = 0.42; // Normal jump initial dy
-    private static final int JUMP_EXEMPT_TICKS = 20;          // 增加到 20 tick（跳跃上升约 0.7 秒）
-    private static final double GRAVITY_INITIAL = 0.08;        // 初始重力减速
-    private static final double GRAVITY_MULTIPLIER = 0.98;     // 重力乘数
-    private static final double TERMINAL_VELOCITY = 3.92;      // 终端速度
+    private static final double LENIENCY = 0.12;
+    private static final int BUFFER_MAX = 8;
 
-    // Sustained altitude detection thresholds
-    private static final double ALTITUDE_HEIGHT_THRESHOLD = 30.0; // 30格高于起始地面
-    private static final int ALTITUDE_DURATION_TICKS = 60;        // 3秒持续高海拔
-    private static final double ALTITUDE_NO_FALL_THRESHOLD = -0.05; // deltaY > -0.05 视为无明显下落
+    // Gravity constants
+    private static final double GRAVITY_ACCEL = 0.08;
+    private static final double GRAVITY_DRAG = 0.98;
+    private static final double JUMP_INITIAL_VELOCITY = 0.42;
+    private static final double TERMINAL_VELOCITY = 3.92;
 
+    // Jump detection
+    private static final double JUMP_DETECTION_DELTA_Y = 0.12;
+    private static final int JUMP_MAX_TICKS = 30; // Full jump cycle with safety margin
+
+    // Altitude detection
+    private static final double ALTITUDE_HEIGHT_THRESHOLD = 30.0;
+    private static final int ALTITUDE_DURATION_TICKS = 60;
+    private static final double ALTITUDE_NO_FALL_THRESHOLD = -0.05;
+
+    private final ConcurrentHashMap<UUID, JumpTracker> jumpTrackers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, AltitudeTracker> altitudeTrackers = new ConcurrentHashMap<>();
 
     public FlyCheck(ANSACPlugin plugin) {
@@ -58,11 +57,8 @@ public class FlyCheck extends Check {
     public void process(Player player, PlayerData data) {
         if (shouldSkip(player)) return;
 
-        // Ping compensation: skip check if latency is too high or spiking
         if (data.getPingCompensator().shouldSkipCheck()) {
-            data.setHoverBuffer(0);
-            data.setAscendBuffer(0);
-            data.setFallBuffer(0);
+            resetAllBuffers(data);
             return;
         }
 
@@ -74,57 +70,98 @@ public class FlyCheck extends Check {
         boolean onGround = player.isOnGround();
         long now = System.currentTimeMillis();
 
-        // --- Jump tracking ---
-        // If player just jumped (large positive deltaY), mark them as jumping
-        if (onGround && deltaY > 0.3) {
-            data.setLastJumpTime(now);
+        UUID uuid = player.getUniqueId();
+        JumpTracker jumpTracker = jumpTrackers.computeIfAbsent(uuid, k -> new JumpTracker());
+
+        // === Physics-based jump detection ===
+        // Jump start: was on ground, now airborne, moving upward
+        boolean justJumped = jumpTracker.wasOnGround && !onGround && deltaY > JUMP_DETECTION_DELTA_Y;
+
+        if (justJumped) {
+            jumpTracker.isJumping = true;
+            jumpTracker.jumpStartTime = now;
+            jumpTracker.jumpTickCount = 0;
+            jumpTracker.previousDeltaY = deltaY;
+            jumpTracker.wasOnGround = onGround;
+            resetAllBuffers(data);
+            return; // Skip all checks on jump tick
         }
-        boolean recentlyJumped = (now - data.getLastJumpTime()) < (JUMP_EXEMPT_TICKS * 50L);
 
-        // --- Wind Charge / explosion knockback detection ---
-        // Wind charge gives a sudden velocity boost; exempt for a short time
-        boolean recentKnockback = (now - data.getLastKnockbackTime()) < 1000L; // 1 second
+        // Update jump state
+        if (jumpTracker.isJumping) {
+            jumpTracker.jumpTickCount++;
 
-        // --- Elytra / Firework rocket check ---
-        // Player might be using firework with elytra (gives upward boost)
-        boolean hasElytra = player.getInventory().getChestplate() != null
-                && player.getInventory().getChestplate().getType().name().contains("ELYTRA");
-        boolean usingFirework = player.isGliding() || hasElytra && deltaY > 0.3;
+            // Detect jump apex (deltaY transitions from positive to near-zero/negative)
+            boolean atApex = jumpTracker.previousDeltaY > 0.02 && deltaY <= 0.02;
+            if (atApex) {
+                jumpTracker.atApex = true;
+            }
 
-        // --- Ground proximity check ---
-        // If player is near ground, they might be edge-standing or about to land
-        double distToGround = distanceToGround(player);
-        boolean nearGround = distToGround >= 0 && distToGround < 1.5;
+            // Jump ends: back on ground, exceeded max time, or fast fall after apex
+            boolean fastFallAfterApex = jumpTracker.atApex && jumpTracker.jumpTickCount > 10 && deltaY < -0.3;
+            if (onGround || jumpTracker.jumpTickCount > JUMP_MAX_TICKS || fastFallAfterApex) {
+                jumpTracker.isJumping = false;
+                jumpTracker.jumpTickCount = 0;
+                jumpTracker.atApex = false;
+            }
+        }
 
-        // Ping-compensated buffer
+        // === During jump cycle: fully exempt ===
+        // Normal jumping produces large deltaY variations that are physically correct.
+        // Sprint-jumping, jump-boosting, etc. all fall within this exemption window.
+        if (jumpTracker.isJumping) {
+            jumpTracker.previousDeltaY = deltaY;
+            jumpTracker.wasOnGround = onGround;
+            return;
+        }
+
+        // === Post-jump landing grace: 3 ticks ===
+        // The tick right after landing may have residual airborne-like deltaY
+        if (!jumpTracker.isJumping && jumpTracker.jumpTickCount == 0
+                && jumpTracker.previousDeltaY < -0.1 && onGround) {
+            // Just landed - give 1 tick grace
+            jumpTracker.previousDeltaY = deltaY;
+            jumpTracker.wasOnGround = onGround;
+            return;
+        }
+
+        // === Non-jump airborne: normal fly checks ===
         int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
             BUFFER_MAX, PingCompensator.COMPENSATION_FLY);
 
-        // --- Check 1: sustained hover ---
-        // Not on ground, not moving vertically, not in liquid, not climbing, not near ground
+        // Recent knockback (1 second)
+        boolean recentKnockback = (now - data.getLastKnockbackTime()) < 1000L;
+
+        // Elytra / firework
+        boolean hasElytra = player.getInventory().getChestplate() != null
+                && player.getInventory().getChestplate().getType().name().contains("ELYTRA");
+        boolean usingFirework = player.isGliding() || (hasElytra && deltaY > 0.3);
+
+        // Ground proximity
+        double distToGround = distanceToGround(player);
+        boolean nearGround = distToGround >= 0 && distToGround < 1.5;
+
+        // --- Check 1: Sustained hover ---
+        // Not on ground, virtually no vertical movement, not in liquid, not climbing, not near ground
         if (!onGround && Math.abs(deltaY) < 0.001
                 && !player.isInWater() && !player.isInLava()
-                && !player.isClimbing()
-                && !nearGround
-                && !recentlyJumped
-                && !usingFirework
-                && !recentKnockback) {
+                && !player.isClimbing() && !nearGround
+                && !usingFirework && !recentKnockback) {
             int hoverBuffer = data.getHoverBuffer() + 1;
             data.setHoverBuffer(hoverBuffer);
             if (hoverBuffer >= compensatedBuffer) {
                 flag(player, data, 1.5,
-                    "空中悬停（连续 " + hoverBuffer + " tick，延迟 "
+                    "空中悬停（连续" + hoverBuffer + " tick，延迟"
                     + data.getPingCompensator().getPingStatus() + "）");
             }
-            return;
+            // Continue to other checks (don't return, might also be ascending)
         } else {
             data.setHoverBuffer(0);
         }
 
-        // --- Check 2: ascending while not on ground ---
-        // Skip if recently jumped, has jump boost, levitation, climbing, in liquid, near ground, using firework, or recent knockback
+        // --- Check 2: Ascending while not on ground ---
         if (!onGround && deltaY > LENIENCY) {
-            if (recentlyJumped || usingFirework || nearGround || recentKnockback) {
+            if (nearGround || usingFirework || recentKnockback) {
                 data.setAscendBuffer(0);
             } else {
                 PotionEffectType levitation = ServerVersionAdapter.getLevitation();
@@ -138,10 +175,9 @@ public class FlyCheck extends Check {
                     data.setAscendBuffer(ascendBuffer);
                     if (ascendBuffer >= compensatedBuffer) {
                         flag(player, data, deltaY / LENIENCY,
-                            String.format("空中异常上升: dy=%.3f (连续 %d tick, 延迟 %s)",
+                            String.format("空中异常上升: dy=%.3f (连续%d tick, 延迟%s)",
                                 deltaY, ascendBuffer, data.getPingCompensator().getPingStatus()));
                     }
-                    return;
                 } else {
                     data.setAscendBuffer(0);
                 }
@@ -150,21 +186,17 @@ public class FlyCheck extends Check {
             data.setAscendBuffer(0);
         }
 
-        // --- Check 3: falling too slowly ---
-        // 正常下落第一刻: deltaY ≈ -0.08 * 0.98 = -0.0784
-        // 之后加速到 -3.92（终端速度）
-        // 如果 deltaY > -0.05（绝对值太小），持续多 tick 才可疑
+        // --- Check 3: Falling too slowly ---
         if (!onGround && deltaY < -LENIENCY) {
             if (deltaY > -0.05 && !player.isInWater() && !player.isInLava()
-                    && !player.isClimbing() && !recentlyJumped && !usingFirework && !recentKnockback) {
+                    && !player.isClimbing() && !usingFirework && !recentKnockback) {
                 int fallBuffer = data.getFallBuffer() + 1;
                 data.setFallBuffer(fallBuffer);
                 if (fallBuffer >= compensatedBuffer) {
                     flag(player, data, 1.2,
-                        String.format("下落过慢: dy=%.3f (连续 %d tick, 延迟 %s)",
+                        String.format("下落过慢: dy=%.3f (连续%d tick, 延迟%s)",
                             deltaY, fallBuffer, data.getPingCompensator().getPingStatus()));
                 }
-                return;
             } else {
                 data.setFallBuffer(0);
             }
@@ -172,38 +204,36 @@ public class FlyCheck extends Check {
             data.setFallBuffer(0);
         }
 
-        // --- Check 4: Sustained abnormal altitude (non-elytra flight) ---
-        checkSustainedAltitude(player, data, deltaY, onGround, usingFirework, recentKnockback, recentlyJumped);
+        // --- Check 4: Sustained abnormal altitude ---
+        checkSustainedAltitude(player, data, deltaY, onGround, usingFirework,
+            recentKnockback, jumpTracker);
+
+        jumpTracker.previousDeltaY = deltaY;
+        jumpTracker.wasOnGround = onGround;
     }
 
     /**
-     * Sustained altitude detection layer - detects non-elytra flight cheats.
-     * Monitors players who remain at abnormally high altitude for extended periods
-     * without showing natural falling behavior.
+     * Sustained altitude detection - non-elytra flight cheats.
      */
     private void checkSustainedAltitude(Player player, PlayerData data, double deltaY,
                                           boolean onGround, boolean usingFirework,
-                                          boolean recentKnockback, boolean recentlyJumped) {
+                                          boolean recentKnockback, JumpTracker jumpTracker) {
         UUID uuid = player.getUniqueId();
 
-        // Exemptions
-        if (onGround || usingFirework || recentKnockback || recentlyJumped) {
+        if (onGround || usingFirework || recentKnockback || jumpTracker.isJumping) {
             resetAltitudeTracker(uuid);
             return;
         }
 
-        // Exempt: elytra gliding
         if (player.isGliding()) {
             resetAltitudeTracker(uuid);
             return;
         }
 
-        // Exempt: levitation or jump boost + slow falling combination
         PotionEffectType levitation = ServerVersionAdapter.getLevitation();
         boolean hasLevitation = levitation != null && player.hasPotionEffect(levitation);
         PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
         boolean hasJumpBoost = jumpBoost != null && player.hasPotionEffect(jumpBoost);
-        // Slow Falling is available since 1.13, use name-based lookup for compatibility
         PotionEffectType slowFalling = getPotionEffectTypeByName("SLOW_FALLING");
         boolean hasSlowFalling = slowFalling != null && player.hasPotionEffect(slowFalling);
 
@@ -212,25 +242,16 @@ public class FlyCheck extends Check {
             return;
         }
 
-        // Exempt: in liquid (swimming/water climbing)
-        if (player.isInWater() || player.isInLava()) {
+        if (player.isInWater() || player.isInLava() || player.isClimbing()) {
             resetAltitudeTracker(uuid);
             return;
         }
 
-        // Exempt: climbing (ladders, vines, etc.)
-        if (player.isClimbing()) {
-            resetAltitudeTracker(uuid);
-            return;
-        }
-
-        // Exempt: The End dimension (natural high platforms)
         if (player.getWorld().getEnvironment().name().contains("THE_END")) {
             resetAltitudeTracker(uuid);
             return;
         }
 
-        // Exempt: riding entity (horses, striders, etc.)
         if (player.isInsideVehicle()) {
             resetAltitudeTracker(uuid);
             return;
@@ -238,7 +259,6 @@ public class FlyCheck extends Check {
 
         AltitudeTracker tracker = altitudeTrackers.computeIfAbsent(uuid, k -> new AltitudeTracker());
 
-        // Initialize start altitude if not set
         if (!tracker.hasStartAltitude) {
             tracker.startAltitudeY = player.getLocation().getY();
             tracker.hasStartAltitude = true;
@@ -247,17 +267,13 @@ public class FlyCheck extends Check {
         double currentY = player.getLocation().getY();
         double heightAboveStart = currentY - tracker.startAltitudeY;
 
-        // Check if player is at abnormally high altitude
         if (heightAboveStart > ALTITUDE_HEIGHT_THRESHOLD) {
-            // Check if there's no significant falling trend
             if (deltaY > ALTITUDE_NO_FALL_THRESHOLD) {
                 tracker.highAltitudeTicks++;
             } else {
-                // Player is falling - reset
                 tracker.highAltitudeTicks = 0;
             }
         } else {
-            // Not high enough - reset
             tracker.highAltitudeTicks = 0;
         }
 
@@ -267,7 +283,6 @@ public class FlyCheck extends Check {
                 String.format("持续异常高度: 高于起点 %.1f 格 (持续 %d tick, 延迟 %s)",
                     heightAboveStart, tracker.highAltitudeTicks,
                     data.getPingCompensator().getPingStatus()));
-            // Reset after flagging to avoid spam
             resetAltitudeTracker(uuid);
         }
     }
@@ -276,10 +291,14 @@ public class FlyCheck extends Check {
         altitudeTrackers.remove(uuid);
     }
 
-    /**
-     * Clean up tracker when player disconnects.
-     */
+    private void resetAllBuffers(PlayerData data) {
+        data.setHoverBuffer(0);
+        data.setAscendBuffer(0);
+        data.setFallBuffer(0);
+    }
+
     public void onPlayerQuit(UUID uuid) {
+        jumpTrackers.remove(uuid);
         altitudeTrackers.remove(uuid);
     }
 
@@ -290,14 +309,9 @@ public class FlyCheck extends Check {
             || player.isSleeping() || player.isDead();
     }
 
-    /**
-     * Calculate distance from player's feet to the nearest solid block below.
-     * Returns -1 if no ground found within reasonable distance.
-     */
     private double distanceToGround(Player player) {
         Location loc = player.getLocation().clone();
         double startY = loc.getY();
-        // Check up to 5 blocks down
         for (int i = 0; i < 10; i++) {
             loc.subtract(0, 0.5, 0);
             if (loc.getBlock().getType().isSolid()) {
@@ -307,10 +321,6 @@ public class FlyCheck extends Check {
         return -1;
     }
 
-    /**
-     * Get a PotionEffectType by name, returning null if not found.
-     * Used for effects not yet in ServerVersionAdapter.
-     */
     private static PotionEffectType getPotionEffectTypeByName(String name) {
         try {
             return PotionEffectType.getByName(name);
@@ -320,14 +330,24 @@ public class FlyCheck extends Check {
     }
 
     /**
-     * Internal tracker for sustained altitude detection.
-     * Monitors how long a player remains at abnormally high altitude
-     * without natural falling behavior.
+     * Jump physics tracker.
+     */
+    private static class JumpTracker {
+        boolean wasOnGround = true;   // Previous tick ground state
+        boolean isJumping = false;     // Currently in jump cycle
+        long jumpStartTime = 0;        // Jump start timestamp
+        int jumpTickCount = 0;         // Ticks since jump start
+        double previousDeltaY = 0.0;   // Previous tick deltaY
+        boolean atApex = false;        // Has reached jump apex
+    }
+
+    /**
+     * Altitude tracker for sustained altitude detection.
      */
     private static class AltitudeTracker {
-        int highAltitudeTicks;      // 连续高海拔 tick 数
-        double startAltitudeY;     // 开始高海拔的 Y 坐标
-        boolean hasStartAltitude;   // 是否已记录起始高度
+        int highAltitudeTicks;
+        double startAltitudeY;
+        boolean hasStartAltitude;
 
         AltitudeTracker() {
             this.highAltitudeTicks = 0;

@@ -9,6 +9,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.entity.Player;
 
+import java.util.UUID;
+
 /**
  * Base class for all anti-cheat checks.
  * Each check monitors a specific type of cheat behavior.
@@ -17,6 +19,14 @@ import org.bukkit.entity.Player;
 public abstract class Check {
 
     private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+
+    /**
+     * Called when a player quits the server.
+     * Subclasses should override this to clean up per-player state.
+     */
+    public void onPlayerQuit(UUID uuid) {
+        // Default: no-op. Subclasses with per-player state should override.
+    }
 
     @Getter
     protected final ANSACPlugin plugin;

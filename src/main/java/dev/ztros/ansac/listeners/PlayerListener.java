@@ -62,6 +62,8 @@ public class PlayerListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
         plugin.getSchedulerAdapter().runNextTick(() -> {
+            // Notify all checks to clean up per-player state before removing PlayerData
+            plugin.getCheckManager().onPlayerQuit(event.getPlayer().getUniqueId());
             plugin.getPlayerDataManager().removePlayerData(event.getPlayer());
 
             // Notify auth service

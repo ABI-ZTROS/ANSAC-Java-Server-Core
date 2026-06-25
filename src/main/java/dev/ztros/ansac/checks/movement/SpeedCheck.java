@@ -15,42 +15,46 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Speed check - detects abnormal horizontal movement speed.
  *
- * 物理参考数据（Minecraft 1.21.x, minecraft.wiki）:
- *   行走速度: 0.21585 格/刻 (4.317 m/s), 公式: 0.098 / (1 - 0.546)
- *   疾跑速度: 0.2806 格/刻 (5.612 m/s), 加速度比行走快 30%
- *   疾跑跳跃: 0.35635 格/刻 (7.127 m/s)
- *   冰面倍率: 9.27x | 蓝冰倍率: 16.85x
- *   速度药水: 基础速度 * (1 + 0.2 * 等级)
- *   灵魂疾行: 疾跑 ~0.394 + 0.03 * (等级-1) 格/刻
- *   海豚恩典: 水中速度 * 5.0
- *   潜行: 速度 * 0.3 | 使用物品: 速度 * 0.2 | 蜘蛛网: 速度 * 0.05
+ * Physics-based prediction model (Minecraft 1.21.x):
+ *   Walk speed:     0.21585 blocks/tick (4.317 m/s)
+ *   Sprint speed:   0.2806  blocks/tick (5.612 m/s)
+ *   Sprint-jump:    0.35635 blocks/tick (7.127 m/s)
+ *   Ice multiplier: 9.27x | Blue ice: 16.85x
+ *   Speed potion:   base * (1 + 0.2 * level)
+ *   Soul Speed:     +0.406 + 0.03 * (level-1)
+ *   Dolphin Grace:  swim * 5.0
  *
- * Design notes:
- * - Creative/Spectator mode players are skipped entirely.
- * - Uses a buffer system: requires multiple consecutive violations to flag.
- * - Accounts for common legitimate speed sources: sprint, jump, ice, speed potion, soul speed, dolphin's grace.
- * - Knockback and teleport are handled via recent-damage and position-jump detection.
- * - Layer 2: Strafe detection - detects players maintaining abnormally consistent high speed over time.
+ * Key design: physics-based jump tracking eliminates sprint-jump false positives.
+ * When a player jumps, horizontal speed in air should not exceed takeoff speed
+ * (no horizontal acceleration in air in vanilla MC).
  */
 public class SpeedCheck extends Check {
 
-    private static final double BASE_WALK = 0.21585;       // 精确值
-    private static final double BASE_SPRINT = 0.2806;       // 精确值
-    private static final double BASE_SPRINT_JUMP = 0.35635; // 精确值
-    private static final double ICE_MULTIPLIER = 9.27;       // 冰面倍率（普通冰/浮冰/霜冰）
-    private static final double BLUE_ICE_MULTIPLIER = 16.85; // 蓝冰倍率
-    private static final double SOUL_SPEED_BASE = 0.406;     // 灵魂疾行基础增加量（格/刻）
-    private static final double SOUL_SPEED_PER_LEVEL = 0.03; // 灵魂疾行每级额外增加
-    private static final double DOLPHIN_GRACE_MULTIPLIER = 5.0; // 海豚恩典倍率
-    private static final double LENIENCY = 0.05;              // 缩小容差
-    private static final int BUFFER_MAX = 10;                  // 增加缓冲
+    // Base speed constants (blocks/tick)
+    private static final double BASE_WALK = 0.21585;
+    private static final double BASE_SPRINT = 0.2806;
+    private static final double BASE_SPRINT_JUMP = 0.35635;
+    private static final double ICE_MULTIPLIER = 9.27;
+    private static final double BLUE_ICE_MULTIPLIER = 16.85;
+    private static final double SOUL_SPEED_BASE = 0.406;
+    private static final double SOUL_SPEED_PER_LEVEL = 0.03;
+    private static final double DOLPHIN_GRACE_MULTIPLIER = 5.0;
+
+    // Detection thresholds
+    private static final double LENIENCY = 0.08;
+    private static final int BUFFER_MAX = 8;
+
+    // Jump detection
+    private static final double JUMP_DETECTION_DELTA_Y = 0.12; // Jump starts when dy > 0.12
+    private static final int JUMP_MAX_TICKS = 25; // Maximum jump cycle (1.25s)
+    private static final double AIR_SPEED_TOLERANCE = 1.12; // 12% tolerance in air
 
     // Strafe detection thresholds
-    private static final int STRAFE_HIGH_SPEED_THRESHOLD_TICKS = 40; // 2秒持续高速
-    private static final double STRAFE_SPEED_RATIO = 0.9;  // 高速判定: expected * 0.9
-    private static final double STRAFE_AVG_SPEED_RATIO = 0.95; // 平均速度判定: expected * 0.95
+    private static final int STRAFE_HIGH_SPEED_THRESHOLD_TICKS = 40;
+    private static final double STRAFE_SPEED_RATIO = 0.9;
+    private static final double STRAFE_AVG_SPEED_RATIO = 0.95;
 
-    private final ConcurrentHashMap<UUID, StrafeTracker> strafeTrackers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, PhysicsTracker> trackers = new ConcurrentHashMap<>();
 
     public SpeedCheck(ANSACPlugin plugin) {
         super(plugin, "Speed", "Movement");
@@ -64,116 +68,167 @@ public class SpeedCheck extends Check {
         Location to = data.getCurrentLocation();
         if (from == null || to == null) return;
 
-        // Skip if this looks like a teleport (large position jump)
-        double teleportCheck = from.distanceSquared(to);
-        if (teleportCheck > 16.0) { // 4 blocks squared
-            data.setSpeedBuffer(0);
-            resetStrafeTracker(player.getUniqueId());
-            return;
-        }
-
         double horizontalDist = data.getHorizontalDistance();
-        if (horizontalDist < 0.05) {
+        boolean onGround = player.isOnGround();
+        double deltaY = data.getVerticalDistance();
+        long now = System.currentTimeMillis();
+
+        // Teleport detection - large position jump
+        double teleportDistSq = from.distanceSquared(to);
+        if (teleportDistSq > 16.0) { // 4 blocks squared
+            resetTracker(player.getUniqueId());
             data.setSpeedBuffer(0);
-            resetStrafeTracker(player.getUniqueId());
             return;
         }
 
-        // Ping compensation: skip check if latency is too high or spiking
+        // Not moving significantly
+        if (horizontalDist < 0.03) {
+            data.setSpeedBuffer(0);
+            return;
+        }
+
+        // Ping compensation
         if (data.getPingCompensator().shouldSkipCheck()) {
             data.setSpeedBuffer(0);
             return;
         }
 
-        double expected = getExpectedMaxSpeed(player);
+        UUID uuid = player.getUniqueId();
+        PhysicsTracker tracker = trackers.computeIfAbsent(uuid, k -> new PhysicsTracker());
 
-        // Apply ping-compensated speed multiplier
+        // === Physics-based jump detection ===
+        // Jump start: was on ground / near ground, now airborne, moving upward
+        boolean justJumped = tracker.wasOnGround && !onGround && deltaY > JUMP_DETECTION_DELTA_Y;
+
+        if (justJumped) {
+            tracker.isJumping = true;
+            tracker.jumpStartTime = now;
+            tracker.jumpTakeoffSpeed = horizontalDist;
+            tracker.jumpTickCount = 0;
+            tracker.wasOnGround = onGround;
+            data.setSpeedBuffer(0);
+            return; // Skip detection on the jump tick
+        }
+
+        // Update jump state
+        if (tracker.isJumping) {
+            tracker.jumpTickCount++;
+            // Jump ends: back on ground, exceeded max time, or started falling fast after apex
+            boolean fallingAfterApex = tracker.jumpTickCount > 8 && deltaY < -0.25;
+            if (onGround || tracker.jumpTickCount > JUMP_MAX_TICKS || fallingAfterApex) {
+                tracker.isJumping = false;
+                tracker.jumpTickCount = 0;
+            }
+        }
+
+        // === Compute expected maximum speed ===
+        double expected;
+
+        if (tracker.isJumping) {
+            // In air: horizontal speed should not exceed takeoff speed
+            // (no horizontal acceleration in vanilla MC while airborne)
+            expected = tracker.jumpTakeoffSpeed * AIR_SPEED_TOLERANCE;
+
+            // Ensure minimum threshold - sprint-jump with speed potion
+            double minAirSpeed = BASE_SPRINT_JUMP * getSpeedPotionMultiplier(player);
+            expected = Math.max(expected, minAirSpeed);
+
+            // If player has Jump Boost, they stay in air longer
+            PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
+            if (jumpBoost != null && player.hasPotionEffect(jumpBoost)) {
+                int level = player.getPotionEffect(jumpBoost).getAmplifier() + 1;
+                // Jump Boost increases jump height but also affects air time
+                // Give extra leniency: +0.03 per level
+                expected += 0.03 * level;
+            }
+
+        } else {
+            // On ground: normal speed calculation
+            expected = getExpectedMaxSpeed(player);
+        }
+
+        // Apply ping compensation
         expected = data.getPingCompensator().getCompensatedSpeed(
             expected, PingCompensator.COMPENSATION_SPEED);
 
-        // Recent damage = possible knockback, add leniency
+        // Knockback exemption (1 second)
+        if ((now - data.getLastKnockbackTime()) < 1000L) {
+            data.setSpeedBuffer(0);
+            tracker.wasOnGround = onGround;
+            return;
+        }
+
+        // Damage ticks = possible knockback
         if (player.getNoDamageTicks() > 0) {
             expected += 0.5;
         }
 
-        // Wind Charge / explosion knockback: exempt for 1 second after sudden velocity change
-        long now = System.currentTimeMillis();
-        if ((now - data.getLastKnockbackTime()) < 1000L) {
-            data.setSpeedBuffer(0);
-            resetStrafeTracker(player.getUniqueId());
-            return;
-        }
-
-        // Ping-compensated leniency and buffer
+        // === Detection ===
         double compensatedLeniency = data.getPingCompensator().getCompensatedThreshold(
             LENIENCY, PingCompensator.COMPENSATION_SPEED);
         int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
             BUFFER_MAX, PingCompensator.COMPENSATION_SPEED);
 
-        int ping = data.getPingCompensator().getAveragePing();
-
-        // --- Layer 1: Single-tick speed check (original) ---
         if (horizontalDist > expected + compensatedLeniency) {
             int buffer = data.getSpeedBuffer() + 1;
             data.setSpeedBuffer(buffer);
             if (buffer >= compensatedBuffer) {
                 double severity = horizontalDist / expected;
+                String phase = tracker.isJumping ? "空中" : "地面";
                 flag(player, data, severity,
-                    String.format("速度异常: %.3f / %.3f (连续 %d tick, 延迟 %s)",
-                        horizontalDist, expected, buffer, data.getPingCompensator().getPingStatus()));
+                    String.format("速度异常(%s): %.3f / %.3f (连续%d tick, 延迟%s)",
+                        phase, horizontalDist, expected, buffer,
+                        data.getPingCompensator().getPingStatus()));
             }
         } else {
-            data.setSpeedBuffer(0);
+            // Decay buffer on good behavior
+            data.setSpeedBuffer(Math.max(0, data.getSpeedBuffer() - 1));
         }
 
-        // --- Layer 2: Strafe detection (sustained high speed) ---
-        checkStrafe(player, data, horizontalDist, expected);
+        // --- Layer 2: Strafe detection ---
+        checkStrafe(player, data, horizontalDist, expected, tracker);
+
+        tracker.wasOnGround = onGround;
     }
 
     /**
-     * Strafe detection layer - detects players maintaining abnormally consistent high speed.
-     * Strafe cheats adjust direction each tick to maintain constant speed, resulting in
-     * very little natural variation. Normal players have speed fluctuations.
+     * Strafe detection - detects sustained abnormally consistent high speed.
      */
-    private void checkStrafe(Player player, PlayerData data, double horizontalDist, double expected) {
-        UUID uuid = player.getUniqueId();
-        StrafeTracker tracker = strafeTrackers.computeIfAbsent(uuid, k -> new StrafeTracker());
-
-        tracker.tickCount++;
-        tracker.totalDistance += horizontalDist;
+    private void checkStrafe(Player player, PlayerData data, double horizontalDist,
+                              double expected, PhysicsTracker tracker) {
+        tracker.strafeTickCount++;
+        tracker.strafeTotalDistance += horizontalDist;
 
         if (horizontalDist > expected * STRAFE_SPEED_RATIO) {
-            tracker.highSpeedTicks++;
+            tracker.strafeHighSpeedTicks++;
         } else {
-            tracker.highSpeedTicks = 0;
-            // Reset accumulated data when speed drops below threshold
-            tracker.totalDistance = 0;
-            tracker.tickCount = 0;
+            tracker.strafeHighSpeedTicks = 0;
+            tracker.strafeTotalDistance = 0;
+            tracker.strafeTickCount = 0;
             return;
         }
 
-        if (tracker.highSpeedTicks > STRAFE_HIGH_SPEED_THRESHOLD_TICKS) {
-            double avgSpeed = tracker.totalDistance / tracker.tickCount;
+        if (tracker.strafeHighSpeedTicks > STRAFE_HIGH_SPEED_THRESHOLD_TICKS) {
+            double avgSpeed = tracker.strafeTotalDistance / tracker.strafeTickCount;
             if (avgSpeed > expected * STRAFE_AVG_SPEED_RATIO) {
                 double severity = avgSpeed / expected;
                 flag(player, data, severity,
-                    String.format("持续高速移动(Strafe检测): 平均速度=%.3f / 预期=%.3f (持续 %d tick, 延迟 %s)",
-                        avgSpeed, expected, tracker.highSpeedTicks, data.getPingCompensator().getPingStatus()));
-                // Reset after flagging to avoid spam
-                resetStrafeTracker(uuid);
+                    String.format("持续高速移动(Strafe): 平均=%.3f / 预期=%.3f (持续%d tick)",
+                        avgSpeed, expected, tracker.strafeHighSpeedTicks));
+                // Reset after flag
+                tracker.strafeHighSpeedTicks = 0;
+                tracker.strafeTotalDistance = 0;
+                tracker.strafeTickCount = 0;
             }
         }
     }
 
-    private void resetStrafeTracker(UUID uuid) {
-        strafeTrackers.remove(uuid);
+    private void resetTracker(UUID uuid) {
+        trackers.remove(uuid);
     }
 
-    /**
-     * Clean up tracker when player disconnects.
-     */
     public void onPlayerQuit(UUID uuid) {
-        strafeTrackers.remove(uuid);
+        trackers.remove(uuid);
     }
 
     private boolean shouldSkip(Player player) {
@@ -183,50 +238,53 @@ public class SpeedCheck extends Check {
             || player.isSleeping() || player.isDead();
     }
 
+    /**
+     * Calculate expected maximum horizontal speed on ground.
+     */
     private double getExpectedMaxSpeed(Player player) {
         double speed = BASE_WALK;
 
         if (player.isSprinting()) {
-            speed = player.isOnGround() ? BASE_SPRINT : BASE_SPRINT_JUMP;
+            speed = BASE_SPRINT;
         }
 
-        // Speed potion: 基础速度 * (1 + 0.2 * level)
+        // Speed potion
         if (player.hasPotionEffect(PotionEffectType.SPEED)) {
             int level = player.getPotionEffect(PotionEffectType.SPEED).getAmplifier() + 1;
             speed *= (1.0 + 0.2 * level);
         }
 
-        // Dolphin's Grace: 正常游泳 * 5.0（仅水中生效）
+        // Dolphin's Grace (water only)
         PotionEffectType dolphinsGrace = ServerVersionAdapter.getDolphinsGrace();
         if (dolphinsGrace != null && player.hasPotionEffect(dolphinsGrace) && player.isInWater()) {
             speed *= DOLPHIN_GRACE_MULTIPLIER;
         }
 
-        // Soul Speed: speed += SOUL_SPEED_BASE + SOUL_SPEED_PER_LEVEL * (level - 1)
+        // Soul Speed
         PotionEffectType soulSpeed = ServerVersionAdapter.getSoulSpeed();
         if (soulSpeed != null && player.hasPotionEffect(soulSpeed)) {
             int level = player.getPotionEffect(soulSpeed).getAmplifier() + 1;
             speed += SOUL_SPEED_BASE + SOUL_SPEED_PER_LEVEL * (level - 1);
         }
 
-        // Ice / packed ice / frosted ice: 区分普通冰和蓝冰
+        // Ice surfaces
         if (isOnBlueIce(player)) {
             speed *= BLUE_ICE_MULTIPLIER;
         } else if (isOnIce(player)) {
             speed *= ICE_MULTIPLIER;
         }
 
-        // Sneaking: 速度 * 0.3
+        // Sneaking
         if (player.isSneaking()) {
             speed *= 0.3;
         }
 
-        // Blocking / Using item: 速度 * 0.2
+        // Blocking / using item
         if (player.isBlocking() || player.isHandRaised()) {
             speed *= 0.2;
         }
 
-        // Cobweb: 速度 * 0.05
+        // Cobweb
         if (player.getLocation().getBlock().getType().name().contains("COBWEB")) {
             speed *= 0.05;
         }
@@ -234,33 +292,42 @@ public class SpeedCheck extends Check {
         return speed;
     }
 
+    /**
+     * Get speed potion multiplier only (for air speed minimum).
+     */
+    private double getSpeedPotionMultiplier(Player player) {
+        double mult = 1.0;
+        if (player.hasPotionEffect(PotionEffectType.SPEED)) {
+            int level = player.getPotionEffect(PotionEffectType.SPEED).getAmplifier() + 1;
+            mult *= (1.0 + 0.2 * level);
+        }
+        return mult;
+    }
+
     private boolean isOnIce(Player player) {
         Location loc = player.getLocation().clone().subtract(0, 1, 0);
         String type = loc.getBlock().getType().name();
-        // 匹配 ICE, PACKED_ICE, FROSTED_ICE，但不匹配 BLUE_ICE
         return type.contains("ICE") && !type.contains("BLUE");
     }
 
     private boolean isOnBlueIce(Player player) {
         Location loc = player.getLocation().clone().subtract(0, 1, 0);
-        String type = loc.getBlock().getType().name();
-        return type.contains("BLUE_ICE");
+        return loc.getBlock().getType().name().contains("BLUE_ICE");
     }
 
     /**
-     * Internal tracker for Strafe detection.
-     * Monitors sustained high-speed movement patterns that indicate
-     * direction-adjustment cheats (Strafe).
+     * Physics tracker for per-player movement state.
      */
-    private static class StrafeTracker {
-        int highSpeedTicks;   // 连续高速 tick 数
-        double totalDistance;  // 累计距离
-        int tickCount;         // 总 tick 数
+    private static class PhysicsTracker {
+        boolean wasOnGround = true;     // Previous tick ground state
+        boolean isJumping = false;       // Currently in jump cycle
+        long jumpStartTime = 0;          // Jump start timestamp
+        double jumpTakeoffSpeed = 0.0;   // Horizontal speed at jump takeoff
+        int jumpTickCount = 0;           // Ticks since jump start
 
-        StrafeTracker() {
-            this.highSpeedTicks = 0;
-            this.totalDistance = 0.0;
-            this.tickCount = 0;
-        }
+        // Strafe tracking
+        int strafeHighSpeedTicks = 0;
+        double strafeTotalDistance = 0.0;
+        int strafeTickCount = 0;
     }
 }

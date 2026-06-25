@@ -52,6 +52,7 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -261,5 +262,18 @@ public class CheckManager {
      */
     public void shutdown() {
         checks.clear();
+    }
+
+    /**
+     * Called when a player quits. Notifies all checks to clean up per-player state.
+     */
+    public void onPlayerQuit(UUID uuid) {
+        for (Check check : checks) {
+            try {
+                check.onPlayerQuit(uuid);
+            } catch (Exception e) {
+                plugin.getLogger().warning("检测 " + check.getName() + " 清理玩家状态时出错：" + e.getMessage());
+            }
+        }
     }
 }
