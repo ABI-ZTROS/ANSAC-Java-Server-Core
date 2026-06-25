@@ -271,18 +271,24 @@ public class NoClipCheck extends Check {
     /**
      * Check if the player is merely standing on top of (or inside the upper
      * portion of) the given block. This is normal behaviour for non-full-height
-     * blocks like dirt path, farmland, soul sand, etc.
+     * blocks like snow, dirt path, farmland, soul sand, etc.
+     *
+     * Uses the block's real bounding box height (via getBoundingBox().getMaxY())
+     * instead of assuming a full 1.0 block height. This correctly handles snow
+     * layers (0.125 - 1.0), slabs (0.5), stairs, and other partial blocks.
      *
      * @param block The block to check
      * @param playerFeetY The player's feet Y coordinate
      * @return true if the player is standing on this block
      */
     private boolean isStandingOnBlock(Block block, double playerFeetY) {
-        double blockTopY = block.getY() + 1.0;
+        double blockTopY = block.getBoundingBox().getMaxY();
         double verticalOverlap = blockTopY - playerFeetY;
         // If the player's feet are within 0.2 blocks of the block's top,
-        // they are standing on it (not clipping through it)
-        return verticalOverlap > 0 && verticalOverlap < 0.2;
+        // they are standing on it (not clipping through it).
+        // Allow a small epsilon (-0.01) for floating-point precision and
+        // minor client-server position sync differences.
+        return verticalOverlap >= -0.01 && verticalOverlap < 0.2;
     }
 
     /**
