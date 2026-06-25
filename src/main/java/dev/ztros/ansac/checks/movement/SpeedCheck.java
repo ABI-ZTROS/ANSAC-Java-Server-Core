@@ -16,13 +16,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * Speed check - detects abnormal horizontal movement speed.
  *
  * Physics-based prediction model (Minecraft 1.21.x):
- *   Walk speed:     0.21585 blocks/tick (4.317 m/s)
- *   Sprint speed:   0.2806  blocks/tick (5.612 m/s)
- *   Sprint-jump:    0.35635 blocks/tick (7.127 m/s)
- *   Ice multiplier: 9.27x | Blue ice: 16.85x
+ *   Walk speed:     0.21585 blocks/tick (wiki: 4.317 m/s)
+ *   Sprint speed:   0.2806  blocks/tick (wiki: 5.612 m/s)
+ *   Sprint-jump:    0.35635 blocks/tick (wiki: 7.127 m/s)
+ *   Ice multiplier: 1.4x (estimate, wiki only documents boat speeds: 40/72.73 m/s)
+ *   Blue ice:       1.6x (estimate, player physics differs from boats)
  *   Speed potion:   base * (1 + 0.2 * level)
- *   Soul Speed:     +0.406 + 0.03 * (level-1)
- *   Dolphin Grace:  swim * 5.0
+ *   Soul Speed:     speed *= (1.3 + level * 0.105) (wiki: I=+40.5%, II=+51%, III=+61.5%)
+ *   Dolphin Grace:  1.75x (wiki: 9.8 m/s underwater, vs sprint 5.612 m/s)
  *
  * Key design: physics-based jump tracking eliminates sprint-jump false positives.
  * When a player jumps, horizontal speed in air should not exceed takeoff speed
@@ -30,15 +31,27 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SpeedCheck extends Check {
 
-    // Base speed constants (blocks/tick)
-    private static final double BASE_WALK = 0.21585;
-    private static final double BASE_SPRINT = 0.2806;
-    private static final double BASE_SPRINT_JUMP = 0.35635;
-    private static final double ICE_MULTIPLIER = 9.27;
-    private static final double BLUE_ICE_MULTIPLIER = 16.85;
-    private static final double SOUL_SPEED_BASE = 0.406;
-    private static final double SOUL_SPEED_PER_LEVEL = 0.03;
-    private static final double DOLPHIN_GRACE_MULTIPLIER = 5.0;
+    // Base speed constants (blocks/tick) - sourced from minecraft.wiki/w/Player
+    private static final double BASE_WALK = 0.21585;        // wiki: 4.317 m/s
+    private static final double BASE_SPRINT = 0.2806;       // wiki: 5.612 m/s
+    private static final double BASE_SPRINT_JUMP = 0.35635; // wiki: 7.127 m/s
+
+    // Ice multipliers - NOT directly documented on wiki for player walking.
+    // Wiki documents boat speeds (ice=40m/s, blue ice=72.73m/s) and slipperiness.
+    // Player ice speed increase is much smaller (~10-60%).
+    // Old values 9.27/16.85 were boat physics incorrectly applied to players.
+    private static final double ICE_MULTIPLIER = 1.4;
+    private static final double BLUE_ICE_MULTIPLIER = 1.6;
+
+    // Soul Speed multiplier - wiki formula: speed *= (1.3 + level * 0.105)
+    // Level 1: 1.405 (+40.5%), Level 2: 1.51 (+51%), Level 3: 1.615 (+61.5%)
+    // Source: minecraft.fandom.com/wiki/Soul_Speed
+    private static final double SOUL_SPEED_BASE_MULT = 1.3;
+    private static final double SOUL_SPEED_PER_LEVEL_MULT = 0.105;
+
+    // Dolphin's Grace multiplier - wiki: 9.8 m/s underwater
+    // 9.8 / 5.612 (sprint) ≈ 1.746. Old value 5.0 was severely inflated.
+    private static final double DOLPHIN_GRACE_MULTIPLIER = 1.75;
 
     // Detection thresholds
     private static final double LENIENCY = 0.08;
@@ -260,11 +273,11 @@ public class SpeedCheck extends Check {
             speed *= DOLPHIN_GRACE_MULTIPLIER;
         }
 
-        // Soul Speed
+        // Soul Speed - wiki: multiplier = 1.3 + level * 0.105
         PotionEffectType soulSpeed = ServerVersionAdapter.getSoulSpeed();
         if (soulSpeed != null && player.hasPotionEffect(soulSpeed)) {
             int level = player.getPotionEffect(soulSpeed).getAmplifier() + 1;
-            speed += SOUL_SPEED_BASE + SOUL_SPEED_PER_LEVEL * (level - 1);
+            speed *= (SOUL_SPEED_BASE_MULT + level * SOUL_SPEED_PER_LEVEL_MULT);
         }
 
         // Ice surfaces

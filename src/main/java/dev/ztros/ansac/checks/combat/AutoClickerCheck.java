@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *     - CPS is excessively uniform (standard deviation extremely low)
  *     - CPS consistently exceeds human limits for extended periods
  *
- * CPS reference (cpsmeter.com):
+ * CPS reference (community data, minecraft.wiki 无此数据):
  *   Normal clicking: 6-7 CPS
  *   Jitter clicking: 12-16 CPS (max ~18 CPS)
  *   Butterfly clicking: 15-25 CPS (max ~28 CPS short bursts)
@@ -33,7 +33,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   - processClick() is called from PacketListener on ANIMATION packets.
  *   - Records click timestamps and intervals between consecutive clicks.
  *   - Checks two dimensions:
- *     1. CPS too high: > 18 clicks in the last 1 second (exceeds human limit)
+ *     1. CPS too high: > 20 clicks in the last 1 second (exceeds human limit)
  *     2. Intervals too uniform: standard deviation of last 20 intervals < 15ms
  *   - Uses a buffer system to avoid false positives.
  *   - Uses PingCompensator for latency compensation.
@@ -41,7 +41,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class AutoClickerCheck extends Check {
 
     // Detection thresholds
-    private static final int MAX_CPS = 18; // Strict limit for dedicated clicker check
+    // MAX_CPS = 20: butterfly clicking can reach 20-25 CPS in short bursts.
+    // 18 was too strict and caused false positives for skilled players.
+    private static final int MAX_CPS = 20;
     private static final int CPS_WINDOW_MS = 1000; // 1 second window for CPS calculation
     private static final double MIN_INTERVAL_STD_DEV = 15.0; // Below this is suspicious (human > 30ms)
     private static final int STD_DEV_SAMPLE_SIZE = 20; // Number of intervals for std dev calculation

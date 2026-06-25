@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Physics reference (Minecraft 1.21.x, minecraft.wiki):
  *   Jump initial velocity: 0.42 blocks/tick (Y-axis)
  *   Gravity formula: v(t) = 0.98 * (v(t-1) - 0.08)
- *   Max jump height (no boost): ~1.252 blocks
+ *   Max jump height (no boost): ~1.2522 blocks (wiki: Jumping)
  *   Jump Boost I: initial velocity 0.52 -> max height ~1.518 blocks
  *   Jump Boost II: initial velocity 0.62 -> max height ~1.835 blocks
  *   Jump Boost III+: initial velocity 0.42 + 0.1 * level
@@ -48,7 +48,8 @@ public class HighJumpCheck extends Check {
     private static final double GRAVITY_MULTIPLIER = 0.98;
 
     // Pre-calculated max heights for common jump boost levels
-    private static final double MAX_HEIGHT_NO_BOOST = 1.252;
+    // Source: minecraft.wiki/w/Jumping - max height no boost = 1.2522 blocks
+    private static final double MAX_HEIGHT_NO_BOOST = 1.2522;
     private static final double MAX_HEIGHT_BOOST_I = 1.518;
     private static final double MAX_HEIGHT_BOOST_II = 1.835;
 

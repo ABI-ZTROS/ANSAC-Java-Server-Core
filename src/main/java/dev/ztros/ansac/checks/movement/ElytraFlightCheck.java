@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   Pitch -45° (dive):      ~2.5 b/t
  *   Pitch 0° (level):       ~1.5 b/t (30 m/s) - equilibrium speed
  *   Pitch +30° (climb):     min ~0.36 b/t (7.2 m/s) - stall threshold
- *   Firework boost:         +1.675 b/t instantaneous, then decays
+ *   Firework boost:         +1.675 b/t (33.5 m/s, wiki: minecraft.wiki/w/Firework_rocket)
  *   Horizontal friction:    0.99 per tick (speed decays slowly)
  *   Glide ratio:            ~10:1 horizontal:vertical
  *

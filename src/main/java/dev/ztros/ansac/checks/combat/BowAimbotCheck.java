@@ -24,7 +24,7 @@ import org.bukkit.util.Vector;
  *   对移动目标使用固定预测系数 (Wurst: 0.2)
  *
  * 物理参考数据（Minecraft Wiki）:
- *   弓箭重力: 0.006/tick² (即 -0.05 m/tick² 但代码中使用 0.006)
+ *   弓箭重力: 0.05 blocks/tick² (wiki: Projectile, 每 tick 垂直速度减少 0.05)
  *   弓箭阻力: 0.99/tick
  *   弓满蓄力时间: 1 秒 (20 tick)
  *   弓箭初速: 满蓄力 ~3.0 格/tick (60 m/s)
@@ -39,7 +39,8 @@ import org.bukkit.util.Vector;
  */
 public class BowAimbotCheck extends Check {
 
-    private static final double ARROW_GRAVITY = 0.006; // 弓箭重力常数
+    // Source: minecraft.wiki/w/Projectile - arrow gravity = 0.05 blocks/tick²
+    private static final double ARROW_GRAVITY = 0.05;
     private static final double MAX_ANGLE_ERROR = 3.0; // 最大允许角度误差（度）
     private static final double MIN_CHARGE_TICKS = 10; // 最小蓄力 tick 数（0.5秒）
     private static final int BUFFER_MAX = 5;

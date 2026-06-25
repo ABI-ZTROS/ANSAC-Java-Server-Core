@@ -18,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Physics-based prediction model (Minecraft 1.21.x):
  *   Gravity: v(t) = (v(t-1) - 0.08) * 0.98
  *   Jump initial velocity: 0.42 blocks/tick
- *   Terminal velocity: -3.92 blocks/tick
+ *   Terminal velocity: -3.886 blocks/tick (wiki: 77.71 m/s = 3.8855 b/t)
  *   Normal jump apex at ~5-6 ticks, total cycle ~10-12 ticks
  *   Jump Boost: +0.1 * level to initial velocity
  *
@@ -35,7 +35,8 @@ public class FlyCheck extends Check {
     private static final double GRAVITY_ACCEL = 0.08;
     private static final double GRAVITY_DRAG = 0.98;
     private static final double JUMP_INITIAL_VELOCITY = 0.42;
-    private static final double TERMINAL_VELOCITY = 3.92;
+    // Source: minecraft.wiki/w/Player - terminal falling speed = 77.71 m/s = 3.8855 b/t
+    private static final double TERMINAL_VELOCITY = 3.886;
 
     // Jump detection
     private static final double JUMP_DETECTION_DELTA_Y = 0.12;

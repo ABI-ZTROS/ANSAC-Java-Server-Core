@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
  *   盾牌格挡速度倍率: 0.2
  *   潜行速度倍率: 0.3
  *   蜘蛛网速度倍率: 0.05
+ *   冰面倍率: 1.4x, 蓝冰: 1.6x (estimate, wiki 无玩家冰上速度直接数据)
  *
  * Design:
  * - 仅在玩家确实处于使用物品状态时检测
@@ -28,8 +29,9 @@ public class NoSlowCheck extends Check {
     private static final double USE_ITEM_SPEED_MULTIPLIER = 0.2;
     private static final double BASE_WALK = 0.21585;
     private static final double BASE_SPRINT = 0.2806;
-    private static final double ICE_MULTIPLIER = 9.27;
-    private static final double BLUE_ICE_MULTIPLIER = 16.85;
+    // Ice multipliers - conservative estimates (wiki documents boat speeds, not player walking)
+    private static final double ICE_MULTIPLIER = 1.4;
+    private static final double BLUE_ICE_MULTIPLIER = 1.6;
     private static final double LENIENCY = 0.03;
     private static final int BUFFER_MAX = 8;
 
