@@ -43,6 +43,63 @@ settings:
   ping-check-interval: 5
 
 # ==========================================
+# 处罚配置
+# ==========================================
+# 参考 AdvancedBan 设计模式，使用 MiniMessage 富文本格式
+# 可用变量: %player%, %uuid%, %reason%, %check%, %vl%, %operator%, %date%, %duration%, %expiry%, %time_remaining%
+
+punishments:
+  # 自动封禁开关（检测达到 max-vl 时，若 punishment-type 为 ban 则执行封禁）
+  auto-ban-enabled: false
+
+  # 自动封禁时长（分钟），-1 = 永久
+  auto-ban-duration: 1440
+
+  # 封禁消息模板（MiniMessage 格式，支持渐变 <gradient:#FF0000:#8B0000>、hover、click 等）
+  # 使用 Unicode 块字符 ▓ 作为"背景"边框，营造页面效果
+  ban-message:
+    - ""
+    - ""
+    - "              <dark_gray>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <gradient:#FF0000:#8B0000><bold>ANSAC 安全系统</bold></gradient>                                      ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <red>你的账号已被封禁</red>                                        ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <yellow>玩家: <white>%player%                                      ▓"
+    - "              <dark_gray>▓         <yellow>原因: <white>%reason%                                      ▓"
+    - "              <dark_gray>▓         <yellow>检测项: <white>%check%                                     ▓"
+    - "              <dark_gray>▓         <yellow>违规等级: <white>%vl%                                      ▓"
+    - "              <dark_gray>▓         <yellow>操作者: <white>%operator%                                   ▓"
+    - "              <dark_gray>▓         <yellow>封禁时间: <white>%date%                                    ▓"
+    - "              <dark_gray>▓         <yellow>封禁时长: <white>%duration%                                 ▓"
+    - "              <dark_gray>▓         <yellow>到期时间: <white>%expiry%                                  ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <gray>如有疑问，请联系服务器管理员</gray>                          ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓"
+    - ""
+    - "         <dark_gray><hover:show_text:'<yellow>点击加入申诉群'><click:open_url:'https://discord.gg/example'>[ 点击申诉 ]</click></hover>   <dark_gray><hover:show_text:'<yellow>查看规则'><click:open_url:'https://example.com/rules'>[ 查看规则 ]</click></hover>"
+
+  # 踢出消息模板
+  kick-message:
+    - ""
+    - ""
+    - "              <dark_gray>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <gradient:#FF8C00:#FF4500><bold>ANSAC 安全系统</bold></gradient>                                      ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <gold>你已被移出服务器</gold>                                        ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <yellow>原因: <white>%reason%                                      ▓"
+    - "              <dark_gray>▓         <yellow>检测项: <white>%check%                                     ▓"
+    - "              <dark_gray>▓         <yellow>违规等级: <white>%vl%                                      ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓         <gray>如有疑问，请联系服务器管理员</gray>                          ▓"
+    - "              <dark_gray>▓                                                                    ▓"
+    - "              <dark_gray>▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓"
+
+# ==========================================
 # 检测配置
 # ==========================================
 

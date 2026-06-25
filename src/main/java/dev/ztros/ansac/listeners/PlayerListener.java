@@ -24,6 +24,7 @@ import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -39,6 +40,15 @@ public class PlayerListener implements Listener {
 
     public PlayerListener(ANSACPlugin plugin) {
         this.plugin = plugin;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerLogin(PlayerLoginEvent event) {
+        var entry = plugin.getPunishmentManager().getActiveBan(event.getPlayer().getUniqueId());
+        if (entry != null) {
+            net.kyori.adventure.text.Component message = plugin.getPunishmentManager().getBanScreen(entry);
+            event.disallow(PlayerLoginEvent.Result.KICK_BANNED, message);
+        }
     }
 
     @EventHandler(priority = EventPriority.LOWEST)

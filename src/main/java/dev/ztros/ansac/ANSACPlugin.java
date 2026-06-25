@@ -11,6 +11,7 @@ import dev.ztros.ansac.config.ANSACConfig;
 import dev.ztros.ansac.listeners.PacketListener;
 import dev.ztros.ansac.listeners.PlayerListener;
 import dev.ztros.ansac.player.PlayerDataManager;
+import dev.ztros.ansac.punishment.PunishmentManager;
 import dev.ztros.ansac.scheduler.SchedulerAdapter;
 import lombok.Getter;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -37,6 +38,9 @@ public class ANSACPlugin extends JavaPlugin {
 
     @Getter
     private AuthService authService;
+
+    @Getter
+    private PunishmentManager punishmentManager;
 
     @Override
     public void onLoad() {
@@ -78,6 +82,7 @@ public class ANSACPlugin extends JavaPlugin {
         // Initialize managers
         this.playerDataManager = new PlayerDataManager(this);
         this.checkManager = new CheckManager(this);
+        this.punishmentManager = new PunishmentManager(this);
 
         // Register listeners
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
@@ -119,6 +124,10 @@ public class ANSACPlugin extends JavaPlugin {
             authService.shutdown();
         }
 
+        if (punishmentManager != null) {
+            punishmentManager.save();
+        }
+
         if (playerDataManager != null) {
             playerDataManager.shutdown();
         }
@@ -134,6 +143,9 @@ public class ANSACPlugin extends JavaPlugin {
         reloadConfig();
         ansacConfig.load();
         checkManager.reload();
+        if (punishmentManager != null) {
+            punishmentManager.loadConfig();
+        }
         if (authService != null) {
             authService.reload();
         }

@@ -2,10 +2,9 @@ package dev.ztros.ansac.checks;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.player.PlayerData;
-import dev.ztros.ansac.util.ServerVersionAdapter;
+import dev.ztros.ansac.punishment.PunishmentType;
 import lombok.Getter;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.entity.Player;
 
@@ -52,6 +51,9 @@ public abstract class Check {
     @Getter
     protected double alertThreshold;
 
+    @Getter
+    protected PunishmentType punishmentType;
+
     public Check(ANSACPlugin plugin, String name, String type) {
         this.plugin = plugin;
         this.name = name;
@@ -69,6 +71,13 @@ public abstract class Check {
         this.maxVL = plugin.getConfig().getInt(path + ".max-vl", 20);
         this.setbackThreshold = plugin.getConfig().getDouble(path + ".setback-threshold", 5.0);
         this.alertThreshold = plugin.getConfig().getDouble(path + ".alert-threshold", 1.0);
+
+        String ptStr = plugin.getConfig().getString(path + ".punishment-type", "kick").toUpperCase();
+        try {
+            this.punishmentType = PunishmentType.valueOf(ptStr);
+        } catch (IllegalArgumentException e) {
+            this.punishmentType = PunishmentType.KICK;
+        }
     }
 
     /**
@@ -162,20 +171,12 @@ public abstract class Check {
     }
 
     /**
-     * Punish player (kick) using Adventure Component API.
+     * Punish player via PunishmentManager.
+     * Supports both kick and ban based on check's punishment-type config.
      */
     protected void punish(Player player, PlayerData data, int vl) {
-        Component kickMessage = MINI_MESSAGE.deserialize(
-            "<red>[ANSAC] <gray>你因使用作弊程序被踢出服务器。\n" +
-            "<gray>检测项：<white>" + name + "\n" +
-            "<gray>违规等级：<white>" + vl
-        );
-
-        plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-            ServerVersionAdapter.kickPlayer(player, kickMessage);
-        });
-
-        plugin.getLogger().warning("[处罚] " + player.getName() + " 因 " + name + " 被踢出 (VL: " + vl + ")");
+        if (!plugin.getAnsacConfig().isPunishmentsEnabled()) return;
+        plugin.getPunishmentManager().punish(player, "使用作弊程序被检测", name, vl);
     }
 
     /**
