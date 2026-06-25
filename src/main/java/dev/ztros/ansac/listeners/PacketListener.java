@@ -206,7 +206,10 @@ public class PacketListener extends PacketListenerAbstract {
     }
 
     /**
-     * Handle block placement for future Scaffold checks.
+     * Handle block placement for building/combat checks.
+     * FastPlace only records timestamps (no world access) and can run on packet thread.
+     * AirPlace, AutoTrap, and Surround access world/block data and MUST run on the
+     * region thread for Folia thread safety.
      */
     private void handleBlockPlacement(Player player, PlayerData data, PacketReceiveEvent event) {
         data.setLastBlockPlaceTime(System.currentTimeMillis());
@@ -215,33 +218,36 @@ public class PacketListener extends PacketListenerAbstract {
         // Get block placement location from player's current position
         Location placeLocation = player.getLocation().clone();
 
-        // Dispatch to AirPlace check
-        dev.ztros.ansac.checks.building.AirPlaceCheck airPlace =
-            (dev.ztros.ansac.checks.building.AirPlaceCheck) plugin.getCheckManager().getCheck("AirPlace");
-        if (airPlace != null) {
-            airPlace.processBlockPlace(player, data, placeLocation);
-        }
-
-        // Dispatch to AutoTrap check
-        dev.ztros.ansac.checks.combat.AutoTrapCheck autoTrap =
-            (dev.ztros.ansac.checks.combat.AutoTrapCheck) plugin.getCheckManager().getCheck("AutoTrap");
-        if (autoTrap != null) {
-            autoTrap.processBlockPlace(player, data, placeLocation);
-        }
-
-        // Dispatch to Surround check
-        dev.ztros.ansac.checks.combat.SurroundCheck surround =
-            (dev.ztros.ansac.checks.combat.SurroundCheck) plugin.getCheckManager().getCheck("Surround");
-        if (surround != null) {
-            surround.processBlockPlace(player, data, placeLocation);
-        }
-
-        // Dispatch to FastPlace check
+        // FastPlace only records timestamps, no world access - safe on packet thread
         dev.ztros.ansac.checks.building.FastPlaceCheck fastPlace =
             (dev.ztros.ansac.checks.building.FastPlaceCheck) plugin.getCheckManager().getCheck("FastPlace");
         if (fastPlace != null) {
             fastPlace.processBlockPlace(player, data);
         }
+
+        // Checks that read block/world data must run on the region thread for Folia
+        plugin.getSchedulerAdapter().runAtLocation(placeLocation, () -> {
+            // Dispatch to AirPlace check
+            dev.ztros.ansac.checks.building.AirPlaceCheck airPlace =
+                (dev.ztros.ansac.checks.building.AirPlaceCheck) plugin.getCheckManager().getCheck("AirPlace");
+            if (airPlace != null) {
+                airPlace.processBlockPlace(player, data, placeLocation);
+            }
+
+            // Dispatch to AutoTrap check
+            dev.ztros.ansac.checks.combat.AutoTrapCheck autoTrap =
+                (dev.ztros.ansac.checks.combat.AutoTrapCheck) plugin.getCheckManager().getCheck("AutoTrap");
+            if (autoTrap != null) {
+                autoTrap.processBlockPlace(player, data, placeLocation);
+            }
+
+            // Dispatch to Surround check
+            dev.ztros.ansac.checks.combat.SurroundCheck surround =
+                (dev.ztros.ansac.checks.combat.SurroundCheck) plugin.getCheckManager().getCheck("Surround");
+            if (surround != null) {
+                surround.processBlockPlace(player, data, placeLocation);
+            }
+        });
     }
 
     /**

@@ -38,9 +38,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class AutoEatCheck extends Check {
 
     // Detection thresholds
-    private static final double LOW_HEALTH_THRESHOLD = 14.0;        // 7 hearts
-    private static final long FAST_CONSUME_INTERVAL_MS = 2000L;    // < 2 seconds between consumptions
-    private static final int BUFFER_FLAG_THRESHOLD = 3;             // 3 violations before flagging
+    // Lowered from 14.0 to 6.0: normal players eat when hungry or moderately
+    // damaged; only truly low health (3 hearts) is suspicious for automation.
+    private static final double LOW_HEALTH_THRESHOLD = 6.0;
+    private static final long FAST_CONSUME_INTERVAL_MS = 2000L;    // Eating within 2 seconds after previous eat
+    private static final int BUFFER_FLAG_THRESHOLD = 5;             // 5 consecutive fast eats before flagging
     private static final long DATA_EXPIRE_MS = 5000L;               // Expire data older than 5 seconds
 
     // Ping compensation factor for this check
@@ -136,8 +138,15 @@ public class AutoEatCheck extends Check {
         double currentHealth = player.getHealth();
         tracker.lastHealthBeforeEat = currentHealth;
 
-        // Check: is the player at low health (< 14 / 7 hearts)?
+        // Check: is the player at critically low health?
         if (currentHealth < LOW_HEALTH_THRESHOLD) {
+            // Exempt if player is actually hungry: normal hunger-based eating is
+            // legitimate even at low health. Only automated eating when NOT hungry
+            // is suspicious.
+            if (player.getFoodLevel() < 15) {
+                return;
+            }
+
             // Check if there was a recent consumption (fast switch + eat pattern)
             if (tracker.consumeTimestamps.size() >= 2) {
                 int size = tracker.consumeTimestamps.size();
@@ -155,9 +164,9 @@ public class AutoEatCheck extends Check {
                     if (tracker.autoEatBuffer >= compensatedThreshold) {
                         double severity = tracker.autoEatBuffer / (double) BUFFER_FLAG_THRESHOLD;
                         flag(player, data, severity,
-                            String.format("自动进食: 血量 %.1f (< %.1f), 两次消耗间隔 %dms (连续 %d 次, 延迟 %s)",
+                            String.format("自动进食: 血量 %.1f (< %.1f), 两次消耗间隔 %dms (连续 %d 次, 饥饿 %d, 延迟 %s)",
                                 currentHealth, LOW_HEALTH_THRESHOLD, interval,
-                                tracker.autoEatBuffer,
+                                tracker.autoEatBuffer, player.getFoodLevel(),
                                 data.getPingCompensator().getPingStatus()));
                         // Reset buffer after flagging to avoid spam
                         tracker.autoEatBuffer = 0;
@@ -172,7 +181,7 @@ public class AutoEatCheck extends Check {
             }
             // If only 1 consumption recorded, no interval check yet - wait for next one
         } else {
-            // Health is not low - this is normal eating, decay buffer
+            // Health is not critically low - this is normal eating, decay buffer
             if (tracker.autoEatBuffer > 0) {
                 tracker.autoEatBuffer = Math.max(0, tracker.autoEatBuffer - 1);
             }

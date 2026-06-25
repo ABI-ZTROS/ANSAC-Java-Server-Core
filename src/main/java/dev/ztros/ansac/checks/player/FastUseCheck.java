@@ -3,7 +3,9 @@ package dev.ztros.ansac.checks.player;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PlayerData;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,8 +34,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class FastUseCheck extends Check {
 
     // Detection thresholds
-    private static final long FAST_USE_INTERVAL_MS = 500L;       // Two uses within 500ms is suspicious
-    private static final int BUFFER_FLAG_THRESHOLD = 5;            // 5 violations before flagging
+    // Raised from 500ms to 1200ms: normal players can legitimately use items
+    // twice within ~1 second (e.g. eat then place block, switch tools quickly).
+    // Only intervals consistently below this are truly suspicious.
+    private static final long FAST_USE_INTERVAL_MS = 1200L;
+    private static final int BUFFER_FLAG_THRESHOLD = 8;            // 8 violations before flagging
     private static final long DATA_EXPIRE_MS = 5000L;              // Expire data older than 5 seconds
 
     // Ping compensation factor for this check
@@ -103,6 +108,13 @@ public class FastUseCheck extends Check {
             return;
         }
 
+        // Exempt consumable items: normal eating/drinking sends USE_ITEM packets
+        // that can have short intervals due to client-side repeat sending.
+        ItemStack mainHand = player.getInventory().getItemInMainHand();
+        if (isConsumable(mainHand)) {
+            return;
+        }
+
         // Ping compensation: skip check if latency is too high or spiking
         if (data.getPingCompensator().shouldSkipCheck()) {
             FastUseTracker tracker = trackers.get(player.getUniqueId());
@@ -160,7 +172,25 @@ public class FastUseCheck extends Check {
     /**
      * Clean up tracker when player disconnects.
      */
+    @Override
     public void onPlayerQuit(UUID uuid) {
         trackers.remove(uuid);
+    }
+
+    /**
+     * Check if an item is a consumable (food, potion, etc.).
+     * FastUse check skips these because normal eating/drinking can trigger
+     * multiple USE_ITEM packets from the client.
+     */
+    private boolean isConsumable(ItemStack item) {
+        if (item == null) return false;
+        Material type = item.getType();
+        if (type.isEdible()) return true;
+        String name = type.name();
+        return name.contains("POTION")
+            || name.contains("SPLASH")
+            || name.contains("LINGERING")
+            || type == Material.MILK_BUCKET
+            || type == Material.HONEY_BOTTLE;
     }
 }
