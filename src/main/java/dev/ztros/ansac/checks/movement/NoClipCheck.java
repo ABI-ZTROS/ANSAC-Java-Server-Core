@@ -110,11 +110,9 @@ public class NoClipCheck extends Check {
         Location to = data.getCurrentLocation();
         if (from == null || to == null) return;
 
-        // Skip if player hasn't moved (not relevant for NoClip)
-        if (from.distanceSquared(to) < MIN_MOVE_DISTANCE * MIN_MOVE_DISTANCE) {
-            // Still check bounding box even when stationary
-            // (player might have clipped into a block without moving)
-        }
+        // Check if player has moved significantly
+        double moveDistSq = from.distanceSquared(to);
+        boolean hasMovedForFlag = moveDistSq >= MIN_MOVE_FOR_FLAG * MIN_MOVE_FOR_FLAG;
 
         long now = System.currentTimeMillis();
 
@@ -139,6 +137,13 @@ public class NoClipCheck extends Check {
                 NOCLIP_BUFFER_THRESHOLD, COMPENSATION_FACTOR);
 
             if (tracker.noClipBuffer >= compensatedBuffer) {
+                // Only flag if the player has moved significantly.
+                // Stationary NoClip while standing on a non-full-height block is
+                // a false positive; real NoClip always involves movement.
+                if (!hasMovedForFlag) {
+                    tracker.reset();
+                    return;
+                }
                 // Count how many solid blocks the player is inside
                 int overlapCount = countSolidBlockOverlaps(to);
 
@@ -161,6 +166,9 @@ public class NoClipCheck extends Check {
      * Check if the player's bounding box overlaps with any solid (non-passable) block.
      * Player bounding box: 0.6 x 1.8 x 0.6, centered horizontally at (x, z).
      *
+     * Exempts the block the player is standing on (feet block), since players
+     * naturally overlap with non-full-height blocks like dirt path, farmland, etc.
+     *
      * @param player The player to check
      * @param loc The player's current location (feet position)
      * @return true if the bounding box overlaps with at least one solid block
@@ -177,6 +185,9 @@ public class NoClipCheck extends Check {
         double minZ = centerZ - PLAYER_HALF_WIDTH;
         double maxZ = centerZ + PLAYER_HALF_WIDTH;
 
+        // Player's feet block coordinates
+        int feetBlockY = loc.getBlockY();
+
         // Iterate over all block positions covered by the bounding box
         // X range: ~2 blocks, Z range: ~2 blocks, Y range: ~2 blocks (1.8 height)
         int startX = (int) Math.floor(minX);
@@ -191,6 +202,13 @@ public class NoClipCheck extends Check {
                 for (int z = startZ; z <= endZ; z++) {
                     Block block = loc.getWorld().getBlockAt(x, y, z);
                     if (isSolidForCollision(block)) {
+                        // Skip the block the player is standing on.
+                        // Non-full-height blocks (dirt path, farmland, soul sand)
+                        // cause the player's feet to be inside the block vertically.
+                        // If overlap is only in the bottom 0.2 blocks, it's normal standing.
+                        if (y == feetBlockY && isStandingOnBlock(block, minY)) {
+                            continue;
+                        }
                         // Verify actual geometric overlap (not just block grid overlap)
                         if (blockOverlapsBoundingBox(block, minX, maxX, minY, maxY, minZ, maxZ)) {
                             return true;
@@ -217,6 +235,8 @@ public class NoClipCheck extends Check {
         double minZ = centerZ - PLAYER_HALF_WIDTH;
         double maxZ = centerZ + PLAYER_HALF_WIDTH;
 
+        int feetBlockY = loc.getBlockY();
+
         int count = 0;
         int startX = (int) Math.floor(minX);
         int endX = (int) Math.floor(maxX);
@@ -230,6 +250,9 @@ public class NoClipCheck extends Check {
                 for (int z = startZ; z <= endZ; z++) {
                     Block block = loc.getWorld().getBlockAt(x, y, z);
                     if (isSolidForCollision(block)) {
+                        if (y == feetBlockY && isStandingOnBlock(block, minY)) {
+                            continue;
+                        }
                         if (blockOverlapsBoundingBox(block, minX, maxX, minY, maxY, minZ, maxZ)) {
                             count++;
                         }
@@ -239,6 +262,23 @@ public class NoClipCheck extends Check {
         }
 
         return count;
+    }
+
+    /**
+     * Check if the player is merely standing on top of (or inside the upper
+     * portion of) the given block. This is normal behaviour for non-full-height
+     * blocks like dirt path, farmland, soul sand, etc.
+     *
+     * @param block The block to check
+     * @param playerFeetY The player's feet Y coordinate
+     * @return true if the player is standing on this block
+     */
+    private boolean isStandingOnBlock(Block block, double playerFeetY) {
+        double blockTopY = block.getY() + 1.0;
+        double verticalOverlap = blockTopY - playerFeetY;
+        // If the player's feet are within 0.2 blocks of the block's top,
+        // they are standing on it (not clipping through it)
+        return verticalOverlap > 0 && verticalOverlap < 0.2;
     }
 
     /**
@@ -320,6 +360,19 @@ public class NoClipCheck extends Check {
             // players can't normally be inside them; however, they have
             // irregular hitboxes that can cause false positives at edges
             return false;
+        }
+        // Non-full-height solid blocks that players can stand on
+        if (type == Material.DIRT_PATH || name.equals("GRASS_PATH")) {
+            return false; // Dirt path is 15/16 height
+        }
+        if (type == Material.FARMLAND) {
+            return false; // Farmland is 15/16 height
+        }
+        if (type == Material.SOUL_SAND) {
+            return false; // Soul sand is 14/16 height
+        }
+        if (type == Material.MUD) {
+            return false; // Mud is slightly lower than full block
         }
         if (name.contains("IRON_BARS") || name.contains("GLASS_PANE")
                 || name.contains("CHAIN")) {
