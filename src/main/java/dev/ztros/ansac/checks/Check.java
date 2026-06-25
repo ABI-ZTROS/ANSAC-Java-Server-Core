@@ -102,6 +102,30 @@ public abstract class Check {
     }
 
     /**
+     * Flag a violation but ONLY send an alert, do NOT add to violation level.
+     * Used for low-confidence detections that warrant monitoring but not punishment.
+     */
+    protected void flagAlertOnly(Player player, PlayerData data, String details) {
+        if (!enabled || data == null || data.hasBypass()) return;
+
+        Component message = MINI_MESSAGE.deserialize(
+            "<gray>[<dark_green>ANSAC-观察</gray>] <yellow>" + player.getName() +
+            " <gray>[观察] <green>" + name +
+            " <dark_gray>| <gray>" + details
+        );
+
+        for (Player staff : plugin.getServer().getOnlinePlayers()) {
+            if (staff.hasPermission("ansac.alerts")) {
+                plugin.getSchedulerAdapter().runAtEntity(staff, () -> {
+                    staff.sendMessage(message);
+                });
+            }
+        }
+
+        plugin.getLogger().info("[观察] " + player.getName() + " - " + name + " - " + details);
+    }
+
+    /**
      * Send alert to staff using Adventure Component API.
      * Uses runAtEntity for each staff player to ensure Folia thread safety.
      */

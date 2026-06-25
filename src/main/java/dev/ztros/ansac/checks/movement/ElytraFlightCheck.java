@@ -221,9 +221,13 @@ public class ElytraFlightCheck extends Check {
     }
 
     /**
-     * Check 5: Linear trajectory detection.
+     * Check 5: Linear trajectory detection (OBSERVATION ONLY - no VL added).
      * Legitimate elytra flight ALWAYS has some natural wobble in yaw/pitch.
      * ElytraFly automation flies in perfectly straight lines.
+     *
+     * Note: This check only alerts staff, does NOT increase violation level.
+     * Straight flight alone is low-confidence; combined with speed constancy
+     * (Check 6) it becomes high-confidence.
      */
     private void checkLinearTrajectory(Player player, PlayerData data,
                                         float yaw, float pitch, double horizontalSpeed,
@@ -241,7 +245,8 @@ public class ElytraFlightCheck extends Check {
         if (yawDelta < LINEAR_ANGLE_THRESHOLD && pitchDelta < LINEAR_ANGLE_THRESHOLD) {
             tracker.linearTicks++;
             if (tracker.linearTicks >= LINEAR_TRAJECTORY_TICKS) {
-                flag(player, data, 1.3,
+                // Alert-only: no VL increase, just staff notification
+                flagAlertOnly(player, data,
                     String.format("鞘翅轨迹过于直线: yaw变化=%.2f° pitch变化=%.2f° (连续%d tick, 速度=%.3f)",
                         yawDelta, pitchDelta, tracker.linearTicks, horizontalSpeed));
                 tracker.linearTicks = 0;
