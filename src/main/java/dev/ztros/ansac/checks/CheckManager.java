@@ -3,32 +3,50 @@ package dev.ztros.ansac.checks;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.building.AirPlaceCheck;
 import dev.ztros.ansac.checks.building.FastBreakCheck;
+import dev.ztros.ansac.checks.building.FastPlaceCheck;
+import dev.ztros.ansac.checks.building.NukerCheck;
+import dev.ztros.ansac.checks.building.PacketMineCheck;
 import dev.ztros.ansac.checks.building.ScaffoldCheck;
 import dev.ztros.ansac.checks.combat.AutoArmorCheck;
 import dev.ztros.ansac.checks.combat.AutoClickerCheck;
+import dev.ztros.ansac.checks.combat.AutoLogCheck;
+import dev.ztros.ansac.checks.combat.AutoTotemCheck;
 import dev.ztros.ansac.checks.combat.AutoTrapCheck;
 import dev.ztros.ansac.checks.combat.BowAimbotCheck;
+import dev.ztros.ansac.checks.combat.BowSpamCheck;
+import dev.ztros.ansac.checks.combat.BurrowCheck;
 import dev.ztros.ansac.checks.combat.CrystalAuraCheck;
 import dev.ztros.ansac.checks.combat.CriticalsCheck;
 import dev.ztros.ansac.checks.combat.HitboxExpandCheck;
 import dev.ztros.ansac.checks.combat.KillAuraCheck;
 import dev.ztros.ansac.checks.combat.MultiAuraCheck;
+import dev.ztros.ansac.checks.combat.QuiverCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
+import dev.ztros.ansac.checks.combat.SurroundCheck;
 import dev.ztros.ansac.checks.combat.VelocityCheck;
 import dev.ztros.ansac.checks.movement.AirJumpCheck;
+import dev.ztros.ansac.checks.movement.AntiWaterPushCheck;
+import dev.ztros.ansac.checks.movement.BoatFlyCheck;
 import dev.ztros.ansac.checks.movement.BlinkCheck;
 import dev.ztros.ansac.checks.movement.ElytraFlightCheck;
+import dev.ztros.ansac.checks.movement.FastClimbCheck;
 import dev.ztros.ansac.checks.movement.FlyCheck;
+import dev.ztros.ansac.checks.movement.GlideCheck;
 import dev.ztros.ansac.checks.movement.HighJumpCheck;
 import dev.ztros.ansac.checks.movement.JesusCheck;
+import dev.ztros.ansac.checks.movement.LongJumpCheck;
 import dev.ztros.ansac.checks.movement.NoClipCheck;
 import dev.ztros.ansac.checks.movement.NoFallCheck;
 import dev.ztros.ansac.checks.movement.NoSlowCheck;
+import dev.ztros.ansac.checks.movement.NoWebCheck;
 import dev.ztros.ansac.checks.movement.SpeedCheck;
 import dev.ztros.ansac.checks.movement.SpiderCheck;
 import dev.ztros.ansac.checks.movement.StepCheck;
 import dev.ztros.ansac.checks.packet.BadPacketsCheck;
 import dev.ztros.ansac.checks.packet.TimerCheck;
+import dev.ztros.ansac.checks.player.AntiHungerCheck;
+import dev.ztros.ansac.checks.player.AutoEatCheck;
+import dev.ztros.ansac.checks.player.FastUseCheck;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.entity.Player;
 
@@ -70,6 +88,12 @@ public class CheckManager {
         checks.add(new StepCheck(plugin));
         checks.add(new NoClipCheck(plugin));
         checks.add(new AirJumpCheck(plugin));
+        checks.add(new GlideCheck(plugin));
+        checks.add(new BoatFlyCheck(plugin));
+        checks.add(new LongJumpCheck(plugin));
+        checks.add(new FastClimbCheck(plugin));
+        checks.add(new NoWebCheck(plugin));
+        checks.add(new AntiWaterPushCheck(plugin));
 
         // Combat checks
         checks.add(new ReachCheck(plugin));
@@ -78,20 +102,34 @@ public class CheckManager {
         checks.add(new CriticalsCheck(plugin));
         checks.add(new HitboxExpandCheck(plugin));
         checks.add(new BowAimbotCheck(plugin));
+        checks.add(new BowSpamCheck(plugin));
         checks.add(new CrystalAuraCheck(plugin));
         checks.add(new MultiAuraCheck(plugin));
         checks.add(new AutoClickerCheck(plugin));
         checks.add(new AutoArmorCheck(plugin));
         checks.add(new AutoTrapCheck(plugin));
+        checks.add(new BurrowCheck(plugin));
+        checks.add(new SurroundCheck(plugin));
+        checks.add(new AutoTotemCheck(plugin));
+        checks.add(new QuiverCheck(plugin));
+        checks.add(new AutoLogCheck(plugin));
 
         // Building checks
         checks.add(new ScaffoldCheck(plugin));
         checks.add(new FastBreakCheck(plugin));
         checks.add(new AirPlaceCheck(plugin));
+        checks.add(new FastPlaceCheck(plugin));
+        checks.add(new NukerCheck(plugin));
+        checks.add(new PacketMineCheck(plugin));
 
         // Packet checks
         checks.add(new TimerCheck(plugin));
         checks.add(new BadPacketsCheck(plugin));
+
+        // Player checks
+        checks.add(new FastUseCheck(plugin));
+        checks.add(new AntiHungerCheck(plugin));
+        checks.add(new AutoEatCheck(plugin));
 
         plugin.getLogger().info("已注册 " + checks.size() + " 项检测。");
     }

@@ -4,21 +4,29 @@ import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.checks.CheckManager;
 import dev.ztros.ansac.checks.combat.AutoArmorCheck;
+import dev.ztros.ansac.checks.combat.AutoLogCheck;
+import dev.ztros.ansac.checks.combat.AutoTotemCheck;
 import dev.ztros.ansac.checks.combat.BowAimbotCheck;
+import dev.ztros.ansac.checks.combat.BowSpamCheck;
 import dev.ztros.ansac.checks.combat.CrystalAuraCheck;
 import dev.ztros.ansac.checks.combat.CriticalsCheck;
 import dev.ztros.ansac.checks.combat.HitboxExpandCheck;
-import dev.ztros.ansac.player.PlayerData;
+import dev.ztros.ansac.checks.combat.QuiverCheck;
+import dev.ztros.ansac.checks.player.AutoEatCheck;
+import dev.ztros.ansac.checks.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.util.Vector;
 
 /**
@@ -152,6 +160,62 @@ public class PlayerListener implements Listener {
         AutoArmorCheck autoArmor = (AutoArmorCheck) plugin.getCheckManager().getCheck("AutoArmor");
         if (autoArmor != null) {
             autoArmor.processInventoryAction(player, data);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityShootBow(EntityShootBowEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.Player player)) return;
+
+        PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+        if (data == null || data.hasBypass()) return;
+
+        BowSpamCheck bowSpam = (BowSpamCheck) plugin.getCheckManager().getCheck("BowSpam");
+        if (bowSpam != null) {
+            bowSpam.processBowShoot(player, data);
+        }
+
+        QuiverCheck quiver = (QuiverCheck) plugin.getCheckManager().getCheck("Quiver");
+        if (quiver != null) {
+            float pitch = player.getLocation().getPitch();
+            quiver.processBowShoot(player, data, pitch);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerSwapHandItems(PlayerSwapHandItemsEvent event) {
+        org.bukkit.entity.Player player = event.getPlayer();
+        PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+        if (data == null || data.hasBypass()) return;
+
+        AutoTotemCheck autoTotem = (AutoTotemCheck) plugin.getCheckManager().getCheck("AutoTotem");
+        if (autoTotem != null) {
+            autoTotem.processOffhandSwap(player, data);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerItemConsume(PlayerItemConsumeEvent event) {
+        if (!(event.getPlayer() instanceof org.bukkit.entity.Player player)) return;
+
+        PlayerData data = plugin.getPlayerDataManager().getPlayerData(player);
+        if (data == null || data.hasBypass()) return;
+
+        AutoEatCheck autoEat = (AutoEatCheck) plugin.getCheckManager().getCheck("AutoEat");
+        if (autoEat != null) {
+            autoEat.processItemConsume(player, data);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerQuitForAutoLog(PlayerQuitEvent event) {
+        // Check for AutoLog before PlayerData is removed (MONITOR runs before LOWEST)
+        PlayerData data = plugin.getPlayerDataManager().getPlayerData(event.getPlayer());
+        if (data != null) {
+            AutoLogCheck autoLog = (AutoLogCheck) plugin.getCheckManager().getCheck("AutoLog");
+            if (autoLog != null) {
+                autoLog.checkDisconnect(event.getPlayer());
+            }
         }
     }
 }

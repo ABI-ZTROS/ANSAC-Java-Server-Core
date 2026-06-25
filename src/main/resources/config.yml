@@ -132,6 +132,48 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    glide:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    boatfly:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    longjump:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    fastclimb:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    noweb:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    antiwaterpush:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
   combat:
     reach:
       enabled: true
@@ -210,6 +252,48 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    burrow:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    bowspam:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    surround:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    autototem:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    quiver:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    autolog:
+      enabled: true
+      punishable: true
+      max-vl: 10
+      setback-threshold: 3.0
+      alert-threshold: 1.0
+
   building:
     scaffold:
       enabled: true
@@ -232,6 +316,27 @@ checks:
       setback-threshold: 5.0
       alert-threshold: 1.0
 
+    fastplace:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    nuker:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    packetmine:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
   packet:
     timer:
       enabled: true
@@ -245,6 +350,28 @@ checks:
       punishable: true
       max-vl: 10
       setback-threshold: 3.0
+      alert-threshold: 1.0
+
+  player:
+    fastuse:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    antihunger:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
+      alert-threshold: 1.0
+
+    autoeat:
+      enabled: true
+      punishable: true
+      max-vl: 15
+      setback-threshold: 5.0
       alert-threshold: 1.0
 
 # ==========================================

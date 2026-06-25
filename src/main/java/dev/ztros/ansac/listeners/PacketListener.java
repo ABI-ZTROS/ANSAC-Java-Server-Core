@@ -196,6 +196,13 @@ public class PacketListener extends PacketListenerAbstract {
      */
     private void handleUseItem(Player player, PlayerData data, PacketReceiveEvent event) {
         data.setLastUseItemTime(System.currentTimeMillis());
+
+        // Dispatch to FastUse check
+        dev.ztros.ansac.checks.player.FastUseCheck fastUse =
+            (dev.ztros.ansac.checks.player.FastUseCheck) plugin.getCheckManager().getCheck("FastUse");
+        if (fastUse != null) {
+            fastUse.processItemUse(player, data);
+        }
     }
 
     /**
@@ -220,6 +227,20 @@ public class PacketListener extends PacketListenerAbstract {
             (dev.ztros.ansac.checks.combat.AutoTrapCheck) plugin.getCheckManager().getCheck("AutoTrap");
         if (autoTrap != null) {
             autoTrap.processBlockPlace(player, data, placeLocation);
+        }
+
+        // Dispatch to Surround check
+        dev.ztros.ansac.checks.combat.SurroundCheck surround =
+            (dev.ztros.ansac.checks.combat.SurroundCheck) plugin.getCheckManager().getCheck("Surround");
+        if (surround != null) {
+            surround.processBlockPlace(player, data, placeLocation);
+        }
+
+        // Dispatch to FastPlace check
+        dev.ztros.ansac.checks.building.FastPlaceCheck fastPlace =
+            (dev.ztros.ansac.checks.building.FastPlaceCheck) plugin.getCheckManager().getCheck("FastPlace");
+        if (fastPlace != null) {
+            fastPlace.processBlockPlace(player, data);
         }
     }
 
