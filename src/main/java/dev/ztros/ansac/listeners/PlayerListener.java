@@ -13,7 +13,7 @@ import dev.ztros.ansac.checks.combat.CriticalsCheck;
 import dev.ztros.ansac.checks.combat.HitboxExpandCheck;
 import dev.ztros.ansac.checks.combat.QuiverCheck;
 import dev.ztros.ansac.checks.player.AutoEatCheck;
-import dev.ztros.ansac.checks.player.PlayerData;
+import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
