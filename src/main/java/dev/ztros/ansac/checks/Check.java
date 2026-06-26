@@ -1,6 +1,7 @@
 package dev.ztros.ansac.checks;
 
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.punishment.PunishmentType;
 import lombok.Getter;
@@ -90,6 +91,9 @@ public abstract class Check {
      */
     protected void flag(Player player, PlayerData data, double severity, String details) {
         if (!enabled || data.hasBypass()) return;
+        // 受信任玩家豁免：照常收集行为画像数据，但不累加VL、不报警、不处罚
+        PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
+        if (inferenceService != null && inferenceService.isTrusted(player.getUniqueId())) return;
 
         data.addViolation(name, severity);
         int vl = data.getViolation(name) != null ? data.getViolation(name).getTotalVL() : 0;
@@ -116,6 +120,9 @@ public abstract class Check {
      */
     protected void flagAlertOnly(Player player, PlayerData data, String details) {
         if (!enabled || data == null || data.hasBypass()) return;
+        // 受信任玩家豁免观察报警
+        PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
+        if (inferenceService != null && inferenceService.isTrusted(player.getUniqueId())) return;
 
         Component message = MINI_MESSAGE.deserialize(
             "<gray>[<dark_green>ANSAC-观察</gray>] <yellow>" + player.getName() +
