@@ -126,24 +126,24 @@ public final class CombatMLP {
 
         // 更新 W3, b3
         for (int j = 0; j < hidden2Size; j++) {
-            W3[0][j] -= learningRate * deltaOut * h2[j];
+            W3[0][j] = MLPActivations.clampWeight(W3[0][j] - learningRate * MLPActivations.clipGrad(deltaOut) * h2[j]);
         }
-        b3[0] -= learningRate * deltaOut;
+        b3[0] -= learningRate * MLPActivations.clipGrad(deltaOut);
 
         // 更新 W2, b2
         for (int i = 0; i < hidden2Size; i++) {
             for (int j = 0; j < hidden1Size; j++) {
-                W2[i][j] -= learningRate * deltaH2[i] * h1[j];
+                W2[i][j] = MLPActivations.clampWeight(W2[i][j] - learningRate * MLPActivations.clipGrad(deltaH2[i]) * h1[j]);
             }
-            b2[i] -= learningRate * deltaH2[i];
+            b2[i] -= learningRate * MLPActivations.clipGrad(deltaH2[i]);
         }
 
         // 更新 W1, b1
         for (int i = 0; i < hidden1Size; i++) {
             for (int j = 0; j < inputSize; j++) {
-                W1[i][j] -= learningRate * deltaH1[i] * input[j];
+                W1[i][j] = MLPActivations.clampWeight(W1[i][j] - learningRate * MLPActivations.clipGrad(deltaH1[i]) * input[j]);
             }
-            b1[i] -= learningRate * deltaH1[i];
+            b1[i] -= learningRate * MLPActivations.clipGrad(deltaH1[i]);
         }
         return error * error; // MSE loss
     }

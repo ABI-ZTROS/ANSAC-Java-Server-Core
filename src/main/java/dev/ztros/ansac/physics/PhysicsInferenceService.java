@@ -166,7 +166,7 @@ public class PhysicsInferenceService {
         int samplingTarget = plugin.getAnsacConfig().getMlpSamplingTarget();
         this.samplingSession = new MLPSamplingSession(samplingTarget);
         this.movementMLP = loadOrCreateMlp();
-        this.combatMLP = new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, 8, 4, 0.01);
+        this.combatMLP = new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, 16, 8, 0.01);
         this.anomalyFusion = new AnomalyFusion(0.01);
         this.mlpEnabled = plugin.getAnsacConfig().isMlpEnabled();
         this.detectionMode = DetectionMode.fromString(plugin.getConfig().getString("detection-mode", "hybrid"));
@@ -214,7 +214,7 @@ public class PhysicsInferenceService {
                 }
             }
         }
-        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, 24, 16, 0.01);
+        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, 48, 32, 0.01);
     }
 
     // ==================== 核心处理方法 ====================

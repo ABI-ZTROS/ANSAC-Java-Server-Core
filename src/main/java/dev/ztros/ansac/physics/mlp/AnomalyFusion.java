@@ -102,15 +102,15 @@ public final class AnomalyFusion {
 
         // 更新 W2, b2
         for (int j = 0; j < 4; j++) {
-            W2[0][j] -= learningRate * deltaOut * h[j];
+            W2[0][j] = MLPActivations.clampWeight(W2[0][j] - learningRate * MLPActivations.clipGrad(deltaOut) * h[j]);
         }
-        b2[0] -= learningRate * deltaOut;
+        b2[0] -= learningRate * MLPActivations.clipGrad(deltaOut);
         // 更新 W1, b1
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 3; j++) {
-                W1[i][j] -= learningRate * deltaH[i] * input[j];
+                W1[i][j] = MLPActivations.clampWeight(W1[i][j] - learningRate * MLPActivations.clipGrad(deltaH[i]) * input[j]);
             }
-            b1[i] -= learningRate * deltaH[i];
+            b1[i] -= learningRate * MLPActivations.clipGrad(deltaH[i]);
         }
     }
 

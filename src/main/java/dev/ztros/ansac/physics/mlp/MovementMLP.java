@@ -158,26 +158,26 @@ public final class MovementMLP {
         }
 
         for (int i = 0; i < hidden2Size; i++) {
-            w3[i] += learningRate * dOut * h2Post[i];
+            w3[i] = MLPActivations.clampWeight(w3[i] + learningRate * MLPActivations.clipGrad(dOut) * h2Post[i]);
         }
-        b3 += learningRate * dOut;
+        b3 += learningRate * MLPActivations.clipGrad(dOut);
 
         for (int i = 0; i < hidden1Size; i++) {
             for (int j = 0; j < hidden2Size; j++) {
-                w2[i][j] += learningRate * dH2[j] * h1Post[i];
+                w2[i][j] = MLPActivations.clampWeight(w2[i][j] + learningRate * MLPActivations.clipGrad(dH2[j]) * h1Post[i]);
             }
         }
         for (int j = 0; j < hidden2Size; j++) {
-            b2[j] += learningRate * dH2[j];
+            b2[j] += learningRate * MLPActivations.clipGrad(dH2[j]);
         }
 
         for (int i = 0; i < inputSize; i++) {
             for (int j = 0; j < hidden1Size; j++) {
-                w1[i][j] += learningRate * dH1[j] * input[i];
+                w1[i][j] = MLPActivations.clampWeight(w1[i][j] + learningRate * MLPActivations.clipGrad(dH1[j]) * input[i]);
             }
         }
         for (int j = 0; j < hidden1Size; j++) {
-            b1[j] += learningRate * dH1[j];
+            b1[j] += learningRate * MLPActivations.clipGrad(dH1[j]);
         }
 
         return loss;

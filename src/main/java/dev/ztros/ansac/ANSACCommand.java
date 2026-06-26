@@ -743,7 +743,7 @@ public class ANSACCommand implements CommandExecutor {
                 // 网络结构概览
                 sender.sendMessage(Component.text("网络结构：", NamedTextColor.YELLOW)
                     .append(Component.text(
-                        "72(输入) → 24(ReLU) → 16(ReLU) → 1(Sigmoid)", NamedTextColor.GRAY)));
+                        "72(输入) → 48(ReLU) → 32(ReLU) → 1(Sigmoid)", NamedTextColor.GRAY)));
 
                 // 隐藏层1激活值热力图
                 sender.sendMessage(Component.text("隐藏层1 激活值 (24神经元)：", NamedTextColor.YELLOW));

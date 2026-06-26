@@ -69,6 +69,13 @@ public final class MLPPersistence {
             int hidden2Size = in.readInt();
             double learningRate = in.readDouble();
 
+            // 版本兼容：如果网络尺寸与当前期望不匹配，丢弃旧模型
+            if (inputSize != BehaviorFeatureExtractor.FEATURE_COUNT
+                    || hidden1Size != 48 || hidden2Size != 32) {
+                throw new IOException("旧模型尺寸不匹配 (" + inputSize + "," + hidden1Size + "," + hidden2Size
+                    + ")，将自动重建新模型");
+            }
+
             MovementMLP mlp = new MovementMLP(inputSize, hidden1Size, hidden2Size, learningRate);
 
             double[][] w1 = mlp.getW1();
