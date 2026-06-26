@@ -60,7 +60,13 @@ public class PlayerListener implements Listener {
 
             // Notify auth service
             if (plugin.getAuthService().isEnabled()) {
-                String ip = event.getPlayer().getAddress().getAddress().getHostAddress();
+                String ip = "unknown";
+                try {
+                    if (event.getPlayer().getAddress() != null
+                            && event.getPlayer().getAddress().getAddress() != null) {
+                        ip = event.getPlayer().getAddress().getAddress().getHostAddress();
+                    }
+                } catch (Exception ignored) {}
                 plugin.getAuthService().handlePlayerJoin(
                     event.getPlayer().getUniqueId(),
                     event.getPlayer().getName(),

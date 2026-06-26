@@ -16,7 +16,7 @@ public final class CombatMLP {
     private final int hidden1Size;
     private final int hidden2Size;
 
-    private final double[][] W1, W2;
+    private final double[][] W1, W2, W3;
     private final double[] b1, b2, b3;
     private final double learningRate;
 
@@ -30,14 +30,12 @@ public final class CombatMLP {
         this.b1 = new double[hidden1Size];
         this.W2 = new double[hidden2Size][hidden1Size];
         this.b2 = new double[hidden2Size];
+        this.W3 = new double[1][hidden2Size]; // 输出层权重
         this.b3 = new double[1];
 
         xavierInit(W1, b1, inputSize, hidden1Size);
         xavierInit(W2, b2, hidden1Size, hidden2Size);
-
-        // 输出层单神经元
-        ThreadLocalRandom rng = ThreadLocalRandom.current();
-        b3[0] = rng.nextDouble(-0.1, 0.1);
+        xavierInit(W3, b3, hidden2Size, 1);
     }
 
     private void xavierInit(double[][] w, double[] b, int in, int out) {
@@ -75,7 +73,7 @@ public final class CombatMLP {
         // 输出: Sigmoid
         double sum = b3[0];
         for (int j = 0; j < hidden2Size; j++) {
-            sum += h2[j];
+            sum += W3[0][j] * h2[j];
         }
         return sigmoid(sum);
     }
@@ -84,7 +82,7 @@ public final class CombatMLP {
      * 训练一步（SGD + 反向传播）。
      * target = 1.0 表示正常行为样本。
      */
-    public void train(double[] input, double target) {
+    public double train(double[] input, double target) {
         // 前向
         double[] h1 = new double[hidden1Size];
         double[] h1Pre = new double[hidden1Size];
@@ -126,11 +124,11 @@ public final class CombatMLP {
             deltaH1[i] = sum * (h1Pre[i] > 0 ? 1.0 : 0.0);
         }
 
-        // 更新输出层权重
+        // 更新 W3, b3
         for (int j = 0; j < hidden2Size; j++) {
-            // W3 是隐式权重=1（输出层没有W矩阵，只有偏置）
-            b3[0] -= learningRate * deltaOut;
+            W3[0][j] -= learningRate * deltaOut * h2[j];
         }
+        b3[0] -= learningRate * deltaOut;
 
         // 更新 W2, b2
         for (int i = 0; i < hidden2Size; i++) {
@@ -147,6 +145,7 @@ public final class CombatMLP {
             }
             b1[i] -= learningRate * deltaH1[i];
         }
+        return error * error; // MSE loss
     }
 
     private static double sigmoid(double x) {

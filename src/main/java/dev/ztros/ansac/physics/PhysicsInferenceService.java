@@ -808,7 +808,7 @@ public class PhysicsInferenceService {
                     for (double[] sample : samples) {
                         totalLossMove += movementMLP.train(sample, 1.0);
                         double[] combatSlice = BehaviorFeatureExtractor.extractCombatSlice(sample);
-                        combatMLP.train(combatSlice, 1.0);
+                        totalLossCombat += combatMLP.train(combatSlice, 1.0);
                     }
                     double avgLoss = totalLossMove / samples.size();
                     if (epoch % 20 == 0 || epoch == epochs - 1) {

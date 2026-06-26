@@ -72,7 +72,15 @@ public class AuthConfig {
         this.proxyType = config.getString("auth.proxy.type", "auto");
 
         this.commandWhitelist = config.getStringList("auth.command-whitelist").stream()
-                .map(Pattern::compile)
+                .map(pattern -> {
+                    try {
+                        return java.util.regex.Pattern.compile(pattern);
+                    } catch (java.util.regex.PatternSyntaxException e) {
+                        plugin.getLogger().warning("auth.command-whitelist 中的正则表达式无效: " + pattern + " (" + e.getMessage() + ")");
+                        return null;
+                    }
+                })
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
     }
 

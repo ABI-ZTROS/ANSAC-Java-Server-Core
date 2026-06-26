@@ -49,6 +49,14 @@ public final class MLPPersistence {
         }
     }
 
+    private static boolean isValidWeight(double v) {
+        return !Double.isNaN(v) && !Double.isInfinite(v) && Double.isFinite(v);
+    }
+
+    private static double sanitizeWeight(double v) {
+        return isValidWeight(v) ? Math.max(-100.0, Math.min(100.0, v)) : 0.0;
+    }
+
     public static MovementMLP load(File file) throws IOException {
         try (DataInputStream in = new DataInputStream(
                 new BufferedInputStream(new FileInputStream(file)))) {
@@ -66,33 +74,33 @@ public final class MLPPersistence {
             double[][] w1 = mlp.getW1();
             for (int i = 0; i < w1.length; i++) {
                 for (int j = 0; j < w1[i].length; j++) {
-                    w1[i][j] = in.readDouble();
+                    w1[i][j] = sanitizeWeight(in.readDouble());
                 }
             }
 
             double[] b1 = mlp.getB1();
             for (int j = 0; j < b1.length; j++) {
-                b1[j] = in.readDouble();
+                b1[j] = sanitizeWeight(in.readDouble());
             }
 
             double[][] w2 = mlp.getW2();
             for (int i = 0; i < w2.length; i++) {
                 for (int j = 0; j < w2[i].length; j++) {
-                    w2[i][j] = in.readDouble();
+                    w2[i][j] = sanitizeWeight(in.readDouble());
                 }
             }
 
             double[] b2 = mlp.getB2();
             for (int j = 0; j < b2.length; j++) {
-                b2[j] = in.readDouble();
+                b2[j] = sanitizeWeight(in.readDouble());
             }
 
             double[] w3 = mlp.getW3();
             for (int i = 0; i < w3.length; i++) {
-                w3[i] = in.readDouble();
+                w3[i] = sanitizeWeight(in.readDouble());
             }
 
-            mlp.setB3(in.readDouble());
+            mlp.setB3(sanitizeWeight(in.readDouble()));
             return mlp;
         }
     }

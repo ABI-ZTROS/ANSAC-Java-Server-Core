@@ -43,7 +43,8 @@ public class PunishmentManager {
     private boolean autoBanEnabled;
 
     private final File punishmentsFile;
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    private static final java.time.format.DateTimeFormatter DATE_FORMAT =
+        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public PunishmentManager(ANSACPlugin plugin) {
         this.plugin = plugin;
@@ -104,14 +105,23 @@ public class PunishmentManager {
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(punishmentsFile);
         var entries = yaml.getStringList("bans");
         int loaded = 0;
+        int skipped = 0;
         for (String entryStr : entries) {
-            String[] parts = entryStr.split(";");
-            PunishmentEntry entry = PunishmentEntry.fromStringArray(parts);
-            if (entry != null && entry.isActive() && !entry.hasExpired()) {
-                activeBans.put(entry.getUuid(), entry);
-                nameToUuid.put(entry.getPlayerName().toLowerCase(), entry.getUuid());
-                loaded++;
+            try {
+                String[] parts = entryStr.split(";");
+                PunishmentEntry entry = PunishmentEntry.fromStringArray(parts);
+                if (entry != null && entry.isActive() && !entry.hasExpired()) {
+                    activeBans.put(entry.getUuid(), entry);
+                    nameToUuid.put(entry.getPlayerName().toLowerCase(), entry.getUuid());
+                    loaded++;
+                }
+            } catch (Exception e) {
+                skipped++;
+                plugin.getLogger().warning("跳过损坏的封禁记录: " + e.getMessage());
             }
+        }
+        if (skipped > 0) {
+            plugin.getLogger().warning("已跳过 " + skipped + " 条损坏的封禁记录。");
         }
         plugin.getLogger().info("已从 punishments.yml 加载 " + loaded + " 条有效封禁记录。");
     }
@@ -358,21 +368,27 @@ public class PunishmentManager {
      * Available variables: %player%, %uuid%, %reason%, %check%, %vl%,
      * %operator%, %date%, %duration%, %expiry%, %time_remaining%
      */
+    private String sanitizeMiniMessage(String input) {
+        if (input == null) return "";
+        // 转义 MiniMessage 标签，防止注入
+        return input.replace("<", "\\<").replace(">", "\\>");
+    }
+
     private String replaceVariables(String text, PunishmentEntry entry) {
-        String dateStr = DATE_FORMAT.format(new Date(entry.getBanTime()));
-        String expiryStr = entry.isPermanent() ? "永久" : DATE_FORMAT.format(new Date(entry.getExpiryTime()));
+        String dateStr = DATE_FORMAT.format(java.time.Instant.ofEpochMilli(entry.getBanTime()));
+        String expiryStr = entry.isPermanent() ? "永久" : DATE_FORMAT.format(java.time.Instant.ofEpochMilli(entry.getExpiryTime()));
         String durationStr = entry.isPermanent() ? "永久" : formatDuration(entry.getDurationSeconds());
         String remainingStr = entry.isPermanent() ? "永久" : formatDuration(
             Math.max(0, (entry.getExpiryTime() - System.currentTimeMillis()) / 1000L)
         );
 
         return text
-            .replace("%player%", entry.getPlayerName())
+            .replace("%player%", sanitizeMiniMessage(entry.getPlayerName()))
             .replace("%uuid%", entry.getUuid().toString())
-            .replace("%reason%", entry.getReason())
-            .replace("%check%", entry.getCheckName() != null ? entry.getCheckName() : "N/A")
+            .replace("%reason%", sanitizeMiniMessage(entry.getReason()))
+            .replace("%check%", sanitizeMiniMessage(entry.getCheckName() != null ? entry.getCheckName() : "N/A"))
             .replace("%vl%", String.valueOf(entry.getVl()))
-            .replace("%operator%", entry.getOperator())
+            .replace("%operator%", sanitizeMiniMessage(entry.getOperator()))
             .replace("%date%", dateStr)
             .replace("%duration%", durationStr)
             .replace("%expiry%", expiryStr)

@@ -106,21 +106,25 @@ public class PunishmentEntry {
      */
     public static PunishmentEntry fromStringArray(String[] parts) {
         if (parts.length < 9) return null;
-        UUID uuid = UUID.fromString(parts[0]);
-        String playerName = parts[1];
-        String reason = parts[2];
-        String checkName = parts[3].isEmpty() ? null : parts[3];
-        int vl = Integer.parseInt(parts[4]);
-        String operator = parts[5];
-        long banTime = Long.parseLong(parts[6]);
-        long durationSeconds = Long.parseLong(parts[7]);
-        boolean active = Boolean.parseBoolean(parts[8]);
-        String ip = parts.length > 9 ? parts[9] : null;
+        try {
+            UUID uuid = UUID.fromString(parts[0]);
+            String playerName = parts[1];
+            String reason = parts[2];
+            String checkName = parts[3].isEmpty() ? null : parts[3];
+            int vl = Integer.parseInt(parts[4]);
+            String operator = parts[5];
+            long banTime = Long.parseLong(parts[6]);
+            long durationSeconds = Long.parseLong(parts[7]);
+            boolean active = Boolean.parseBoolean(parts[8]);
+            String ip = parts.length > 9 ? parts[9] : null;
 
-        PunishmentEntry entry = new PunishmentEntry(
-            uuid, playerName, reason, checkName, vl, operator, banTime, durationSeconds, ip
-        );
-        entry.setActive(active);
-        return entry;
+            PunishmentEntry entry = new PunishmentEntry(
+                uuid, playerName, reason, checkName, vl, operator, banTime, durationSeconds, ip
+            );
+            entry.setActive(active);
+            return entry;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

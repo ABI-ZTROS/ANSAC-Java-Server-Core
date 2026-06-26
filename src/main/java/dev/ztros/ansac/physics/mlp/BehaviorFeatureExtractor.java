@@ -133,7 +133,7 @@ public final class BehaviorFeatureExtractor {
         f[i++] = clamp(profile.getPlaceIntervalMean() / 500.0, 0.0, 1.0);        // 放置间隔均值
         f[i++] = clamp(profile.getPlaceIntervalStd() / 200.0, 0.0, 1.0);         // 放置间隔标准差
         f[i++] = clamp(profile.getBreakIntervalMean() / 1000.0, 0.0, 1.0);        // 破坏间隔均值
-        f[i++] = clamp(profile.getBreakIntervalMean() / 500.0, 0.0, 1.0);         // 破坏间隔标准差
+        f[i++] = clamp(profile.getBreakIntervalStd() / 500.0, 0.0, 1.0);         // 破坏间隔标准差
         f[i++] = (profile.getDirectionConsistencyMean() + 1.0) / 2.0;            // 方向一致性
         f[i++] = profile.getAirPlaceRate();                                      // 空中放置率
         f[i++] = 0.0; // 单次放置数均值

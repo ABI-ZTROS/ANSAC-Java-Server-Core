@@ -15,7 +15,7 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public final class AnomalyFusion {
 
-    private final double[][] W1;
+    private final double[][] W1, W2;
     private final double[] b1, b2;
     private final double learningRate;
 
@@ -25,9 +25,11 @@ public final class AnomalyFusion {
         // 隐藏层4维
         this.W1 = new double[4][3];
         this.b1 = new double[4];
+        // 输出层权重
+        this.W2 = new double[1][4];
         this.b2 = new double[1];
         xavierInit(W1, b1, 3, 4);
-        b2[0] = ThreadLocalRandom.current().nextDouble(-0.1, 0.1);
+        xavierInit(W2, b2, 4, 1);
     }
 
     private void xavierInit(double[][] w, double[] b, int in, int out) {
@@ -64,7 +66,7 @@ public final class AnomalyFusion {
         // 输出: Sigmoid
         double sum = b2[0];
         for (int j = 0; j < 4; j++) {
-            sum += h[j];
+            sum += W2[0][j] * h[j];
         }
         return sigmoid(sum);
     }
@@ -98,10 +100,12 @@ public final class AnomalyFusion {
             deltaH[i] = deltaOut * (hPre[i] > 0 ? 1.0 : 0.0);
         }
 
-        // 更新
+        // 更新 W2, b2
         for (int j = 0; j < 4; j++) {
-            b2[0] -= learningRate * deltaOut;
+            W2[0][j] -= learningRate * deltaOut * h[j];
         }
+        b2[0] -= learningRate * deltaOut;
+        // 更新 W1, b1
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 3; j++) {
                 W1[i][j] -= learningRate * deltaH[i] * input[j];
