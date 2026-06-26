@@ -19,61 +19,75 @@ import java.util.concurrent.ConcurrentHashMap;
  * Step check - detects automated step-up cheats (walking up blocks without jumping).
  *
  * Cheat principle (Wurst Step + Meteor Step):
- *   Wurst Step: Automatically walks up blocks higher than 1 block (normal max auto-step is 0.6 blocks)
- *   Meteor Step: Similar, supports multiple height modes
- *   Normal MC: Player can auto-step up to 0.6 blocks high without jumping
- *   Cheat: Player walks up 1.0, 1.5 or even higher blocks without jumping
+ *   Wurst Step: Client-side modifies collision to allow walking up 1+ block heights
+ *   Meteor Step: Similar, supports configurable step heights (1.0, 1.5, 2.0+)
+ *   Normal MC: Player can auto-step up to 0.6 blocks without jumping
+ *   Cheat signature: Consistent >0.6 block vertical rise while on ground, no jump
  *
  * Physics reference (Minecraft 1.21.x, minecraft.wiki):
- *   Normal auto-step height: 0.6 blocks (full block height is 1.0)
- *   With Jump Boost: auto-step height remains 0.6, but jump height increases
- *   Soul Sand: 0.875 block height (slows but doesn't change step height)
- *   Snow layers: variable height (0.125 per layer, up to 0.875 for 7 layers)
- *   Slabs: 0.5 blocks (bottom/top slab)
- *   Stairs: 0.5 blocks (bottom step)
- *   Carpets: 0.0625 blocks
+ *   Normal auto-step height: 0.6 blocks
+ *   Step height formula: stepHeight = 0.6 (hardcoded in client)
+ *   Player bounding box: 0.6 x 1.8 x 0.6
+ *   Full block: 1.0 height
+ *   Slabs: 0.5, Stairs bottom: 0.5, Snow: 0.125-0.875, Carpet: 0.0625
+ *   Soul Sand collision: 0.875, Farmland: 0.9375
+ *   Dirt Path: 0.9375
  *
- * Detection logic:
- *   - Every tick, check if player moved horizontally AND vertically upward
- *   - If player is on ground and vertical rise > 0.6 without having jumped recently
- *   - Verify by checking block height difference at player's feet position
- *   - Two-tier flagging: >1.0 blocks = instant flag, >0.6 blocks = buffer-based flag
- *   - Uses ConcurrentHashMap for thread-safe per-player tracking
+ * Detection logic (multi-layer):
+ *   1. Basic: deltaY > 0.6 while on ground, no recent jump
+ *   2. Height verification: Use block.getBoundingBox() for real collision height
+ *   3. Velocity check: Step should have minimal vertical velocity (not a jump)
+ *   4. Pattern detection: Repeated 0.6+ steps in short window = suspicious
+ *   5. Instant flag for >1.0 (impossible without jump or specific blocks)
  */
 public class StepCheck extends Check {
 
-    // Normal auto-step height limit
+    // Source: minecraft.wiki/w/Player - auto-step height = 0.6 blocks
     private static final double NORMAL_STEP_HEIGHT = 0.6;
 
-    // Minimum horizontal movement to consider (filter out vertical-only movement)
-    private static final double MIN_HORIZONTAL_MOVE = 0.1;
+    // Minimum horizontal movement to consider
+    private static final double MIN_HORIZONTAL_MOVE = 0.05;
 
-    // Minimum vertical rise to be suspicious (above normal step)
-    private static final double MIN_SUSPICIOUS_RISE = 0.6;
+    // Minimum vertical rise to enter step analysis
+    private static final double MIN_RISE_ANALYSIS = 0.5;
 
     // Threshold for instant flag (clearly impossible without jump)
+    // 0.6 < height <= 1.0: buffer path
+    // > 1.0: instant flag (no legitimate scenario except very specific block combos)
     private static final double INSTANT_FLAG_THRESHOLD = 1.0;
 
+    // Buffer threshold for borderline cases (0.6 < height <= 1.0)
+    // Lowered from 3 to 2: legitimate players rarely step 0.6+ repeatedly
+    private static final int STEP_BUFFER_FLAG_THRESHOLD = 2;
+
+    // Pattern detection: window for counting repeated steps (ms)
+    private static final long PATTERN_WINDOW_MS = 3000L;
+
+    // Pattern detection: number of 0.6+ steps in window to flag
+    private static final int PATTERN_STEP_THRESHOLD = 3;
+
     // Time window to consider a jump "recent" (ms)
-    private static final long RECENT_JUMP_WINDOW_MS = 500L;
+    // Reduced from 500 to 350: a real jump clears step in < 200ms
+    private static final long RECENT_JUMP_WINDOW_MS = 350L;
 
-    // Buffer threshold for borderline cases (0.6 < height < 1.0)
-    private static final int STEP_BUFFER_FLAG_THRESHOLD = 3;
-
-    // Knockback exemption window (ms)
-    private static final long KNOCKBACK_EXEMPT_MS = 1000L;
+    // Knockback/damage exemption window (ms)
+    // Reduced from 1000 to 400: step cheats exploit long exemption windows
+    private static final long KNOCKBACK_EXEMPT_MS = 400L;
 
     // Ping compensation factor for this check
-    private static final double COMPENSATION_FACTOR = 0.25;
+    private static final double COMPENSATION_FACTOR = 0.20;
 
     /**
      * Internal tracker for per-player step violations.
-     * Stored in a ConcurrentHashMap for thread safety.
      */
     static class StepTracker {
         int stepBuffer;
         double lastStepHeight;
         boolean wasOnGround;
+
+        // Pattern detection: timestamps of recent step-ups
+        final long[] stepTimestamps = new long[10];
+        int stepTimestampCount;
 
         StepTracker() {
             this.stepBuffer = 0;
@@ -84,6 +98,25 @@ public class StepCheck extends Check {
         void reset() {
             this.stepBuffer = 0;
             this.lastStepHeight = 0;
+        }
+
+        void recordStep(long now) {
+            if (stepTimestampCount < stepTimestamps.length) {
+                stepTimestamps[stepTimestampCount++] = now;
+            } else {
+                // Shift array left
+                System.arraycopy(stepTimestamps, 1, stepTimestamps, 0, stepTimestamps.length - 1);
+                stepTimestamps[stepTimestampCount - 1] = now;
+            }
+        }
+
+        int countStepsInWindow(long now, long windowMs) {
+            long cutoff = now - windowMs;
+            int count = 0;
+            for (int i = 0; i < stepTimestampCount; i++) {
+                if (stepTimestamps[i] >= cutoff) count++;
+            }
+            return count;
         }
     }
 
@@ -97,7 +130,7 @@ public class StepCheck extends Check {
     public void process(Player player, PlayerData data) {
         if (shouldSkip(player)) return;
 
-        // Ping compensation: skip check if latency is too high or spiking
+        // Ping compensation
         if (data.getPingCompensator().shouldSkipCheck()) {
             StepTracker tracker = trackers.get(player.getUniqueId());
             if (tracker != null) {
@@ -130,54 +163,77 @@ public class StepCheck extends Check {
         // --- Pre-condition checks ---
         // Must be moving horizontally
         if (horizontalDist < MIN_HORIZONTAL_MOVE) {
-            tracker.stepBuffer = Math.max(0, tracker.stepBuffer - 1);
+            decayBuffer(tracker);
             tracker.wasOnGround = onGround;
             return;
         }
 
-        // Must be moving upward
-        if (deltaY <= MIN_SUSPICIOUS_RISE) {
-            tracker.stepBuffer = Math.max(0, tracker.stepBuffer - 1);
+        // Must be moving upward at all
+        if (deltaY <= 0) {
+            decayBuffer(tracker);
             tracker.wasOnGround = onGround;
             return;
         }
 
-        // Must be on ground (or was on ground last tick)
+        // Must be on ground (or was on ground last tick - transitional)
         if (!onGround && !tracker.wasOnGround) {
+            tracker.wasOnGround = onGround;
+            return;
+        }
+
+        // Only analyze if deltaY is above analysis threshold
+        if (deltaY < MIN_RISE_ANALYSIS) {
+            decayBuffer(tracker);
             tracker.wasOnGround = onGround;
             return;
         }
 
         // --- Exemption checks ---
         if (shouldExempt(player, data, now)) {
-            tracker.stepBuffer = Math.max(0, tracker.stepBuffer - 1);
+            decayBuffer(tracker);
             tracker.wasOnGround = onGround;
             return;
         }
 
-        // --- Verify step height by checking block geometry ---
+        // --- Verify step height using real block collision ---
         double stepHeight = verifyStepHeight(from, to, deltaY);
 
         if (stepHeight <= NORMAL_STEP_HEIGHT) {
-            // Legitimate step (e.g., slab, snow layer)
-            tracker.stepBuffer = Math.max(0, tracker.stepBuffer - 1);
+            // Legitimate step (slab, snow layer, carpet, etc.)
+            decayBuffer(tracker);
             tracker.wasOnGround = onGround;
             return;
         }
 
         tracker.lastStepHeight = stepHeight;
+        tracker.recordStep(now);
 
-        // --- Two-tier detection ---
+        // --- Pattern detection ---
+        // Even individual steps that pass the threshold are suspicious if
+        // they happen repeatedly. Count 0.6+ steps in the pattern window.
+        int stepsInWindow = tracker.countStepsInWindow(now, PATTERN_WINDOW_MS);
+        boolean isPattern = stepsInWindow >= PATTERN_STEP_THRESHOLD;
+
+        // --- Three-tier detection ---
         if (stepHeight > INSTANT_FLAG_THRESHOLD) {
-            // Clearly impossible: > 1.0 block step without jumping
-            double severity = stepHeight / NORMAL_STEP_HEIGHT;
+            // Tier 1: Clearly impossible (>1.0 block step without jump)
+            double severity = 1.5 + (stepHeight - INSTANT_FLAG_THRESHOLD);
             flag(player, data, severity,
-                String.format("异常台阶: %.2f 格 (上限: %.1f 格, 无跳跃, 延迟 %s)",
-                    stepHeight, NORMAL_STEP_HEIGHT,
+                String.format("异常台阶: %.2f 格 (上限 %.1f, 无跳跃, %d次/3s, 延迟 %s)",
+                    stepHeight, NORMAL_STEP_HEIGHT, stepsInWindow,
+                    data.getPingCompensator().getPingStatus()));
+            tracker.reset();
+        } else if (isPattern) {
+            // Tier 2: Pattern detected (repeated 0.6+ steps)
+            // Each individual step is borderline but the pattern is unmistakable
+            double severity = 1.0 + (stepsInWindow - PATTERN_STEP_THRESHOLD) * 0.3;
+            flag(player, data, severity,
+                String.format("台阶模式: %.2f 格 x%d次/3s (上限 %.1f, 延迟 %s)",
+                    stepHeight, stepsInWindow, NORMAL_STEP_HEIGHT,
                     data.getPingCompensator().getPingStatus()));
             tracker.reset();
         } else {
-            // Borderline: 0.6 < height <= 1.0, use buffer
+            // Tier 3: Borderline single step (0.6 < height <= 1.0)
             tracker.stepBuffer++;
             int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
                 STEP_BUFFER_FLAG_THRESHOLD, COMPENSATION_FACTOR);
@@ -185,8 +241,8 @@ public class StepCheck extends Check {
             if (tracker.stepBuffer >= compensatedBuffer) {
                 double severity = stepHeight / NORMAL_STEP_HEIGHT;
                 flag(player, data, severity,
-                    String.format("可疑台阶: %.2f 格 (连续 %d 次, 延迟 %s)",
-                        stepHeight, tracker.stepBuffer,
+                    String.format("可疑台阶: %.2f 格 (连续 %d 次, %d次/3s, 延迟 %s)",
+                        stepHeight, tracker.stepBuffer, stepsInWindow,
                         data.getPingCompensator().getPingStatus()));
                 tracker.reset();
             }
@@ -196,127 +252,81 @@ public class StepCheck extends Check {
     }
 
     /**
-     * Verify the actual step height by checking block heights at player's feet.
-     * This prevents false positives from half-slabs, stairs, snow layers, etc.
-     * that are legitimately less than 0.6 blocks but may report higher deltaY
-     * due to tick timing.
+     * Verify the actual step height by checking block collision shapes.
+     * Uses Block.getBoundingBox() for real height data instead of hardcoded values.
      *
-     * @return The verified step height, or the raw deltaY if verification is inconclusive.
+     * @return The verified step height, or raw deltaY if verification is inconclusive.
      */
     private double verifyStepHeight(Location from, Location to, double rawDeltaY) {
-        // Check the block at the destination position (player's feet)
-        Block destBlock = to.getBlock();
+        Block destBlock = to.getWorld().getBlockAt(
+            to.getBlockX(), to.getBlockY(), to.getBlockZ());
         Material destType = destBlock.getType();
-        String destName = destType.name();
 
-        // Slabs: 0.5 block height (legitimate step)
-        if (destName.contains("SLAB")) {
-            return 0.5;
+        // Quick check: if the destination block is air/passable, the player
+        // stepped onto whatever is below it.
+        Block belowDest = destBlock.getRelative(BlockFace.DOWN);
+        Material belowDestType = belowDest.getType();
+        String belowName = belowDestType.name();
+
+        // Check block below from position
+        Block fromBlock = from.getWorld().getBlockAt(
+            from.getBlockX(), from.getBlockY(), from.getBlockZ());
+        Block belowFrom = fromBlock.getRelative(BlockFace.DOWN);
+
+        // Calculate actual height difference using real bounding box heights
+        double fromSurfaceY = belowFrom.getY() + getBlockCollisionTop(belowFrom);
+        double toSurfaceY = belowDest.getY() + getBlockCollisionTop(belowDest);
+
+        double actualStep = toSurfaceY - fromSurfaceY;
+
+        // Sanity: if calculated step is negative or zero but raw deltaY is positive,
+        // the bounding box method failed. Fall back to raw deltaY.
+        if (actualStep > 0) {
+            return actualStep;
         }
 
-        // Stairs: bottom is 0.5 (legitimate step)
-        if (destName.contains("STAIRS")) {
-            return 0.5;
-        }
-
-        // Snow layers: 0.125 per layer, max 8 layers = 1.0 (but 7 layers = 0.875)
-        if (destType == Material.SNOW) {
-            // Snow height is stored in block data; approximate
-            return Math.min(rawDeltaY, 0.875);
-        }
-
-        // Carpet: 0.0625 blocks
-        if (destName.contains("CARPET")) {
-            return 0.0625;
-        }
-
-        // Check if the player stepped onto a block with a non-full top surface
-        Block below = destBlock.getRelative(BlockFace.DOWN);
-        Material belowType = below.getType();
-        String belowName = belowType.name();
-
-        // Soul sand: 0.875 height, but player stands at 0.875 (not a step-up)
-        if (belowType == Material.SOUL_SAND) {
-            return 0.0; // Not a step, just standing on soul sand
-        }
-
-        // Farmland: 0.9375 height
-        if (belowType == Material.FARMLAND) {
-            return 0.0;
-        }
-
-        // Check the block the player was standing on before
-        Block fromBelow = from.getBlock().getRelative(BlockFace.DOWN);
-        double fromTopY = fromBelow.getY() + getBlockTopHeight(fromBelow);
-        double toTopY = below.getY() + getBlockTopHeight(below);
-
-        // Calculate actual height difference between the two surfaces
-        double actualStepHeight = toTopY - fromTopY;
-
-        // If we can determine actual block heights, use them
-        if (actualStepHeight > 0) {
-            return actualStepHeight;
-        }
-
-        // Fallback to raw deltaY
         return rawDeltaY;
     }
 
     /**
-     * Get the effective top height of a block.
-     * Most full blocks are 1.0, but some have non-standard heights.
+     * Get the real collision top height of a block using getBoundingBox().
+     * This accurately handles all block types without hardcoding.
      */
-    private double getBlockTopHeight(Block block) {
+    private double getBlockCollisionTop(Block block) {
+        try {
+            org.bukkit.util.BoundingBox box = block.getBoundingBox();
+            if (box != null && box.getHeight() > 0) {
+                // getBoundingBox() returns local coordinates relative to block position
+                return box.getMaxY() - block.getY();
+            }
+        } catch (Exception ignored) {
+            // Fallback to hardcoded check
+        }
+
+        // Fallback: estimate from material type
         Material type = block.getType();
         String name = type.name();
 
-        // Full blocks: 1.0
-        if (type.isSolid() && !name.contains("SLAB") && !name.contains("STAIRS")
-                && !name.contains("WALL") && type != Material.SNOW
-                && type != Material.SOUL_SAND && type != Material.FARMLAND
-                && !name.contains("CARPET") && !name.contains("DAYLIGHT")) {
-            return 1.0;
-        }
+        if (name.contains("SLAB")) return 0.5;
+        if (name.contains("STAIRS")) return 0.5;
+        if (type == Material.SNOW) return 0.875; // max layers
+        if (name.contains("CARPET")) return 0.0625;
+        if (type == Material.SOUL_SAND) return 0.875;
+        if (type == Material.FARMLAND) return 0.9375;
+        if (type == Material.DIRT_PATH) return 0.9375;
+        if (type == Material.MUD) return 0.9375;
 
-        // Slabs: 0.5 (bottom or top)
-        if (name.contains("SLAB")) {
-            return 0.5;
-        }
-
-        // Stairs: 0.5 at the lower step
-        if (name.contains("STAIRS")) {
-            return 0.5;
-        }
-
-        // Snow: approximate 0.125 per layer
-        if (type == Material.SNOW) {
-            return 0.125; // Minimum, actual depends on layers
-        }
-
-        // Soul sand: 0.875
-        if (type == Material.SOUL_SAND) {
-            return 0.875;
-        }
-
-        // Farmland: 0.9375
-        if (type == Material.FARMLAND) {
-            return 0.9375;
-        }
-
-        // Carpet: 0.0625
-        if (name.contains("CARPET")) {
-            return 0.0625;
-        }
-
-        // Walls, fences, etc.: 1.0 but player can't normally step onto them
+        // Walls, fences, gates, etc. have 1.5 collision but player can't step onto them
+        // normally. If somehow on top, treat as 1.0.
         return 1.0;
     }
 
     /**
      * Check if the player should be exempted from this check.
+     * Narrow exemptions to prevent cheat exploitation.
      */
     private boolean shouldExempt(Player player, PlayerData data, long now) {
-        // Recently jumped: legitimate step-up after jump
+        // Recently jumped: a real jump can cause a brief "step" appearance
         if ((now - data.getLastJumpTime()) < RECENT_JUMP_WINDOW_MS) {
             return true;
         }
@@ -326,30 +336,21 @@ public class StepCheck extends Check {
             return true;
         }
 
-        // Jump Boost effect: increases jump height, might affect step feel
-        PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
-        if (jumpBoost != null && player.hasPotionEffect(jumpBoost)) {
-            // Jump Boost doesn't change auto-step height, but high levels
-            // can cause the player to barely clear a block and land on top,
-            // which looks like a step. Exempt to avoid false positives.
-            int level = player.getPotionEffect(jumpBoost).getAmplifier() + 1;
-            if (level >= 2) {
-                return true;
-            }
-        }
-
-        // Levitation effect
+        // Levitation effect (completely overrides normal movement)
         PotionEffectType levitation = ServerVersionAdapter.getLevitation();
         if (levitation != null && player.hasPotionEffect(levitation)) {
             return true;
         }
+
+        // Slow Falling (reduces fall speed, can affect step timing)
+        // No exemption needed as it doesn't increase step height
 
         // Player in water or lava (different physics)
         if (player.isInWater() || player.isInLava()) {
             return true;
         }
 
-        // Player climbing
+        // Player climbing (ladders, vines, etc.)
         if (player.isClimbing()) {
             return true;
         }
@@ -359,18 +360,31 @@ public class StepCheck extends Check {
             return true;
         }
 
-        // Player recently took damage (knockback)
-        if (player.getNoDamageTicks() > 0) {
+        // Player in vehicle
+        if (player.isInsideVehicle()) {
             return true;
         }
 
+        // NOTE: Jump Boost does NOT change auto-step height (wiki: always 0.6).
+        // Removed Jump Boost exemption to prevent cheat exploitation.
+        //
+        // NOTE: NoDamageTicks exemption removed. Step cheats exploit damage
+        // immunity to bypass checks. Knockback exemption via lastKnockbackTime
+        // is more precise.
+
         return false;
+    }
+
+    private void decayBuffer(StepTracker tracker) {
+        if (tracker.stepBuffer > 0) {
+            tracker.stepBuffer = Math.max(0, tracker.stepBuffer - 1);
+        }
     }
 
     private boolean shouldSkip(Player player) {
         String gm = player.getGameMode().name();
         return gm.contains("CREATIVE") || gm.contains("SPECTATOR")
-            || player.isFlying() || player.isInsideVehicle()
+            || player.isFlying()
             || player.isSleeping() || player.isDead();
     }
 }
