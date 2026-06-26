@@ -86,6 +86,12 @@ public class PhysicsInferenceService {
     /** 检测运行模式: RULE_ONLY / MODEL_ONLY / HYBRID */
     private volatile DetectionMode detectionMode = DetectionMode.HYBRID;
 
+    /** 实时监控：被监控玩家的 UUID -> BukkitTask */
+    private final ConcurrentHashMap<UUID, org.bukkit.scheduler.BukkitTask> watchTasks = new ConcurrentHashMap<>();
+
+    /** 实时监控间隔（tick），默认 40 tick = 2 秒 */
+    private static final int WATCH_INTERVAL_TICKS = 40;
+
     // ==================== 配置参数 ====================
 
     /**
@@ -547,6 +553,11 @@ public class PhysicsInferenceService {
      * </p>
      */
     public void shutdown() {
+        // 停止所有实时监控任务
+        for (java.util.UUID uuid : new java.util.ArrayList<>(watchTasks.keySet())) {
+            org.bukkit.scheduler.BukkitTask task = watchTasks.remove(uuid);
+            if (task != null) task.cancel();
+        }
         states.clear();
         trustedPlayers.clear();
     }
@@ -892,5 +903,108 @@ public class PhysicsInferenceService {
 
     public void setMlpEnabled(boolean mlpEnabled) {
         this.mlpEnabled = mlpEnabled;
+    }
+
+    // ==================== 实时监控 ====================
+
+    /**
+     * 开始实时监控指定玩家。
+     * 每 2 秒向所有管理员推送一次 AI 思维状态。
+     */
+    public void startWatch(UUID targetUuid) {
+        if (watchTasks.containsKey(targetUuid)) return;
+        if (plugin == null) return;
+
+        org.bukkit.scheduler.BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(
+            plugin, () -> {
+                Player target = plugin.getServer().getPlayer(targetUuid);
+                if (target == null || !target.isOnline()) {
+                    stopWatch(targetUuid);
+                    return;
+                }
+
+                PlayerPhysicsState state = states.get(targetUuid);
+                if (state == null || !mlpEnabled) return;
+
+                double moveScore = state.getLastNormalScore();
+                double anomalyScore = state.getLastAnomalyScore();
+
+                // 计算 combatScore
+                dev.ztros.ansac.player.PlayerData data = plugin.getPlayerDataManager().getPlayerData(targetUuid);
+                double combatScore = 0.5;
+                if (data != null) {
+                    double[] features = BehaviorFeatureExtractor.extract(state, data.getBehaviorProfile());
+                    double[] combatSlice = BehaviorFeatureExtractor.extractCombatSlice(features);
+                    combatScore = combatMLP.forward(combatSlice);
+                }
+
+                String thoughtLine = InferenceInterpreter.buildThoughtLine(
+                    moveScore, combatScore, anomalyScore,
+                    samplingSession.getTrainRound());
+
+                String indicator = InferenceInterpreter.buildThinkingIndicator(anomalyScore);
+
+                for (Player admin : plugin.getServer().getOnlinePlayers()) {
+                    if (admin.hasPermission("ansac.admin")) {
+                        admin.sendActionBar(miniMessage.deserialize(
+                            "<dark_aqua>" + indicator + "</dark_aqua> <gray>[AI:" +
+                            target.getName() + "]</gray> " + thoughtLine
+                        ));
+                    }
+                }
+            },
+            WATCH_INTERVAL_TICKS, // delay
+            WATCH_INTERVAL_TICKS  // period
+        );
+        watchTasks.put(targetUuid, task);
+
+        // 通知管理员监控已开启
+        Player target = plugin.getServer().getPlayer(targetUuid);
+        String targetName = target != null ? target.getName() : targetUuid.toString().substring(0, 8);
+        for (Player admin : plugin.getServer().getOnlinePlayers()) {
+            if (admin.hasPermission("ansac.admin")) {
+                admin.sendMessage(miniMessage.deserialize(
+                    "<gray>[<dark_aqua>ANSAC</dark_aqua>]</gray> " +
+                    "<green>已开始实时监控 <yellow>" + targetName +
+                    "</yellow>，每 " + (WATCH_INTERVAL_TICKS / 20) + " 秒推送 AI 思维状态到 ActionBar。</green>"
+                ));
+            }
+        }
+    }
+
+    /**
+     * 停止实时监控指定玩家。
+     */
+    public void stopWatch(UUID targetUuid) {
+        org.bukkit.scheduler.BukkitTask task = watchTasks.remove(targetUuid);
+        if (task != null) {
+            task.cancel();
+            if (plugin != null) {
+                Player target = plugin.getServer().getPlayer(targetUuid);
+                String targetName = target != null ? target.getName() : targetUuid.toString().substring(0, 8);
+                for (Player admin : plugin.getServer().getOnlinePlayers()) {
+                    if (admin.hasPermission("ansac.admin")) {
+                        admin.sendMessage(miniMessage.deserialize(
+                            "<gray>[<dark_aqua>ANSAC</dark_aqua>]</gray> " +
+                            "<red>已停止监控 <yellow>" + targetName + "</yellow>。</red>"
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 检查指定玩家是否正在被监控。
+     */
+    public boolean isWatching(UUID targetUuid) {
+        return watchTasks.containsKey(targetUuid);
+    }
+
+    /**
+     * 获取当前所有被监控玩家的 UUID 集合。
+     */
+    public java.util.Set<UUID> getWatchedPlayers() {
+        return watchTasks.keySet();
     }
 }

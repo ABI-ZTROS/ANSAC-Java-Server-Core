@@ -5,6 +5,7 @@ import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceResult;
 import dev.ztros.ansac.physics.PlayerPhysicsState;
 import dev.ztros.ansac.physics.mlp.BehaviorFeatureExtractor;
+import dev.ztros.ansac.physics.mlp.InferenceInterpreter;
 import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
 import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
@@ -182,6 +183,18 @@ public class ANSACCommand implements CommandExecutor {
                 handleModeSet(sender, args[1]);
                 break;
 
+            case "watch":
+                if (!sender.hasPermission("ansac.admin")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    handleWatchList(sender);
+                    return true;
+                }
+                handleWatchSub(sender, args);
+                break;
+
             default:
                 sendHelp(sender);
                 break;
@@ -251,6 +264,10 @@ public class ANSACCommand implements CommandExecutor {
             Component.text("/ansac mode [rule|model|hybrid]", NamedTextColor.YELLOW)
                 .append(Component.text(" - 切换检测模式（纯规则/纯模型/混合双打）", NamedTextColor.GRAY))
         );
+        sender.sendMessage(
+            Component.text("/ansac watch <start|stop|list>", NamedTextColor.YELLOW)
+                .append(Component.text(" - 实时AI思维监控 (start/stop 需接玩家名)", NamedTextColor.GRAY))
+        );
     }
 
     private void handleModeStatus(CommandSender sender) {
@@ -288,6 +305,66 @@ public class ANSACCommand implements CommandExecutor {
             case HYBRID -> "混合双打启动，模型异常分数将放大规则 severity";
         };
         sender.sendMessage(Component.text(tip, NamedTextColor.GRAY));
+    }
+
+    // ============================================================
+    // Real-time AI Watch Commands
+    // ============================================================
+
+    private void handleWatchSub(CommandSender sender, String[] args) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        String sub = args[1].toLowerCase();
+        if (sub.equals("start") && args.length >= 3) {
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null || !target.isOnline()) {
+                sender.sendMessage(Component.text("找不到该玩家或玩家不在线。", NamedTextColor.RED));
+                return;
+            }
+            if (svc.isWatching(target.getUniqueId())) {
+                sender.sendMessage(Component.text("该玩家已在监控中。", NamedTextColor.YELLOW));
+                return;
+            }
+            svc.startWatch(target.getUniqueId());
+        } else if (sub.equals("stop") && args.length >= 3) {
+            Player target = Bukkit.getPlayerExact(args[2]);
+            if (target == null || !target.isOnline()) {
+                sender.sendMessage(Component.text("找不到该玩家或玩家不在线。", NamedTextColor.RED));
+                return;
+            }
+            svc.stopWatch(target.getUniqueId());
+        } else if (sub.equals("stopall") || sub.equals("clear")) {
+            for (java.util.UUID uuid : new java.util.ArrayList<>(svc.getWatchedPlayers())) {
+                svc.stopWatch(uuid);
+            }
+            sender.sendMessage(Component.text("已停止所有监控。", NamedTextColor.GREEN));
+        } else {
+            sender.sendMessage(Component.text("用法: /ansac watch start <玩家> | stop <玩家> | stopall | list", NamedTextColor.RED));
+        }
+    }
+
+    private void handleWatchList(CommandSender sender) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        java.util.Set<java.util.UUID> watched = svc.getWatchedPlayers();
+        if (watched.isEmpty()) {
+            sender.sendMessage(Component.text("当前没有正在监控的玩家。", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("用法: /ansac watch start <玩家名>", NamedTextColor.GRAY));
+            return;
+        }
+        sender.sendMessage(Component.text("=== 实时监控列表 (" + watched.size() + "人) ===", NamedTextColor.GOLD));
+        for (java.util.UUID uuid : watched) {
+            Player p = Bukkit.getPlayer(uuid);
+            String name = p != null ? p.getName() : uuid.toString().substring(0, 8);
+            sender.sendMessage(Component.text("- " + name, NamedTextColor.YELLOW));
+        }
+        sender.sendMessage(Component.text("AI思维状态每2秒推送到 ActionBar。", NamedTextColor.GRAY));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -740,6 +817,11 @@ public class ANSACCommand implements CommandExecutor {
                     .append(Component.text(String.format("%.4f (%s)", anomalyScore, fusionVerdict), fusionColor)));
                 sender.sendMessage(Component.text("检测模式：", NamedTextColor.YELLOW)
                     .append(Component.text(svc.getDetectionMode().name(), NamedTextColor.WHITE)));
+
+                // AI 思维链（人类可读的自然语言推理过程）
+                sender.sendMessage(miniMessage.deserialize(
+                    InferenceInterpreter.buildDetailedThought(
+                        moveScore, anomalyScore, anomalyScore, pstate)));
             }
         }
 
