@@ -255,6 +255,6 @@ public class PacketListener extends PacketListenerAbstract {
      * Must be called from the correct region thread on Folia.
      */
     private Entity getEntityById(Player player, int entityId) {
-        return player.getWorld().getEntityById(entityId);
+        return org.bukkit.Bukkit.getEntity(entityId);
     }
 }
