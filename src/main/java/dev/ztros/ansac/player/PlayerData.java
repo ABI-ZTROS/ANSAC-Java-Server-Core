@@ -2,6 +2,7 @@ package dev.ztros.ansac.player;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.violation.ViolationData;
+import dev.ztros.ansac.physics.mlp.profile.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.bukkit.Location;
@@ -76,6 +77,10 @@ public class PlayerData {
 
     @Getter @Setter
     private long joinTime;
+
+    // ==================== 行为画像 ====================
+    @Getter
+    private final PlayerBehaviorProfile behaviorProfile = new PlayerBehaviorProfile();
 
     // --- Buffer fields for consecutive violation counting ---
 

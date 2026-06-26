@@ -2,9 +2,11 @@ package dev.ztros.ansac;
 
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.mlp.BehaviorFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
 import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
+import dev.ztros.ansac.physics.mlp.profile.PlayerBehaviorProfile;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.punishment.PunishmentEntry;
 import net.kyori.adventure.text.Component;
@@ -620,15 +622,15 @@ public class ANSACCommand implements CommandExecutor {
                 // 网络结构概览
                 sender.sendMessage(Component.text("网络结构：", NamedTextColor.YELLOW)
                     .append(Component.text(
-                        "24(输入) → 16(ReLU) → 8(ReLU) → 1(Sigmoid)", NamedTextColor.GRAY)));
+                        "72(输入) → 24(ReLU) → 16(ReLU) → 1(Sigmoid)", NamedTextColor.GRAY)));
 
                 // 隐藏层1激活值热力图
-                sender.sendMessage(Component.text("隐藏层1 激活值 (16神经元)：", NamedTextColor.YELLOW));
+                sender.sendMessage(Component.text("隐藏层1 激活值 (24神经元)：", NamedTextColor.YELLOW));
                 sender.sendMessage(miniMessage.deserialize(
                     formatActivationBar(detail.getHidden1Activations(), "h1")));
 
                 // 隐藏层2激活值热力图
-                sender.sendMessage(Component.text("隐藏层2 激活值 (8神经元)：", NamedTextColor.YELLOW));
+                sender.sendMessage(Component.text("隐藏层2 激活值 (16神经元)：", NamedTextColor.YELLOW));
                 sender.sendMessage(miniMessage.deserialize(
                     formatActivationBar(detail.getHidden2Activations(), "h2")));
 
@@ -636,8 +638,8 @@ public class ANSACCommand implements CommandExecutor {
                 sender.sendMessage(Component.text("关键输入特征（Top 6）：", NamedTextColor.YELLOW));
                 int[] topIndices = getTopActiveIndices(detail.getInputFeatures(), 6);
                 for (int idx : topIndices) {
-                    String name = idx < MLPFeatureExtractor.FEATURE_NAMES.length
-                        ? MLPFeatureExtractor.FEATURE_NAMES[idx] : "F" + idx;
+                    String name = idx < BehaviorFeatureExtractor.FEATURE_NAMES.length
+                        ? BehaviorFeatureExtractor.FEATURE_NAMES[idx] : "F" + idx;
                     double val = detail.getInputFeatures()[idx];
                     String bar = buildMiniBar(val, 10);
                     NamedTextColor barColor = Math.abs(val) > 0.7 ? NamedTextColor.GOLD
@@ -655,6 +657,58 @@ public class ANSACCommand implements CommandExecutor {
             }
         } else {
             sender.sendMessage(Component.text("MLP 推理已禁用。", NamedTextColor.GRAY));
+        }
+
+        // ===== 玩家行为完整画像 =====
+        PlayerData pdata = plugin.getPlayerDataManager().getPlayerData(target);
+        if (pdata != null) {
+            PlayerBehaviorProfile profile = pdata.getBehaviorProfile();
+            sender.sendMessage(Component.text("━━━ 玩家行为画像 ━━━", NamedTextColor.DARK_AQUA));
+
+            // 战斗维度
+            sender.sendMessage(Component.text("【战斗】", NamedTextColor.RED)
+                .append(Component.text(
+                    " CPS=" + String.format("%.1f", profile.getCombatCpsMean())
+                    + "±" + String.format("%.1f", profile.getCombatCpsStd())
+                    + " | 暴击率=" + String.format("%.1f%%", profile.getCritRate() * 100)
+                    + " | reach=" + String.format("%.2f", profile.getReachMean())
+                    + " | 连击=" + profile.getComboCount()
+                    + " | 平滑=" + String.format("%.2f", profile.getAimSmoothness()),
+                    NamedTextColor.GRAY)));
+
+            // 建造维度
+            sender.sendMessage(Component.text("【建造】", NamedTextColor.GREEN)
+                .append(Component.text(
+                    " 放置间隔=" + String.format("%.0f", profile.getPlaceIntervalMean()) + "ms"
+                    + " | 空中放置率=" + String.format("%.1f%%", profile.getAirPlaceRate() * 100)
+                    + " | 方向一致=" + String.format("%.2f", profile.getDirectionConsistencyMean()),
+                    NamedTextColor.GRAY)));
+
+            // 交互维度
+            sender.sendMessage(Component.text("【交互】", NamedTextColor.YELLOW)
+                .append(Component.text(
+                    " 吃速=" + String.format("%.1f", profile.getEatDurationMean()) + "tick"
+                    + " | 格挡=" + String.format("%.1f", profile.getBlockDurationMean()) + "tick"
+                    + " | 快速使用率=" + String.format("%.1f%%", profile.getFastUseRate() * 100),
+                    NamedTextColor.GRAY)));
+
+            // 网络维度
+            sender.sendMessage(Component.text("【网络】", NamedTextColor.AQUA)
+                .append(Component.text(
+                    " 飞行包间隔=" + String.format("%.1f", profile.getFlyingIntervalMean()) + "ms"
+                    + " | 丢包=" + String.format("%.2f%%", profile.getPacketLossMean() * 100)
+                    + " | 计时器=" + String.format("%.0f", profile.getTimerBalanceMean()),
+                    NamedTextColor.GRAY)));
+
+            // 会话统计
+            sender.sendMessage(Component.text("【会话】", NamedTextColor.LIGHT_PURPLE)
+                .append(Component.text(
+                    " 总攻击=" + profile.getTotalAttacks()
+                    + " | 总放置=" + profile.getTotalBlocksPlaced()
+                    + " | 总破坏=" + profile.getTotalBlocksBroken()
+                    + " | 总进食=" + profile.getTotalEats()
+                    + " | 在线=" + profile.getSessionDurationMinutes() + "min",
+                    NamedTextColor.GRAY)));
         }
 
         boolean isTrusted = svc.isTrusted(target.getUniqueId());

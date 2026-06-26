@@ -2,10 +2,8 @@ package dev.ztros.ansac.physics;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
-import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
-import dev.ztros.ansac.physics.mlp.MLPPersistence;
-import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
-import dev.ztros.ansac.physics.mlp.MovementMLP;
+import dev.ztros.ansac.physics.mlp.*;
+import dev.ztros.ansac.physics.mlp.profile.*;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
@@ -158,14 +156,30 @@ public class PhysicsInferenceService {
     private MovementMLP loadOrCreateMlp() {
         if (mlpFile.exists()) {
             try {
-                return MLPPersistence.load(mlpFile);
+                MovementMLP loaded = MLPPersistence.load(mlpFile);
+                if (loaded.getInputSize() == BehaviorFeatureExtractor.FEATURE_COUNT
+                        && loaded.getHidden1Size() == 24
+                        && loaded.getHidden2Size() == 16) {
+                    if (plugin != null) {
+                        plugin.getLogger().info("MLP 模型加载成功: " + loaded.getInputSize()
+                            + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size());
+                    }
+                    return loaded;
+                }
+                if (plugin != null) {
+                    plugin.getLogger().warning("MLP 模型维度不匹配 (旧模型 " + loaded.getInputSize()
+                        + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size()
+                        + ")，将创建新模型 (" + BehaviorFeatureExtractor.FEATURE_COUNT + "→24→16)");
+                }
+                // 删除旧模型文件，防止重复加载
+                mlpFile.delete();
             } catch (IOException e) {
                 if (plugin != null) {
                     plugin.getLogger().warning("加载 MLP 模型失败，将创建新模型: " + e.getMessage());
                 }
             }
         }
-        return new MovementMLP(MLPFeatureExtractor.FEATURE_COUNT, 16, 8, 0.01);
+        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, 24, 16, 0.01);
     }
 
     // ==================== 核心处理方法 ====================
@@ -212,9 +226,11 @@ public class PhysicsInferenceService {
         long now = System.currentTimeMillis();
         state.updateFromPlayer(player, from, to, now);
 
-        // MLP 推理
+        // MLP 完整画像推理
         if (mlpEnabled) {
-            double[] features = MLPFeatureExtractor.extract(state);
+            dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
+            PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
+            double[] features = BehaviorFeatureExtractor.extract(state, profile);
             double normalScore = movementMLP.forward(features);
             state.setLastNormalScore(normalScore);
         }
@@ -246,9 +262,11 @@ public class PhysicsInferenceService {
                 }
             }
 
-            // MLP 采样
+            // MLP 完整画像采样
             if (samplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
-                double[] features = MLPFeatureExtractor.extract(state);
+                dev.ztros.ansac.player.PlayerData sampleData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
+                PlayerBehaviorProfile sampleProfile = (sampleData != null) ? sampleData.getBehaviorProfile() : new PlayerBehaviorProfile();
+                double[] features = BehaviorFeatureExtractor.extract(state, sampleProfile);
                 samplingSession.offerSample(features);
             }
         }
@@ -785,7 +803,9 @@ public class PhysicsInferenceService {
         if (state == null || !mlpEnabled) {
             return null;
         }
-        double[] features = MLPFeatureExtractor.extract(state);
+        dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);
+        PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
+        double[] features = BehaviorFeatureExtractor.extract(state, profile);
         return movementMLP.forwardDetailed(features);
     }
 

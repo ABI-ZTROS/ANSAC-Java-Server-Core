@@ -14,6 +14,7 @@ import dev.ztros.ansac.checks.combat.MultiAuraCheck;
 import dev.ztros.ansac.checks.combat.ReachCheck;
 import dev.ztros.ansac.checks.packet.BadPacketsCheck;
 import dev.ztros.ansac.checks.packet.TimerCheck;
+import dev.ztros.ansac.physics.mlp.profile.*;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -130,6 +131,23 @@ public class PacketListener extends PacketListenerAbstract {
                 );
             }
         }
+
+        // === 行为画像：网络采样 ===
+        long now = System.currentTimeMillis();
+        long lastFlying = data.getLastFlyingPacket();
+        long interval = (lastFlying > 0) ? (now - lastFlying) : 50;
+        data.setLastFlyingPacket(now);
+        data.setFlyingPacketCount(data.getFlyingPacketCount() + 1);
+
+        // 简单的计时器余额估算
+        long expectedInterval = 50;
+        long timerBalance = data.getTimerBalance() + (expectedInterval - interval);
+        data.setTimerBalance(timerBalance);
+
+        NetworkSample netSample = new NetworkSample(
+            now, interval, 0.0, timerBalance
+        );
+        data.getBehaviorProfile().addNetworkSample(netSample);
     }
 
     /**
@@ -141,6 +159,11 @@ public class PacketListener extends PacketListenerAbstract {
 
         if (interact.getAction() == WrapperPlayClientInteractEntity.InteractAction.ATTACK) {
             int targetEntityId = interact.getEntityId();
+            long now = System.currentTimeMillis();
+            long lastAttack = data.getLastAttackTime();
+            long attackInterval = (lastAttack > 0) ? (now - lastAttack) : 0;
+            data.setLastAttackTime(now);
+            data.setAttackCount(data.getAttackCount() + 1);
 
             // Defer entity lookup and combat checks to the player's entity thread
             plugin.getSchedulerAdapter().runAtEntity(player, () -> {
@@ -164,6 +187,24 @@ public class PacketListener extends PacketListenerAbstract {
                     if (multiAura != null) {
                         multiAura.processAttack(player, data, target);
                     }
+
+                    // === 行为画像：战斗采样 ===
+                    double reachDist = player.getLocation().distance(target.getLocation());
+                    double cps = (attackInterval > 0) ? (1000.0 / attackInterval) : 0.0;
+                    boolean isCrit = player.getFallDistance() > 0.0
+                            && !player.isOnGround()
+                            && !player.isInWater()
+                            && !player.isInLava();
+                    float yawDelta = 0f, pitchDelta = 0f;
+                    try {
+                        yawDelta = Math.abs(player.getLocation().getYaw() - data.getCurrentLocation().getYaw());
+                        pitchDelta = Math.abs(player.getLocation().getPitch() - data.getCurrentLocation().getPitch());
+                    } catch (Exception ignored) {}
+
+                    CombatSample combatSample = new CombatSample(
+                        now, cps, attackInterval, isCrit, reachDist, yawDelta, pitchDelta
+                    );
+                    data.getBehaviorProfile().addCombatSample(combatSample);
                 }
             });
         }
@@ -188,14 +229,26 @@ public class PacketListener extends PacketListenerAbstract {
      * Handle player digging packet for future FastBreak/NoSlow checks.
      */
     private void handlePlayerDigging(Player player, PlayerData data, PacketReceiveEvent event) {
-        data.setLastDiggingTime(System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        long lastDig = data.getLastDiggingTime();
+        long breakInterval = (lastDig > 0) ? (now - lastDig) : 0;
+        data.setLastDiggingTime(now);
+
+        // === 行为画像：建造采样（破坏） ===
+        BuildingSample breakSample = new BuildingSample(
+            now, 0, breakInterval, 1.0, false, 0
+        );
+        data.getBehaviorProfile().addBuildingSample(breakSample);
     }
 
     /**
      * Handle use item packet for NoSlow check enhancement.
      */
     private void handleUseItem(Player player, PlayerData data, PacketReceiveEvent event) {
-        data.setLastUseItemTime(System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        long lastUse = data.getLastUseItemTime();
+        long useInterval = (lastUse > 0) ? (now - lastUse) : 0;
+        data.setLastUseItemTime(now);
 
         // Dispatch to FastUse check
         dev.ztros.ansac.checks.player.FastUseCheck fastUse =
@@ -203,6 +256,13 @@ public class PacketListener extends PacketListenerAbstract {
         if (fastUse != null) {
             fastUse.processItemUse(player, data);
         }
+
+        // === 行为画像：交互采样 ===
+        boolean isFast = useInterval > 0 && useInterval < 200;
+        InteractionSample interactionSample = new InteractionSample(
+            now, 0, 0, useInterval, isFast
+        );
+        data.getBehaviorProfile().addInteractionSample(interactionSample);
     }
 
     /**
@@ -212,7 +272,10 @@ public class PacketListener extends PacketListenerAbstract {
      * region thread for Folia thread safety.
      */
     private void handleBlockPlacement(Player player, PlayerData data, PacketReceiveEvent event) {
-        data.setLastBlockPlaceTime(System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        long lastPlace = data.getLastBlockPlaceTime();
+        long placeInterval = (lastPlace > 0) ? (now - lastPlace) : 0;
+        data.setLastBlockPlaceTime(now);
         data.setBlockPlaceCount(data.getBlockPlaceCount() + 1);
 
         // Get block placement location from player's current position
@@ -247,6 +310,13 @@ public class PacketListener extends PacketListenerAbstract {
             if (surround != null) {
                 surround.processBlockPlace(player, data, placeLocation);
             }
+
+            // === 行为画像：建造采样（放置） ===
+            boolean isAir = placeLocation.clone().subtract(0, 0.01, 0).getBlock().isEmpty();
+            BuildingSample placeSample = new BuildingSample(
+                now, placeInterval, 0, 1.0, isAir, 1
+            );
+            data.getBehaviorProfile().addBuildingSample(placeSample);
         });
     }
 
