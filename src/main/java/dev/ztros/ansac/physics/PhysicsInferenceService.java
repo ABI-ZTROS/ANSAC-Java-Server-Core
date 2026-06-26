@@ -86,8 +86,8 @@ public class PhysicsInferenceService {
     /** 检测运行模式: RULE_ONLY / MODEL_ONLY / HYBRID */
     private volatile DetectionMode detectionMode = DetectionMode.HYBRID;
 
-    /** 实时监控：被监控玩家的 UUID -> WrappedTask (FoliaLib) */
-    private final ConcurrentHashMap<UUID, com.tcoded.folialib.wrapper.task.WrappedTask> watchTasks = new ConcurrentHashMap<>();
+    /** 实时监控：被监控玩家的 UUID -> 是否活跃 */
+    private final ConcurrentHashMap<UUID, Boolean> watchActive = new ConcurrentHashMap<>();
 
     /** 实时监控间隔（tick），默认 40 tick = 2 秒 */
     private static final int WATCH_INTERVAL_TICKS = 40;
@@ -553,11 +553,8 @@ public class PhysicsInferenceService {
      * </p>
      */
     public void shutdown() {
-        // 停止所有实时监控任务
-        for (java.util.UUID uuid : new java.util.ArrayList<>(watchTasks.keySet())) {
-            com.tcoded.folialib.wrapper.task.WrappedTask task = watchTasks.remove(uuid);
-            if (task != null) task.cancel();
-        }
+        // 停止所有实时监控
+        watchActive.clear();
         states.clear();
         trustedPlayers.clear();
     }
@@ -912,11 +909,14 @@ public class PhysicsInferenceService {
      * 每 2 秒向所有管理员推送一次 AI 思维状态。
      */
     public void startWatch(UUID targetUuid) {
-        if (watchTasks.containsKey(targetUuid)) return;
+        if (watchActive.containsKey(targetUuid)) return;
         if (plugin == null) return;
 
-        com.tcoded.folialib.wrapper.task.WrappedTask task = plugin.getSchedulerAdapter().runTimerAsync(
+        watchActive.put(targetUuid, true);
+
+        plugin.getSchedulerAdapter().runTimerAsync(
             () -> {
+                if (!watchActive.containsKey(targetUuid)) return;
                 Player target = plugin.getServer().getPlayer(targetUuid);
                 if (target == null || !target.isOnline()) {
                     stopWatch(targetUuid);
@@ -929,7 +929,6 @@ public class PhysicsInferenceService {
                 double moveScore = state.getLastNormalScore();
                 double anomalyScore = state.getLastAnomalyScore();
 
-                // 计算 combatScore
                 dev.ztros.ansac.player.PlayerData data = plugin.getPlayerDataManager().getPlayerData(targetUuid);
                 double combatScore = 0.5;
                 if (data != null) {
@@ -953,11 +952,10 @@ public class PhysicsInferenceService {
                     }
                 }
             },
-            WATCH_INTERVAL_TICKS * 50L, // delay (毫秒)
-            WATCH_INTERVAL_TICKS * 50L, // period (毫秒)
+            WATCH_INTERVAL_TICKS * 50L,
+            WATCH_INTERVAL_TICKS * 50L,
             java.util.concurrent.TimeUnit.MILLISECONDS
         );
-        watchTasks.put(targetUuid, task);
 
         // 通知管理员监控已开启
         Player target = plugin.getServer().getPlayer(targetUuid);
@@ -977,19 +975,16 @@ public class PhysicsInferenceService {
      * 停止实时监控指定玩家。
      */
     public void stopWatch(UUID targetUuid) {
-        com.tcoded.folialib.wrapper.task.WrappedTask task = watchTasks.remove(targetUuid);
-        if (task != null) {
-            task.cancel();
-            if (plugin != null) {
-                Player target = plugin.getServer().getPlayer(targetUuid);
-                String targetName = target != null ? target.getName() : targetUuid.toString().substring(0, 8);
-                for (Player admin : plugin.getServer().getOnlinePlayers()) {
-                    if (admin.hasPermission("ansac.admin")) {
-                        admin.sendMessage(miniMessage.deserialize(
-                            "<gray>[<dark_aqua>ANSAC</dark_aqua>]</gray> " +
-                            "<red>已停止监控 <yellow>" + targetName + "</yellow>。</red>"
-                        ));
-                    }
+        watchActive.remove(targetUuid);
+        if (plugin != null) {
+            Player target = plugin.getServer().getPlayer(targetUuid);
+            String targetName = target != null ? target.getName() : targetUuid.toString().substring(0, 8);
+            for (Player admin : plugin.getServer().getOnlinePlayers()) {
+                if (admin.hasPermission("ansac.admin")) {
+                    admin.sendMessage(miniMessage.deserialize(
+                        "<gray>[<dark_aqua>ANSAC</dark_aqua>]</gray> " +
+                        "<red>已停止监控 <yellow>" + targetName + "</yellow>。</red>"
+                    ));
                 }
             }
         }
@@ -999,13 +994,13 @@ public class PhysicsInferenceService {
      * 检查指定玩家是否正在被监控。
      */
     public boolean isWatching(UUID targetUuid) {
-        return watchTasks.containsKey(targetUuid);
+        return watchActive.containsKey(targetUuid);
     }
 
     /**
      * 获取当前所有被监控玩家的 UUID 集合。
      */
     public java.util.Set<UUID> getWatchedPlayers() {
-        return watchTasks.keySet();
+        return watchActive.keySet();
     }
 }
