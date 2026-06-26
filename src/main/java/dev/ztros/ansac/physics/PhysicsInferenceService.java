@@ -86,8 +86,8 @@ public class PhysicsInferenceService {
     /** 检测运行模式: RULE_ONLY / MODEL_ONLY / HYBRID */
     private volatile DetectionMode detectionMode = DetectionMode.HYBRID;
 
-    /** 实时监控：被监控玩家的 UUID -> BukkitTask */
-    private final ConcurrentHashMap<UUID, org.bukkit.scheduler.BukkitTask> watchTasks = new ConcurrentHashMap<>();
+    /** 实时监控：被监控玩家的 UUID -> WrappedTask (FoliaLib) */
+    private final ConcurrentHashMap<UUID, com.tcoded.folialib.wrapper.task.WrappedTask> watchTasks = new ConcurrentHashMap<>();
 
     /** 实时监控间隔（tick），默认 40 tick = 2 秒 */
     private static final int WATCH_INTERVAL_TICKS = 40;
@@ -555,7 +555,7 @@ public class PhysicsInferenceService {
     public void shutdown() {
         // 停止所有实时监控任务
         for (java.util.UUID uuid : new java.util.ArrayList<>(watchTasks.keySet())) {
-            org.bukkit.scheduler.BukkitTask task = watchTasks.remove(uuid);
+            com.tcoded.folialib.wrapper.task.WrappedTask task = watchTasks.remove(uuid);
             if (task != null) task.cancel();
         }
         states.clear();
@@ -915,8 +915,8 @@ public class PhysicsInferenceService {
         if (watchTasks.containsKey(targetUuid)) return;
         if (plugin == null) return;
 
-        org.bukkit.scheduler.BukkitTask task = plugin.getServer().getScheduler().runTaskTimer(
-            plugin, () -> {
+        com.tcoded.folialib.wrapper.task.WrappedTask task = plugin.getSchedulerAdapter().runTimerAsync(
+            () -> {
                 Player target = plugin.getServer().getPlayer(targetUuid);
                 if (target == null || !target.isOnline()) {
                     stopWatch(targetUuid);
@@ -976,7 +976,7 @@ public class PhysicsInferenceService {
      * 停止实时监控指定玩家。
      */
     public void stopWatch(UUID targetUuid) {
-        org.bukkit.scheduler.BukkitTask task = watchTasks.remove(targetUuid);
+        com.tcoded.folialib.wrapper.task.WrappedTask task = watchTasks.remove(targetUuid);
         if (task != null) {
             task.cancel();
             if (plugin != null) {
