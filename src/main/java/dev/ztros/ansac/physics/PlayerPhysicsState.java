@@ -3,7 +3,7 @@ package dev.ztros.ansac.physics;
 import dev.ztros.ansac.util.ServerVersionAdapter;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.PotionEffectType;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
