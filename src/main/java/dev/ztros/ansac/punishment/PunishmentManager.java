@@ -402,38 +402,36 @@ public class PunishmentManager {
 
     private List<String> getDefaultBanMessage() {
         return Arrays.asList(
-            "<#8B0000>",
             "<#8B0000><bold>哟，开挂被逮到了吧！</bold>",
-            "<#8B0000>",
+            "",
             "<black>玩家 <white>%player%</white> 已被永久 <black><bold>BAN</bold><black> 咯~",
-            "<black>",
+            "",
             "<black>原因: %reason%",
             "<black>检测: %check% (VL:%vl%)",
-            "<black>",
+            "",
             "<black>不会吧不会吧，真有人觉得不会被发现？",
             "<black>建议: 卸载作弊器，重新做人。",
-            "<black>",
+            "",
             "<black>不服？憋着。找管理哭唧唧",
-            "<black>",
+            "",
             "<black>到期: %expiry%",
-            "<black>",
+            "",
             "<black><hover:show_text:'点也没用，乖~'><click:open_url:'https://example.com'>[ 申诉入口（假的）]</click></hover>"
         );
     }
 
     private List<String> getDefaultKickMessage() {
         return Arrays.asList(
-            "<#8B0000>",
             "<#8B0000><bold>嗖~ 的一下你就飞出去了！</bold>",
-            "<#8B0000>",
+            "",
             "<black>玩家 <white>%player%</white> 已被一脚踢飞",
-            "<black>",
+            "",
             "<black>原因: %reason%",
             "<black>检测: %check% (VL:%vl%)",
-            "<black>",
+            "",
             "<black>系统检测到你的操作太下饭了",
             "<black>建议: 手残就练，别老想走捷径",
-            "<black>",
+            "",
             "<black><hover:show_text:'再试试？我赌你还会触发'><click:open_url:'https://example.com'>[ 不服？点我 ]</click></hover>"
         );
     }
