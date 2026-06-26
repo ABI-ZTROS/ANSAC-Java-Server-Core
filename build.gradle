@@ -38,6 +38,11 @@ dependencies {
     // Lombok - compile time only
     compileOnly 'org.projectlombok:lombok:1.18.30'
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+    // Testing
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    testImplementation 'org.mockito:mockito-core:5.7.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.7.0'
 }
 
 // Replace version placeholder in plugin.yml
@@ -96,4 +101,8 @@ tasks.named('build') {
 tasks.named('compileJava') {
     options.encoding = 'UTF-8'
     options.release = 21
+}
+
+test {
+    useJUnitPlatform()
 }

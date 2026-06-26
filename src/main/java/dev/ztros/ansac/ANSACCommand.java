@@ -2,6 +2,7 @@ package dev.ztros.ansac;
 
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.punishment.PunishmentEntry;
 import net.kyori.adventure.text.Component;
@@ -151,6 +152,18 @@ public class ANSACCommand implements CommandExecutor {
                 }
                 break;
 
+            case "sampling":
+                if (!sender.hasPermission("ansac.admin")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    handleSamplingStatus(sender);
+                    return true;
+                }
+                handleSamplingSub(sender, args[1]);
+                break;
+
             default:
                 sendHelp(sender);
                 break;
@@ -211,6 +224,10 @@ public class ANSACCommand implements CommandExecutor {
         sender.sendMessage(
             Component.text("/ansac inference [玩家]", NamedTextColor.YELLOW)
                 .append(Component.text(" - 查看推理服务状态/玩家物理快照", NamedTextColor.GRAY))
+        );
+        sender.sendMessage(
+            Component.text("/ansac sampling [start|continue|stop]", NamedTextColor.YELLOW)
+                .append(Component.text(" - MLP 采样与训练管理", NamedTextColor.GRAY))
         );
     }
 
@@ -585,5 +602,54 @@ public class ANSACCommand implements CommandExecutor {
         boolean isTrusted = svc.isTrusted(target.getUniqueId());
         sender.sendMessage(Component.text("信任状态：", NamedTextColor.YELLOW)
             .append(Component.text(isTrusted ? "受信任" : "未信任", isTrusted ? NamedTextColor.GREEN : NamedTextColor.GRAY)));
+    }
+
+    private void handleSamplingStatus(CommandSender sender) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        MLPSamplingSession session = svc.getSamplingSession();
+        sender.sendMessage(Component.text("=== MLP 采样状态 ===", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("会话状态：", NamedTextColor.YELLOW)
+            .append(Component.text(session.getState().name(), NamedTextColor.WHITE)));
+        sender.sendMessage(Component.text("样本进度：", NamedTextColor.YELLOW)
+            .append(Component.text(session.getSampleCount() + " / " + session.getTargetSamples(), NamedTextColor.WHITE)));
+        sender.sendMessage(Component.text("MLP 启用：", NamedTextColor.YELLOW)
+            .append(Component.text(svc.isMlpEnabled() ? "是" : "否", NamedTextColor.WHITE)));
+    }
+
+    private void handleSamplingSub(CommandSender sender, String sub) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        MLPSamplingSession session = svc.getSamplingSession();
+        switch (sub.toLowerCase()) {
+            case "start":
+                session.startCollecting();
+                sender.sendMessage(Component.text("已开始收集受信任玩家的移动数据用于 MLP 训练。", NamedTextColor.GREEN));
+                break;
+            case "continue":
+                if (session.getState() != MLPSamplingSession.State.WAITING_ADMIN) {
+                    sender.sendMessage(Component.text("当前没有待处理的采样数据。", NamedTextColor.RED));
+                    return;
+                }
+                java.util.List<double[]> samples = session.drainSamples();
+                session.adminContinue();
+                sender.sendMessage(Component.text("开始训练 MLP 模型，样本数：" + samples.size(), NamedTextColor.GREEN));
+                svc.trainMlp(samples);
+                sender.sendMessage(Component.text("MLP 训练任务已提交（异步执行中）。", NamedTextColor.GREEN));
+                break;
+            case "stop":
+                session.adminStop();
+                sender.sendMessage(Component.text("已停止采样并丢弃所有样本。", NamedTextColor.YELLOW));
+                break;
+            default:
+                sender.sendMessage(Component.text("未知子命令。用法: /ansac sampling [start|continue|stop]", NamedTextColor.RED));
+                break;
+        }
     }
 }

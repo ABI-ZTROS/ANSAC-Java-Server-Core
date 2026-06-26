@@ -49,6 +49,11 @@ public class ANSACConfig {
     @Getter
     private int physicsSaveIntervalMinutes;
 
+    @Getter
+    private boolean mlpEnabled;
+    @Getter
+    private int mlpSamplingTarget;
+
     public ANSACConfig(ANSACPlugin plugin) {
         this.plugin = plugin;
         load();
@@ -74,5 +79,7 @@ public class ANSACConfig {
         this.physicsCalibrationThreshold = config.getInt("physics-inference.calibration-threshold", 1000);
         this.physicsDeviationThreshold = config.getDouble("physics-inference.deviation-threshold", 0.15);
         this.physicsSaveIntervalMinutes = config.getInt("physics-inference.save-interval-minutes", 30);
+        this.mlpEnabled = config.getBoolean("physics-inference.mlp-enabled", true);
+        this.mlpSamplingTarget = config.getInt("physics-inference.mlp-sampling-target", 5000);
     }
 }

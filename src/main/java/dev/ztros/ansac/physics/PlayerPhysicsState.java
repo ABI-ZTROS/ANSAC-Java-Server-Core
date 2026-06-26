@@ -219,6 +219,10 @@ public class PlayerPhysicsState {
     /** 移动采样滑动窗口（最多 20 个采样） */
     private final Deque<MovementSample> movementSamples;
 
+    // ==================== MLP 推理评分 ====================
+    /** MLP 推理的上一 tick 正常度评分 (0-1)，0.5 为未知/中性 */
+    private double lastNormalScore = 0.5;
+
     // ==================== 时间追踪 ====================
 
     /** 上次着地的时间戳（毫秒） */
@@ -385,7 +389,7 @@ public class PlayerPhysicsState {
 
         // 冰面检测
         this.onIce = (belowType == Material.ICE || belowType == Material.FROSTED_ICE);
-        this.onBlueIce = (belowType == Material.PACKED_ICE);
+        this.onBlueIce = (belowType == Material.BLUE_ICE);
 
         // 爬梯检测
         this.isClimbing = (belowType == Material.LADDER
@@ -417,7 +421,7 @@ public class PlayerPhysicsState {
      */
     public void updateJumpStateMachine() {
         double deltaY = this.velocityY;
-        boolean wasOnGround = (jumpPhase != JumpPhase.NONE || jumpPhase != JumpPhase.LANDED)
+        boolean wasOnGround = (jumpPhase != JumpPhase.NONE && jumpPhase != JumpPhase.LANDED)
                 ? ticksSinceLeftGround == 0
                 : clientOnGround;
 
@@ -605,6 +609,7 @@ public class PlayerPhysicsState {
 
         this.lastGroundTime = 0;
         this.lastKnockbackTime = 0;
+        this.lastNormalScore = 0.5;
     }
 
     // ==================== Getter 方法 ====================
@@ -683,6 +688,9 @@ public class PlayerPhysicsState {
     public void setLastKnockbackTime(long lastKnockbackTime) {
         this.lastKnockbackTime = lastKnockbackTime;
     }
+
+    public double getLastNormalScore() { return lastNormalScore; }
+    public void setLastNormalScore(double lastNormalScore) { this.lastNormalScore = lastNormalScore; }
 
     public void setOnGround(boolean onGround) {
         this.clientOnGround = onGround;

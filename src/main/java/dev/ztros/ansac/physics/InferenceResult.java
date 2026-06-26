@@ -89,7 +89,10 @@ public record InferenceResult(
         int speedPotionLevel,
 
         /** 跳跃增益等级 */
-        int jumpBoostLevel
+        int jumpBoostLevel,
+
+        /** MLP 行为正常度评分 (0-1) */
+        double normalScore
 ) {
 
     /**
@@ -104,7 +107,8 @@ public record InferenceResult(
             false, false, false, false,
             PlayerPhysicsState.JumpPhase.NONE,
             0.0, 0.0, 0, 0.0, 0.0, 0.0, 0.0,
-            0, 0
+            0, 0,
+            0.5
     );
 
     /**

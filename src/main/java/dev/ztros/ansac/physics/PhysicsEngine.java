@@ -152,7 +152,9 @@ public final class PhysicsEngine {
                 : PhysicsConstants.BASE_WALK_SPEED;
 
         // 速度药水加成
-        baseSpeed += state.getSpeedPotionLevel() * PhysicsConstants.SPEED_POTION_PER_LEVEL;
+        if (state.getSpeedPotionLevel() > 0) {
+            baseSpeed *= (1.0 + state.getSpeedPotionLevel() * PhysicsConstants.SPEED_POTION_PER_LEVEL);
+        }
 
         // 潜行减速
         if (state.isSneaking()) {

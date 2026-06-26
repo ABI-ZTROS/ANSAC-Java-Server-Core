@@ -190,5 +190,6 @@ public class ANSACPlugin extends JavaPlugin {
         physicsInferenceService.setLearningRate(ansacConfig.getPhysicsLearningRate());
         physicsInferenceService.setInfluenceWeight(ansacConfig.getPhysicsInfluenceWeight());
         physicsInferenceService.setMinSamples(ansacConfig.getPhysicsMinSamples());
+        physicsInferenceService.setMlpEnabled(ansacConfig.isMlpEnabled());
     }
 }

@@ -73,6 +73,10 @@ physics-inference:
   # 自动保存间隔（分钟）
   save-interval-minutes: 30
 
+  # MLP 行为分析模型
+  mlp-enabled: true
+  mlp-sampling-target: 5000
+
 # ==========================================
 # 处罚配置
 # ==========================================

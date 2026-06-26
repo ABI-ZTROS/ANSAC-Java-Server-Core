@@ -255,11 +255,6 @@ public class PacketListener extends PacketListenerAbstract {
      * Must be called from the correct region thread on Folia.
      */
     private Entity getEntityById(Player player, int entityId) {
-        for (Entity entity : player.getWorld().getEntities()) {
-            if (entity.getEntityId() == entityId) {
-                return entity;
-            }
-        }
-        return null;
+        return player.getWorld().getEntityById(entityId);
     }
 }

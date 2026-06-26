@@ -1,11 +1,16 @@
 package dev.ztros.ansac.physics;
 
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
+import dev.ztros.ansac.physics.mlp.MLPPersistence;
+import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
+import dev.ztros.ansac.physics.mlp.MovementMLP;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -60,6 +65,13 @@ public class PhysicsInferenceService {
      * 自学习基准模型实例。
      */
     private final BaselineModel baselineModel;
+
+    // ==================== MLP 模型 ====================
+
+    private final MovementMLP movementMLP;
+    private final MLPSamplingSession samplingSession;
+    private final File mlpFile;
+    private volatile boolean mlpEnabled;
 
     // ==================== 配置参数 ====================
 
@@ -130,6 +142,25 @@ public class PhysicsInferenceService {
         this.learningCount = 0;
         this.correctionCount = 0;
         this.iterationCount = 0;
+
+        this.mlpFile = new File(plugin.getDataFolder(), "mlp-model.bin");
+        int samplingTarget = plugin.getAnsacConfig().getMlpSamplingTarget();
+        this.samplingSession = new MLPSamplingSession(samplingTarget);
+        this.movementMLP = loadOrCreateMlp();
+        this.mlpEnabled = plugin.getAnsacConfig().isMlpEnabled();
+    }
+
+    private MovementMLP loadOrCreateMlp() {
+        if (mlpFile.exists()) {
+            try {
+                return MLPPersistence.load(mlpFile);
+            } catch (IOException e) {
+                if (plugin != null) {
+                    plugin.getLogger().warning("加载 MLP 模型失败，将创建新模型: " + e.getMessage());
+                }
+            }
+        }
+        return new MovementMLP(MLPFeatureExtractor.FEATURE_COUNT, 16, 8, 0.01);
     }
 
     // ==================== 核心处理方法 ====================
@@ -176,6 +207,13 @@ public class PhysicsInferenceService {
         long now = System.currentTimeMillis();
         state.updateFromPlayer(player, from, to, now);
 
+        // MLP 推理
+        if (mlpEnabled) {
+            double[] features = MLPFeatureExtractor.extract(state);
+            double normalScore = movementMLP.forward(features);
+            state.setLastNormalScore(normalScore);
+        }
+
         // 自动学习: 仅对受信任玩家
         if (autoLearn && trustedPlayers.getOrDefault(uuid, false)) {
             String scenarioKey = determineScenario(state);
@@ -201,6 +239,12 @@ public class PhysicsInferenceService {
                         correctionCount++;
                     }
                 }
+            }
+
+            // MLP 采样
+            if (samplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
+                double[] features = MLPFeatureExtractor.extract(state);
+                samplingSession.offerSample(features);
             }
         }
     }
@@ -340,7 +384,8 @@ public class PhysicsInferenceService {
                 state.getPredictedVelocityY(),
                 expectedMaxSpeed,
                 state.getSpeedPotionLevel(),
-                state.getJumpBoostLevel()
+                state.getJumpBoostLevel(),
+                state.getLastNormalScore()
         );
     }
 
@@ -658,5 +703,46 @@ public class PhysicsInferenceService {
      */
     public int getScenarioCount() {
         return baselineModel.getScenarioBaselines().size();
+    }
+
+    public void trainMlp(List<double[]> samples) {
+        plugin.getSchedulerAdapter().runAsync(() -> {
+            try {
+                final int epochs = 200;
+                for (int epoch = 0; epoch < epochs; epoch++) {
+                    double totalLoss = 0.0;
+                    for (double[] sample : samples) {
+                        totalLoss += movementMLP.train(sample, 1.0);
+                    }
+                    if (epoch % 20 == 0 || epoch == epochs - 1) {
+                        plugin.getLogger().info(String.format(
+                            "MLP 训练 epoch %d/%d, 平均损失: %.6f",
+                            epoch + 1, epochs, totalLoss / samples.size()));
+                    }
+                }
+                MLPPersistence.save(movementMLP, mlpFile);
+                plugin.getLogger().info("MLP 模型已保存至 " + mlpFile.getName());
+                samplingSession.markReady();
+            } catch (IOException e) {
+                plugin.getLogger().severe("MLP 模型保存失败: " + e.getMessage());
+                samplingSession.adminStop();
+            }
+        });
+    }
+
+    public MovementMLP getMovementMLP() {
+        return movementMLP;
+    }
+
+    public MLPSamplingSession getSamplingSession() {
+        return samplingSession;
+    }
+
+    public boolean isMlpEnabled() {
+        return mlpEnabled;
+    }
+
+    public void setMlpEnabled(boolean mlpEnabled) {
+        this.mlpEnabled = mlpEnabled;
     }
 }
