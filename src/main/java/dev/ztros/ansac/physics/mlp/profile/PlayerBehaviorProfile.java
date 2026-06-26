@@ -138,6 +138,10 @@ public final class PlayerBehaviorProfile {
         return mean(buildingSamples.stream().mapToDouble(s -> (double) s.breakIntervalMs()).toArray());
     }
 
+    public double getBreakIntervalStd() {
+        return std(buildingSamples.stream().mapToDouble(s -> (double) s.breakIntervalMs()).toArray());
+    }
+
     public double getDirectionConsistencyMean() {
         return mean(buildingSamples.stream().mapToDouble(BuildingSample::directionConsistency).toArray());
     }
