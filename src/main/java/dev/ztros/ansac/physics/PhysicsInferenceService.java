@@ -953,8 +953,9 @@ public class PhysicsInferenceService {
                     }
                 }
             },
-            WATCH_INTERVAL_TICKS, // delay
-            WATCH_INTERVAL_TICKS  // period
+            WATCH_INTERVAL_TICKS * 50L, // delay (毫秒)
+            WATCH_INTERVAL_TICKS * 50L, // period (毫秒)
+            java.util.concurrent.TimeUnit.MILLISECONDS
         );
         watchTasks.put(targetUuid, task);
 
