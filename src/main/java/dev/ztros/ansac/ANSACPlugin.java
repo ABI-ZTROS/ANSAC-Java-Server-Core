@@ -98,6 +98,7 @@ public class ANSACPlugin extends JavaPlugin {
 
         // Register commands
         getCommand("ansac").setExecutor(new ANSACCommand(this));
+        getCommand("ansac").setTabCompleter(new ANSACTabCompleter());
 
         // Register auth commands
         if (authService.isEnabled()) {

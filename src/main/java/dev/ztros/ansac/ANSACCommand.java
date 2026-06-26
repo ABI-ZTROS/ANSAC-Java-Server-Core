@@ -204,69 +204,58 @@ public class ANSACCommand implements CommandExecutor {
     }
 
     private void sendHelp(CommandSender sender) {
-        sender.sendMessage(Component.text("=== ANSAC 反作弊系统 ===", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("========================================", NamedTextColor.DARK_AQUA));
+        sender.sendMessage(Component.text("  ANSAC 反作弊系统 v" + plugin.getDescription().getVersion(), NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("========================================", NamedTextColor.DARK_AQUA));
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── 基础命令 ──", NamedTextColor.AQUA));
+        sendHelpEntry(sender, "/ansac reload", "重载配置文件");
+        sendHelpEntry(sender, "/ansac status", "查看插件运行状态");
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── 玩家命令 ──", NamedTextColor.AQUA));
+        sendHelpEntry(sender, "/ansac info <玩家>", "查看玩家数据(延迟/VL/触发检测数)");
+        sendHelpEntry(sender, "/ansac ban <玩家> [时长] [原因]", "封禁玩家 (forever=永久)");
+        sendHelpEntry(sender, "/ansac kick <玩家> [原因]", "踢出玩家");
+        sendHelpEntry(sender, "/ansac unban <玩家/UUID>", "解封玩家");
+        sendHelpEntry(sender, "/ansac banlist", "查看活跃封禁列表");
+        sender.sendMessage(Component.text("  封禁时长: 10s 20s 1min 30min 1h 8h 24h 3d 7d 15d 30d 180d 360d forever", NamedTextColor.DARK_GRAY));
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── 信任与学习 ──", NamedTextColor.AQUA));
+        sendHelpEntry(sender, "/ansac trust <玩家>", "标记为受信任（数据用于MLP自学习，豁免处罚）");
+        sendHelpEntry(sender, "/ansac untrust <玩家>", "取消信任标记");
+        sendHelpEntry(sender, "/ansac trustlist", "查看受信任玩家列表");
+        sendHelpEntry(sender, "/ansac baseline [reset|save]", "查看/重置/保存物理基准模型");
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── AI 神经网络 ──", NamedTextColor.AQUA));
+        sendHelpEntry(sender, "/ansac inference [玩家]", "查看推理状态 / 玩家完整推理报告");
+        sendHelpEntry(sender, "/ansac sampling [start|continue|stop]", "MLP 采样与训练管理");
+        sendHelpEntry(sender, "/ansac mode <rule|model|hybrid>", "切换检测模式");
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── 实时监控 ──", NamedTextColor.AQUA));
+        sendHelpEntry(sender, "/ansac watch start <玩家>", "开启AI思维实时监控(ActionBar推送)");
+        sendHelpEntry(sender, "/ansac watch stop <玩家>", "停止监控指定玩家");
+        sendHelpEntry(sender, "/ansac watch stopall", "停止所有监控");
+        sendHelpEntry(sender, "/ansac watch", "查看当前监控列表");
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── 检测模式说明 ──", NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("  RULE_ONLY", NamedTextColor.YELLOW)
+            .append(Component.text("  纯规则检测，MLP仅作为观察参考", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("  MODEL_ONLY", NamedTextColor.YELLOW)
+            .append(Component.text("  AI全权接管判罪，规则层只记录参考", NamedTextColor.GRAY)));
+        sender.sendMessage(Component.text("  HYBRID", NamedTextColor.YELLOW)
+            .append(Component.text("  规则+模型融合双打，异常分数放大severity (默认)", NamedTextColor.GRAY)));
+    }
+
+    private void sendHelpEntry(CommandSender sender, String cmd, String desc) {
         sender.sendMessage(
-            Component.text("/ansac reload", NamedTextColor.YELLOW)
-                .append(Component.text(" - 重载配置", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac status", NamedTextColor.YELLOW)
-                .append(Component.text(" - 查看插件状态", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac info <玩家名>", NamedTextColor.YELLOW)
-                .append(Component.text(" - 查看玩家数据", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac ban <玩家> [时长] [原因]", NamedTextColor.YELLOW)
-                .append(Component.text(" - 封禁玩家 (forever=永久)", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("  时长: 10s/20s/1min/30min/1h/8h/24h/3d/7d/15d/30d/180d/360d/3600d", NamedTextColor.GRAY)
-        );
-        sender.sendMessage(
-            Component.text("/ansac kick <玩家> [原因]", NamedTextColor.YELLOW)
-                .append(Component.text(" - 踢出玩家", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac unban <玩家/UUID>", NamedTextColor.YELLOW)
-                .append(Component.text(" - 解封玩家", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac banlist", NamedTextColor.YELLOW)
-                .append(Component.text(" - 查看封禁列表", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac trust <玩家>", NamedTextColor.YELLOW)
-                .append(Component.text(" - 标记玩家为受信任（数据用于自学习）", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac untrust <玩家>", NamedTextColor.YELLOW)
-                .append(Component.text(" - 取消信任玩家", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac trustlist", NamedTextColor.YELLOW)
-                .append(Component.text(" - 查看受信任玩家列表", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac baseline [reset|save]", NamedTextColor.YELLOW)
-                .append(Component.text(" - 查看/重置/保存基准模型", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac inference [玩家]", NamedTextColor.YELLOW)
-                .append(Component.text(" - 查看推理服务状态/玩家物理快照", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac sampling [start|continue|stop]", NamedTextColor.YELLOW)
-                .append(Component.text(" - MLP 采样与训练管理", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac mode [rule|model|hybrid]", NamedTextColor.YELLOW)
-                .append(Component.text(" - 切换检测模式（纯规则/纯模型/混合双打）", NamedTextColor.GRAY))
-        );
-        sender.sendMessage(
-            Component.text("/ansac watch <start|stop|list>", NamedTextColor.YELLOW)
-                .append(Component.text(" - 实时AI思维监控 (start/stop 需接玩家名)", NamedTextColor.GRAY))
+            Component.text("  " + cmd, NamedTextColor.YELLOW)
+                .append(Component.text(" - " + desc, NamedTextColor.GRAY))
         );
     }
 
