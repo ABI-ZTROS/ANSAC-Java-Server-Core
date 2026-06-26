@@ -728,12 +728,13 @@ public class PhysicsInferenceService {
                         // 每20个epoch通知在线管理员训练进度
                         int finalEpoch = epoch;
                         double finalAvgLoss = avgLoss;
-                        plugin.getSchedulerAdapter().runAtEntity(null, null, () -> {
+                        boolean isLast = (epoch == epochs - 1);
+                        plugin.getSchedulerAdapter().runAsync(() -> {
                             Component msg = miniMessage.deserialize(
                                 "<gray>[<dark_aqua>ANSAC-MLP</dark_aqua>]</gray> " +
                                 "<yellow>训练进度：<white>" + (finalEpoch + 1) + "/" + epochs + "</white>" +
                                 " | 平均损失：<white>" + String.format("%.6f", finalAvgLoss) + "</white>" +
-                                (finalEpoch == epochs - 1
+                                (isLast
                                     ? " <green>训练完成!</green>"
                                     : " <gray>继续训练中...</gray>")
                             );
