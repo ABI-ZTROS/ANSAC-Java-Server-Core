@@ -220,8 +220,11 @@ public class PlayerPhysicsState {
     private final Deque<MovementSample> movementSamples;
 
     // ==================== MLP 推理评分 ====================
-    /** MLP 推理的上一 tick 正常度评分 (0-1)，0.5 为未知/中性 */
+    /** MovementMLP 正常度评分 (0-1)，0.5 为未知/中性 */
     private double lastNormalScore = 0.5;
+
+    /** AnomalyFusion 融合异常评分 (0-1)，0 为正常，1 为严重异常 */
+    private double lastAnomalyScore = 0.0;
 
     // ==================== 时间追踪 ====================
 
@@ -691,6 +694,9 @@ public class PlayerPhysicsState {
 
     public double getLastNormalScore() { return lastNormalScore; }
     public void setLastNormalScore(double lastNormalScore) { this.lastNormalScore = lastNormalScore; }
+
+    public double getLastAnomalyScore() { return lastAnomalyScore; }
+    public void setLastAnomalyScore(double lastAnomalyScore) { this.lastAnomalyScore = lastAnomalyScore; }
 
     public void setOnGround(boolean onGround) {
         this.clientOnGround = onGround;

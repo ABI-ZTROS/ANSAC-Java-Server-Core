@@ -62,6 +62,11 @@ public class PhysicsInferenceService {
      */
     private final ConcurrentHashMap<UUID, Boolean> trustedPlayers;
 
+    /**
+     * 纯模型模式下 AI 自动处罚的冷却时间记录。
+     */
+    private final ConcurrentHashMap<UUID, Long> modelPunishCooldown = new ConcurrentHashMap<>();
+
     // ==================== 基准模型 ====================
 
     /**
@@ -72,9 +77,14 @@ public class PhysicsInferenceService {
     // ==================== MLP 模型 ====================
 
     private final MovementMLP movementMLP;
+    private final CombatMLP combatMLP;
+    private final AnomalyFusion anomalyFusion;
     private final MLPSamplingSession samplingSession;
     private final File mlpFile;
     private volatile boolean mlpEnabled;
+
+    /** 检测运行模式: RULE_ONLY / MODEL_ONLY / HYBRID */
+    private volatile DetectionMode detectionMode = DetectionMode.HYBRID;
 
     // ==================== 配置参数 ====================
 
@@ -150,7 +160,10 @@ public class PhysicsInferenceService {
         int samplingTarget = plugin.getAnsacConfig().getMlpSamplingTarget();
         this.samplingSession = new MLPSamplingSession(samplingTarget);
         this.movementMLP = loadOrCreateMlp();
+        this.combatMLP = new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, 8, 4, 0.01);
+        this.anomalyFusion = new AnomalyFusion(0.01);
         this.mlpEnabled = plugin.getAnsacConfig().isMlpEnabled();
+        this.detectionMode = DetectionMode.fromString(plugin.getConfig().getString("detection-mode", "hybrid"));
 
         // 注册持续自动训练回调：达到采样目标后自动训练
         this.samplingSession.setOnTargetReached((round) -> {
@@ -242,13 +255,42 @@ public class PhysicsInferenceService {
         long now = System.currentTimeMillis();
         state.updateFromPlayer(player, from, to, now);
 
-        // MLP 完整画像推理
+        // MLP 完整画像推理 (MovementMLP + CombatMLP + AnomalyFusion)
         if (mlpEnabled) {
             dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
             PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
             double[] features = BehaviorFeatureExtractor.extract(state, profile);
-            double normalScore = movementMLP.forward(features);
-            state.setLastNormalScore(normalScore);
+            double movementScore = movementMLP.forward(features);
+            double[] combatFeatures = BehaviorFeatureExtractor.extractCombatSlice(features);
+            double combatScore = combatMLP.forward(combatFeatures);
+            // 规则分数初始为0（无规则偏离），由 Check 层在 flag 时更新
+            double anomalyScore = anomalyFusion.forward(movementScore, combatScore, 0.0);
+            state.setLastNormalScore(movementScore);
+            state.setLastAnomalyScore(anomalyScore);
+
+            // 纯模型模式：AI自主判罪（10秒冷却避免重复处罚）
+            if (detectionMode == DetectionMode.MODEL_ONLY && anomalyScore > 0.70) {
+                long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
+                if (now - lastPunish > 10000L) {
+                    modelPunishCooldown.put(uuid, now);
+                    final double finalAnomaly = anomalyScore;
+                    plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                        plugin.getPunishmentManager().punish(player,
+                            "AI模型检测到异常行为", "AnomalyFusion",
+                            (int)(finalAnomaly * 100));
+                    });
+                    Component aiAlert = miniMessage.deserialize(
+                        "<gray>[<dark_red>ANSAC-AI</dark_red>]</gray> " +
+                        "<red>AI 已自动处罚 <yellow>" + player.getName() + "</yellow> " +
+                        "异常度: <white>" + String.format("%.1f%%", finalAnomaly * 100) + "</white>"
+                    );
+                    for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                        if (p.hasPermission("ansac.admin")) {
+                            p.sendMessage(aiAlert);
+                        }
+                    }
+                }
+            }
         }
 
         // 自动学习: 仅对受信任玩家
@@ -753,15 +795,18 @@ public class PhysicsInferenceService {
             try {
                 final int epochs = 200;
                 for (int epoch = 0; epoch < epochs; epoch++) {
-                    double totalLoss = 0.0;
+                    double totalLossMove = 0.0;
+                    double totalLossCombat = 0.0;
                     for (double[] sample : samples) {
-                        totalLoss += movementMLP.train(sample, 1.0);
+                        totalLossMove += movementMLP.train(sample, 1.0);
+                        double[] combatSlice = BehaviorFeatureExtractor.extractCombatSlice(sample);
+                        combatMLP.train(combatSlice, 1.0);
                     }
-                    double avgLoss = totalLoss / samples.size();
+                    double avgLoss = totalLossMove / samples.size();
                     if (epoch % 20 == 0 || epoch == epochs - 1) {
                         plugin.getLogger().info(String.format(
-                            "MLP 训练 epoch %d/%d, 平均损失: %.6f",
-                            epoch + 1, epochs, avgLoss));
+                            "MLP 训练 epoch %d/%d, 移动损失: %.6f, 战斗损失: %.6f",
+                            epoch + 1, epochs, avgLoss, totalLossCombat / samples.size()));
 
                         // 每20个epoch通知在线管理员训练进度
                         int finalEpoch = epoch;
@@ -771,7 +816,7 @@ public class PhysicsInferenceService {
                             Component msg = miniMessage.deserialize(
                                 "<gray>[<dark_aqua>ANSAC-MLP</dark_aqua>]</gray> " +
                                 "<yellow>训练进度：<white>" + (finalEpoch + 1) + "/" + epochs + "</white>" +
-                                " | 平均损失：<white>" + String.format("%.6f", finalAvgLoss) + "</white>" +
+                                " | 移动损失：<white>" + String.format("%.6f", finalAvgLoss) + "</white>" +
                                 (isLast
                                     ? " <green>训练完成!</green>"
                                     : " <gray>继续训练中...</gray>")
@@ -810,8 +855,16 @@ public class PhysicsInferenceService {
         return sb.toString();
     }
 
-    public MovementMLP getMovementMLP() {
-        return movementMLP;
+    public MovementMLP getMovementMLP() { return movementMLP; }
+    public CombatMLP getCombatMLP() { return combatMLP; }
+    public AnomalyFusion getAnomalyFusion() { return anomalyFusion; }
+
+    public DetectionMode getDetectionMode() { return detectionMode; }
+    public void setDetectionMode(DetectionMode mode) {
+        this.detectionMode = mode;
+        if (plugin != null) {
+            plugin.getLogger().info("检测模式已切换为: " + mode.name());
+        }
     }
 
     /**

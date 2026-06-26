@@ -4,30 +4,33 @@ import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * Timer check - detects game speed manipulation (speed hack / slow motion).
  *
- * 参考: GrimAC TimerA (drift=120ms), TimerLimit (ping-abuse-limit=1000ms)
- *   GrimAC 精度: 1.005 timer (0.5% 偏差可检测)
- *   System.currentTimeMillis() 精度: 1-15ms (取决于操作系统)
- *   正常客户端飞行包间隔: ~50ms (20 TPS), 实际波动 40-60ms
+ * <p>修复说明 (2026-06-27):</p>
+ * <ul>
+ *   <li>添加 TPS 补偿：根据服务器实际 TPS 动态调整 expected interval。</li>
+ *   <li>Balance 重置改为递减（减去阈值而非归零），避免漏检持续轻微加速。</li>
+ *   <li>新增短期爆发检测：最近 20 包平均间隔异常直接 flag。</li>
+ *   <li>MIN_PACKETS 从 60 降到 30，缩短检测延迟。</li>
+ * </ul>
  *
- * Design: Cumulative balance approach (inspired by GrimAC).
- * - Each expected tick adds +50ms to balance.
- * - Each actual packet interval subtracts the real time from balance.
- * - Positive balance = client is sending faster than expected (speed hack).
- * - Negative balance = client is sending slower than expected (slow motion).
- * - This naturally smooths out single-packet jitter.
+ * 参考: GrimAC TimerA (drift=120ms)
  */
 public class TimerCheck extends Check {
 
     private static final long EXPECTED_MS = 50L; // 20 TPS
-    private static final long BALANCE_THRESHOLD = 120L; // 参考 GrimAC TimerA drift=120ms
-    private static final long MAX_BALANCE = 600L; // 参考 GrimAC NegativeTimer drift=1200ms 的一半
-    private static final long LAG_SPIKE_MS = 250L; // Reset on lag spike
-    private static final int MIN_PACKETS = 60; // 约 3 秒样本（之前 100 太保守）
+    private static final long BALANCE_THRESHOLD = 120L;
+    private static final long MAX_BALANCE = 600L;
+    private static final long LAG_SPIKE_MS = 250L;
+    private static final int MIN_PACKETS = 30; // 约 1.5 秒
+    private static final int BURST_WINDOW = 20; // 短期爆发检测窗口
 
     public TimerCheck(ANSACPlugin plugin) {
         super(plugin, "Timer", "Packet");
@@ -38,93 +41,141 @@ public class TimerCheck extends Check {
         // Timer check is event-driven via onFlyingPacket()
     }
 
-    /**
-     * Called from PacketListener when a flying packet is received.
-     */
     public void onFlyingPacket(Player player, PlayerData data) {
         if (!isEnabled() || data.hasBypass()) return;
 
-        // Ping compensation: skip check if latency is too high or spiking
         if (data.getPingCompensator().shouldSkipCheck()) {
             data.setLastFlyingPacket(System.currentTimeMillis());
             data.setFlyingPacketCount(0);
             data.setTimerBalance(0);
+            clearIntervalWindow(data);
             return;
         }
 
         long now = System.currentTimeMillis();
         long last = data.getLastFlyingPacket();
 
-        // First packet since join / reset
         if (last == 0) {
             data.setLastFlyingPacket(now);
             data.setFlyingPacketCount(0);
             data.setTimerBalance(0);
+            clearIntervalWindow(data);
             return;
         }
 
         long diff = now - last;
 
-        // Lag spike: reset everything
         if (diff > LAG_SPIKE_MS) {
             data.setLastFlyingPacket(now);
             data.setFlyingPacketCount(0);
             data.setTimerBalance(0);
+            clearIntervalWindow(data);
             return;
         }
 
-        // Ignore unreasonably small intervals (packet batching)
-        if (diff < 5) {
-            return;
-        }
+        if (diff < 5) return;
 
-        // Update balance: expected - actual
-        // If client is speeding (sending more often), diff < 50, balance goes up
-        // If client is slowing (sending less often), diff > 50, balance goes down
-        long balance = data.getTimerBalance() + (EXPECTED_MS - diff);
+        // TPS 补偿：根据服务器实际 TPS 调整 expected interval
+        long expectedInterval = getCompensatedExpectedInterval();
 
-        // Clamp balance to prevent extreme runaway values
+        long balance = data.getTimerBalance() + (expectedInterval - diff);
         balance = Math.max(-MAX_BALANCE, Math.min(MAX_BALANCE, balance));
         data.setTimerBalance(balance);
 
         int count = data.getFlyingPacketCount() + 1;
         data.setFlyingPacketCount(count);
 
-        // Only flag after enough packets to establish a trend
+        // 短期爆发检测：最近 20 包平均间隔
+        addToIntervalWindow(data, diff);
+        if (count >= BURST_WINDOW) {
+            double avgInterval = getAverageInterval(data);
+            if (avgInterval < expectedInterval * 0.85) { // 加速超过 15%
+                double severity = (expectedInterval - avgInterval) / (double) expectedInterval;
+                flag(player, data, severity * 2.0,
+                    String.format("Timer 爆发加速: 平均间隔 %.1fms (预期 %dms)", avgInterval, expectedInterval));
+                data.setTimerBalance(Math.max(0, balance - BALANCE_THRESHOLD));
+                clearIntervalWindow(data);
+            }
+        }
+
+        // 累积偏移检测
         if (count < MIN_PACKETS) {
             data.setLastFlyingPacket(now);
             return;
         }
 
-        // Ping-compensated thresholds
         long compensatedThreshold = (long) data.getPingCompensator().getCompensatedThreshold(
             BALANCE_THRESHOLD, PingCompensator.COMPENSATION_TIMER);
         long compensatedMaxBalance = (long) data.getPingCompensator().getCompensatedThreshold(
             MAX_BALANCE, PingCompensator.COMPENSATION_TIMER);
 
-        // Re-clamp with compensated max balance
         balance = Math.max(-compensatedMaxBalance, Math.min(compensatedMaxBalance, balance));
         data.setTimerBalance(balance);
 
-        // Speed timer: balance too positive (client sending faster than expected)
         if (balance > compensatedThreshold) {
             double severity = balance / (double) compensatedThreshold;
             flag(player, data, severity,
                 String.format("Timer 加速: 累积偏移 +%dms (阈值: %dms, 样本: %d, 延迟 %s)",
                     balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
-            // Reset balance after flag to avoid repeated flags
-            data.setTimerBalance(0);
+            // 递减而非归零：保留剩余偏移继续检测持续加速
+            data.setTimerBalance(Math.max(0, balance - compensatedThreshold));
         }
 
-        // Slow timer: balance too negative (client sending slower than expected)
         if (balance < -compensatedThreshold) {
             double severity = Math.abs(balance) / (double) compensatedThreshold;
             flag(player, data, severity,
                 String.format("Timer 减速: 累积偏移 %dms (阈值: %dms, 样本: %d, 延迟 %s)",
                     balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
-            data.setTimerBalance(0);
+            data.setTimerBalance(Math.min(0, balance + compensatedThreshold));
         }
 
         data.setLastFlyingPacket(now);
+    }
+
+    // ==================== TPS 补偿 ====================
+
+    private static long cachedExpectedInterval = EXPECTED_MS;
+    private static long lastTpsCheck = 0;
+
+    private long getCompensatedExpectedInterval() {
+        long now = System.currentTimeMillis();
+        if (now - lastTpsCheck > 5000L) { // 每 5 秒更新一次
+            lastTpsCheck = now;
+            try {
+                double[] tps = Bukkit.getServer().getTPS();
+                if (tps != null && tps.length > 0 && tps[0] > 0.0) {
+                    // TPS 越低，expected interval 越大
+                    double currentTps = Math.min(tps[0], 20.0);
+                    cachedExpectedInterval = Math.round(1000.0 / currentTps);
+                }
+            } catch (Exception ignored) {
+                cachedExpectedInterval = EXPECTED_MS;
+            }
+        }
+        return cachedExpectedInterval;
+    }
+
+    // ==================== 短期爆发窗口 ====================
+
+    private static final java.util.Map<PlayerData, Deque<Long>> intervalWindows = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void addToIntervalWindow(PlayerData data, long interval) {
+        Deque<Long> window = intervalWindows.computeIfAbsent(data, k -> new ArrayDeque<>(BURST_WINDOW));
+        window.addLast(interval);
+        while (window.size() > BURST_WINDOW) {
+            window.pollFirst();
+        }
+    }
+
+    private double getAverageInterval(PlayerData data) {
+        Deque<Long> window = intervalWindows.get(data);
+        if (window == null || window.isEmpty()) return EXPECTED_MS;
+        double sum = 0;
+        for (long v : window) sum += v;
+        return sum / window.size();
+    }
+
+    private void clearIntervalWindow(PlayerData data) {
+        intervalWindows.remove(data);
     }
 }

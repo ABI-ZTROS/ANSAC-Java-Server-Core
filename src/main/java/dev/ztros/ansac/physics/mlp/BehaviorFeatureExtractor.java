@@ -10,6 +10,18 @@ import dev.ztros.ansac.physics.mlp.profile.PlayerBehaviorProfile;
 public final class BehaviorFeatureExtractor {
     public static final int FEATURE_COUNT = 72;
 
+    // 各维度偏移和数量
+    public static final int MOVEMENT_COUNT = 24;
+    public static final int COMBAT_COUNT = 14;
+    public static final int BUILDING_COUNT = 10;
+    public static final int INTERACTION_COUNT = 10;
+    public static final int NETWORK_COUNT = 10;
+
+    public static final int COMBAT_OFFSET = MOVEMENT_COUNT;
+    public static final int BUILDING_OFFSET = MOVEMENT_COUNT + COMBAT_COUNT;
+    public static final int INTERACTION_OFFSET = BUILDING_OFFSET + BUILDING_COUNT;
+    public static final int NETWORK_OFFSET = INTERACTION_OFFSET + INTERACTION_COUNT;
+
     /** 72 维特征的人类可读名称 */
     public static final String[] FEATURE_NAMES = {
         // 移动维度 (24)
@@ -160,6 +172,16 @@ public final class BehaviorFeatureExtractor {
         }
 
         return f;
+    }
+
+    /**
+     * 从完整特征向量中切片出战斗维度特征(14维)。
+     * 供 CombatMLP 直接输入使用。
+     */
+    public static double[] extractCombatSlice(double[] fullFeatures) {
+        double[] combat = new double[COMBAT_COUNT];
+        System.arraycopy(fullFeatures, COMBAT_OFFSET, combat, 0, COMBAT_COUNT);
+        return combat;
     }
 
     private static double clamp(double v, double min, double max) {

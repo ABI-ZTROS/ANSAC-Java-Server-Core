@@ -1,7 +1,9 @@
 package dev.ztros.ansac.checks;
 
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.physics.DetectionMode;
 import dev.ztros.ansac.physics.PhysicsInferenceService;
+import dev.ztros.ansac.physics.PlayerPhysicsState;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.punishment.PunishmentType;
 import lombok.Getter;
@@ -91,11 +93,27 @@ public abstract class Check {
      */
     protected void flag(Player player, PlayerData data, double severity, String details) {
         if (!enabled || data.hasBypass()) return;
-        // 受信任玩家豁免：照常收集行为画像数据，但不累加VL、不报警、不处罚
-        PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
-        if (inferenceService != null && inferenceService.isTrusted(player.getUniqueId())) return;
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
 
-        data.addViolation(name, severity);
+        // 受信任玩家豁免：照常收集行为画像数据，但不累加VL、不报警、不处罚
+        if (svc != null && svc.isTrusted(player.getUniqueId())) return;
+
+        // 纯模型模式：规则层只记录微量参考，不处罚、不回拉、不报警
+        if (svc != null && svc.getDetectionMode() == DetectionMode.MODEL_ONLY) {
+            data.addViolation(name, 0.01);
+            return;
+        }
+
+        double effectiveSeverity = severity;
+        // 混合双打模式：模型异常分数放大规则 severity
+        if (svc != null && svc.getDetectionMode() == DetectionMode.HYBRID) {
+            PlayerPhysicsState state = svc.getState(player.getUniqueId());
+            double anomalyScore = (state != null) ? state.getLastAnomalyScore() : 0.0;
+            // anomalyScore 0~1，0.5 时 severity 翻倍，1.0 时三倍
+            effectiveSeverity = severity * (1.0 + anomalyScore * 2.0);
+        }
+
+        data.addViolation(name, effectiveSeverity);
         int vl = data.getViolation(name) != null ? data.getViolation(name).getTotalVL() : 0;
 
         // Alert if above threshold

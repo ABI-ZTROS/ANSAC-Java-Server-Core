@@ -1,7 +1,9 @@
 package dev.ztros.ansac;
 
+import dev.ztros.ansac.physics.DetectionMode;
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.PlayerPhysicsState;
 import dev.ztros.ansac.physics.mlp.BehaviorFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
@@ -168,6 +170,18 @@ public class ANSACCommand implements CommandExecutor {
                 handleSamplingSub(sender, args[1]);
                 break;
 
+            case "mode":
+                if (!sender.hasPermission("ansac.admin")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    handleModeStatus(sender);
+                    return true;
+                }
+                handleModeSet(sender, args[1]);
+                break;
+
             default:
                 sendHelp(sender);
                 break;
@@ -233,6 +247,47 @@ public class ANSACCommand implements CommandExecutor {
             Component.text("/ansac sampling [start|continue|stop]", NamedTextColor.YELLOW)
                 .append(Component.text(" - MLP 采样与训练管理", NamedTextColor.GRAY))
         );
+        sender.sendMessage(
+            Component.text("/ansac mode [rule|model|hybrid]", NamedTextColor.YELLOW)
+                .append(Component.text(" - 切换检测模式（纯规则/纯模型/混合双打）", NamedTextColor.GRAY))
+        );
+    }
+
+    private void handleModeStatus(CommandSender sender) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        DetectionMode mode = svc.getDetectionMode();
+        sender.sendMessage(Component.text("=== 检测模式 ===", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("当前模式：", NamedTextColor.YELLOW)
+            .append(Component.text(mode.name(), NamedTextColor.WHITE)));
+        String desc = switch (mode) {
+            case RULE_ONLY -> "传统 if/else 规则检测，MLP 仅作为观察参考";
+            case MODEL_ONLY -> "AI 模型全权接管判罪，规则层只记录参考";
+            case HYBRID -> "规则 + 模型融合双打，异常分数放大 severity";
+        };
+        sender.sendMessage(Component.text("模式说明：", NamedTextColor.YELLOW)
+            .append(Component.text(desc, NamedTextColor.GRAY)));
+    }
+
+    private void handleModeSet(CommandSender sender, String modeArg) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        DetectionMode mode = DetectionMode.fromString(modeArg);
+        svc.setDetectionMode(mode);
+        sender.sendMessage(Component.text("检测模式已切换为：", NamedTextColor.GREEN)
+            .append(Component.text(mode.name(), NamedTextColor.YELLOW)));
+        String tip = switch (mode) {
+            case RULE_ONLY -> "规则检测已接管，MLP 不再参与处罚决策";
+            case MODEL_ONLY -> "AI 模型已接管，异常度 >70% 将自动处罚";
+            case HYBRID -> "混合双打启动，模型异常分数将放大规则 severity";
+        };
+        sender.sendMessage(Component.text(tip, NamedTextColor.GRAY));
     }
 
     private void sendStatus(CommandSender sender) {
@@ -657,6 +712,35 @@ public class ANSACCommand implements CommandExecutor {
             }
         } else {
             sender.sendMessage(Component.text("MLP 推理已禁用。", NamedTextColor.GRAY));
+        }
+
+        // ===== 多模型融合决策 =====
+        if (svc.isMlpEnabled()) {
+            PlayerPhysicsState pstate = svc.getState(target.getUniqueId());
+            if (pstate != null) {
+                sender.sendMessage(Component.text("━━━ 多模型融合决策 ━━━", NamedTextColor.DARK_AQUA));
+                double moveScore = pstate.getLastNormalScore();
+                double anomalyScore = pstate.getLastAnomalyScore();
+                sender.sendMessage(Component.text("MovementMLP 正常度：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.4f", moveScore), moveScore >= 0.5 ? NamedTextColor.GREEN : NamedTextColor.RED)));
+                // CombatMLP 正常度
+                PlayerData cdata = plugin.getPlayerDataManager().getPlayerData(target);
+                if (cdata != null) {
+                    double[] cfeatures = BehaviorFeatureExtractor.extractCombatSlice(
+                        BehaviorFeatureExtractor.extract(pstate, cdata.getBehaviorProfile()));
+                    double combatScore = svc.getCombatMLP().forward(cfeatures);
+                    sender.sendMessage(Component.text("CombatMLP 正常度：", NamedTextColor.YELLOW)
+                        .append(Component.text(String.format("%.4f", combatScore), combatScore >= 0.5 ? NamedTextColor.GREEN : NamedTextColor.RED)));
+                }
+                String fusionVerdict = dev.ztros.ansac.physics.mlp.AnomalyFusion.getVerdictLabel(anomalyScore);
+                NamedTextColor fusionColor = anomalyScore >= 0.65 ? NamedTextColor.DARK_RED
+                    : anomalyScore >= 0.45 ? NamedTextColor.RED
+                    : anomalyScore >= 0.25 ? NamedTextColor.YELLOW : NamedTextColor.GREEN;
+                sender.sendMessage(Component.text("AnomalyFusion 异常度：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.4f (%s)", anomalyScore, fusionVerdict), fusionColor)));
+                sender.sendMessage(Component.text("检测模式：", NamedTextColor.YELLOW)
+                    .append(Component.text(svc.getDetectionMode().name(), NamedTextColor.WHITE)));
+            }
         }
 
         // ===== 玩家行为完整画像 =====
