@@ -70,6 +70,29 @@ public class PunishmentManager {
         if (kickMessageTemplate.isEmpty()) {
             kickMessageTemplate = getDefaultKickMessage();
         }
+
+        // Auto-detect and strip legacy block-character borders (█) from old configs.
+        // If any line contains the full block character, fall back to clean defaults.
+        if (containsBlockChars(banMessageTemplate)) {
+            plugin.getLogger().warning("[ANSAC] 检测到旧版 ban-message 包含方块边框字符，已自动替换为纯净模板。");
+            banMessageTemplate = getDefaultBanMessage();
+        }
+        if (containsBlockChars(kickMessageTemplate)) {
+            plugin.getLogger().warning("[ANSAC] 检测到旧版 kick-message 包含方块边框字符，已自动替换为纯净模板。");
+            kickMessageTemplate = getDefaultKickMessage();
+        }
+    }
+
+    /**
+     * Check if any line in the template contains the Unicode full block character (█).
+     */
+    private boolean containsBlockChars(List<String> template) {
+        for (String line : template) {
+            if (line != null && line.contains("\u2588")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
