@@ -20,9 +20,6 @@ public final class CombatMLP {
     private final double[] b1, b2, b3;
     private final double learningRate;
 
-    // Xavier 初始化用的固定种子
-    private static final long SEED = 0xBATTLE_CAFE_2026L;
-
     public CombatMLP(int inputSize, int hidden1Size, int hidden2Size, double learningRate) {
         this.inputSize = inputSize;
         this.hidden1Size = hidden1Size;
