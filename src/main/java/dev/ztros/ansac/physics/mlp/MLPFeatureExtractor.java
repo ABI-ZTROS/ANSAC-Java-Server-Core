@@ -8,6 +8,15 @@ import dev.ztros.ansac.physics.PlayerPhysicsState;
 public final class MLPFeatureExtractor {
     public static final int FEATURE_COUNT = 24;
 
+    /** 24 维特征的人类可读名称 */
+    public static final String[] FEATURE_NAMES = {
+        "水平速度", "Y轴速度", "预测Y速度", "速度药水", "跳跃增益",
+        "跳跃阶段", "跳跃计时", "离地Tick", "跌落距离", "着地状态",
+        "水中", "岩浆中", "潜行", "疾跑", "举盾",
+        "冰面", "蓝冰", "飘浮", "缓降", "海豚恩惠",
+        "灵魂疾行", "窗口平均水平速度", "窗口Y速度方差", "窗口着地比例"
+    };
+
     private MLPFeatureExtractor() {
         throw new UnsupportedOperationException();
     }

@@ -2,6 +2,8 @@ package dev.ztros.ansac;
 
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
+import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
 import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.punishment.PunishmentEntry;
@@ -599,9 +601,120 @@ public class ANSACCommand implements CommandExecutor {
             .append(Component.text(result.inAir() ? "是" : "否", NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("跌落距离：", NamedTextColor.YELLOW)
             .append(Component.text(String.format("%.2f", result.fallDistance()), NamedTextColor.WHITE)));
+
+        // ===== MLP 神经网络推理详情 =====
+        if (svc.isMlpEnabled()) {
+            MLPInferenceDetail detail = svc.getDetailedMlpResult(target.getUniqueId());
+            if (detail != null) {
+                sender.sendMessage(Component.text("━━━ MLP 神经网络推理 ━━━", NamedTextColor.DARK_AQUA));
+
+                // 判定结果
+                double score = detail.getOutputScore();
+                String verdict = detail.getVerdictLabel();
+                NamedTextColor verdictColor = score >= 0.6 ? NamedTextColor.GREEN
+                    : score >= 0.4 ? NamedTextColor.YELLOW : NamedTextColor.RED;
+                sender.sendMessage(Component.text("判定结果：", NamedTextColor.YELLOW)
+                    .append(Component.text(verdict, verdictColor))
+                    .append(Component.text(" (" + String.format("%.4f", score) + ")", NamedTextColor.GRAY)));
+
+                // 网络结构概览
+                sender.sendMessage(Component.text("网络结构：", NamedTextColor.YELLOW)
+                    .append(Component.text(
+                        "24(输入) → 16(ReLU) → 8(ReLU) → 1(Sigmoid)", NamedTextColor.GRAY)));
+
+                // 隐藏层1激活值热力图
+                sender.sendMessage(Component.text("隐藏层1 激活值 (16神经元)：", NamedTextColor.YELLOW));
+                sender.sendMessage(miniMessage.deserialize(
+                    formatActivationBar(detail.getHidden1Activations(), "h1")));
+
+                // 隐藏层2激活值热力图
+                sender.sendMessage(Component.text("隐藏层2 激活值 (8神经元)：", NamedTextColor.YELLOW));
+                sender.sendMessage(miniMessage.deserialize(
+                    formatActivationBar(detail.getHidden2Activations(), "h2")));
+
+                // 关键输入特征（显示偏离零值最大的前6个）
+                sender.sendMessage(Component.text("关键输入特征（Top 6）：", NamedTextColor.YELLOW));
+                int[] topIndices = getTopActiveIndices(detail.getInputFeatures(), 6);
+                for (int idx : topIndices) {
+                    String name = idx < MLPFeatureExtractor.FEATURE_NAMES.length
+                        ? MLPFeatureExtractor.FEATURE_NAMES[idx] : "F" + idx;
+                    double val = detail.getInputFeatures()[idx];
+                    String bar = buildMiniBar(val, 10);
+                    NamedTextColor barColor = Math.abs(val) > 0.7 ? NamedTextColor.GOLD
+                        : Math.abs(val) > 0.3 ? NamedTextColor.AQUA : NamedTextColor.DARK_GRAY;
+                    sender.sendMessage(miniMessage.deserialize(
+                        "  <gray>" + name + "</gray> <" +
+                        (barColor == NamedTextColor.GOLD ? "gold" : barColor == NamedTextColor.AQUA ? "aqua" : "dark_gray") +
+                        ">" + bar + "</" +
+                        (barColor == NamedTextColor.GOLD ? "gold" : barColor == NamedTextColor.AQUA ? "aqua" : "dark_gray") +
+                        "> <white>" + String.format("%.3f", val) + "</white>"
+                    ));
+                }
+            } else {
+                sender.sendMessage(Component.text("MLP 推理数据暂不可用。", NamedTextColor.GRAY));
+            }
+        } else {
+            sender.sendMessage(Component.text("MLP 推理已禁用。", NamedTextColor.GRAY));
+        }
+
         boolean isTrusted = svc.isTrusted(target.getUniqueId());
         sender.sendMessage(Component.text("信任状态：", NamedTextColor.YELLOW)
             .append(Component.text(isTrusted ? "受信任" : "未信任", isTrusted ? NamedTextColor.GREEN : NamedTextColor.GRAY)));
+    }
+
+    /**
+     * 格式化激活值为可视化文本条。
+     */
+    private String formatActivationBar(double[] activations, String prefix) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<gray>");
+        for (int i = 0; i < activations.length; i++) {
+            double v = activations[i];
+            String block;
+            if (v > 1.0) block = "<red>X</red>";
+            else if (v > 0.5) block = "<gold>\u2588</gold>";
+            else if (v > 0.0) block = "<aqua>\u2593</aqua>";
+            else block = "<dark_gray>\u2591</dark_gray>";
+            sb.append(block);
+            if ((i + 1) % 8 == 0 && i < activations.length - 1) sb.append("\n ");
+        }
+        sb.append("</gray>");
+        return sb.toString();
+    }
+
+    /**
+     * 获取偏离零值最大的前N个特征索引。
+     */
+    private static int[] getTopActiveIndices(double[] features, int count) {
+        int n = Math.min(count, features.length);
+        int[] indices = new int[n];
+        boolean[] used = new boolean[features.length];
+        for (int k = 0; k < n; k++) {
+            double maxVal = Double.MIN_VALUE;
+            int maxIdx = 0;
+            for (int i = 0; i < features.length; i++) {
+                if (!used[i] && Math.abs(features[i]) > maxVal) {
+                    maxVal = Math.abs(features[i]);
+                    maxIdx = i;
+                }
+            }
+            indices[k] = maxIdx;
+            used[maxIdx] = true;
+        }
+        return indices;
+    }
+
+    /**
+     * 构建MiniMessage格式的微型进度条。
+     */
+    private static String buildMiniBar(double value, int length) {
+        double absVal = Math.min(Math.abs(value), 1.0);
+        int filled = (int) Math.round(absVal * length);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            sb.append(i < filled ? "\u25a0" : "\u25a1");
+        }
+        return sb.toString();
     }
 
     private void handleSamplingStatus(CommandSender sender) {

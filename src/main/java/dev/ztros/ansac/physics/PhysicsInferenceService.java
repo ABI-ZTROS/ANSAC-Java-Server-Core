@@ -2,9 +2,12 @@ package dev.ztros.ansac.physics;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
+import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
 import dev.ztros.ansac.physics.mlp.MLPPersistence;
 import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
 import dev.ztros.ansac.physics.mlp.MovementMLP;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
@@ -46,6 +49,8 @@ public class PhysicsInferenceService {
     private final File baselineFile;
 
     // ==================== 玩家状态管理 ====================
+
+    private final MiniMessage miniMessage = MiniMessage.miniMessage();
 
     /**
      * 每玩家物理状态映射表。
@@ -714,10 +719,37 @@ public class PhysicsInferenceService {
                     for (double[] sample : samples) {
                         totalLoss += movementMLP.train(sample, 1.0);
                     }
+                    double avgLoss = totalLoss / samples.size();
                     if (epoch % 20 == 0 || epoch == epochs - 1) {
                         plugin.getLogger().info(String.format(
                             "MLP 训练 epoch %d/%d, 平均损失: %.6f",
-                            epoch + 1, epochs, totalLoss / samples.size()));
+                            epoch + 1, epochs, avgLoss));
+
+                        // 每20个epoch通知在线管理员训练进度
+                        int finalEpoch = epoch;
+                        double finalAvgLoss = avgLoss;
+                        plugin.getSchedulerAdapter().runAtEntity(null, null, () -> {
+                            Component msg = miniMessage.deserialize(
+                                "<gray>[<dark_aqua>ANSAC-MLP</dark_aqua>]</gray> " +
+                                "<yellow>训练进度：<white>" + (finalEpoch + 1) + "/" + epochs + "</white>" +
+                                " | 平均损失：<white>" + String.format("%.6f", finalAvgLoss) + "</white>" +
+                                (finalEpoch == epochs - 1
+                                    ? " <green>训练完成!</green>"
+                                    : " <gray>继续训练中...</gray>")
+                            );
+                            for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                                if (p.hasPermission("ansac.admin")) {
+                                    p.sendMessage(msg);
+                                    // 同时发送 ActionBar 显示进度条
+                                    double progress = (double)(finalEpoch + 1) / epochs;
+                                    String bar = buildProgressBar(progress, 20);
+                                    p.sendActionBar(miniMessage.deserialize(
+                                        "<dark_aqua>" + bar + "</dark_aqua> <white>" +
+                                        String.format("%.1f%%", progress * 100) + "</white>"
+                                    ));
+                                }
+                            }
+                        });
                     }
                 }
                 MLPPersistence.save(movementMLP, mlpFile);
@@ -730,8 +762,30 @@ public class PhysicsInferenceService {
         });
     }
 
+    private static String buildProgressBar(double progress, int length) {
+        int filled = (int) Math.round(progress * length);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) {
+            sb.append(i < filled ? "\u25a0" : "\u25a1");
+        }
+        return sb.toString();
+    }
+
     public MovementMLP getMovementMLP() {
         return movementMLP;
+    }
+
+    /**
+     * 获取指定玩家的 MLP 推理详情，包含各层激活值。
+     * 用于可视化模型的思考过程。
+     */
+    public MLPInferenceDetail getDetailedMlpResult(UUID uuid) {
+        PlayerPhysicsState state = states.get(uuid);
+        if (state == null || !mlpEnabled) {
+            return null;
+        }
+        double[] features = MLPFeatureExtractor.extract(state);
+        return movementMLP.forwardDetailed(features);
     }
 
     public MLPSamplingSession getSamplingSession() {

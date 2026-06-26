@@ -66,6 +66,14 @@ public final class MovementMLP {
     }
 
     public double forward(double[] input) {
+        MLPInferenceDetail detail = forwardDetailed(input);
+        return detail.getOutputScore();
+    }
+
+    /**
+     * 带详情的前向传播，返回各层激活值，用于可视化推理过程。
+     */
+    public MLPInferenceDetail forwardDetailed(double[] input) {
         if (input == null || input.length != inputSize) {
             throw new IllegalArgumentException("Input size mismatch: expected " + inputSize
                 + ", got " + (input == null ? "null" : input.length));
@@ -93,7 +101,8 @@ public final class MovementMLP {
         for (int i = 0; i < hidden2Size; i++) {
             sum += h2[i] * w3[i];
         }
-        return sigmoid(sum);
+        double output = sigmoid(sum);
+        return new MLPInferenceDetail(input.clone(), h1, h2, output);
     }
 
     public double train(double[] input, double target) {
