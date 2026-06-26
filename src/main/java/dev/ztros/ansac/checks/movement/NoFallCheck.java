@@ -2,6 +2,9 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.physics.IPhysicsCheck;
+import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
@@ -47,16 +50,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *   3. Fall distance discrepancy: Compare server-tracked fall distance with
  *      client-reported fallDistance (player.getFallDistance()).
  */
-public class NoFallCheck extends Check {
+public class NoFallCheck extends Check implements IPhysicsCheck {
 
-    // Source: minecraft.wiki/w/Fall_damage - threshold = 3.0 blocks
-    private static final double FALL_DAMAGE_THRESHOLD = 3.0;
-
-    // Source: minecraft.wiki/w/Player - gravity = 0.08, drag = 0.98
-    private static final double GRAVITY_ACCEL = 0.08;
-    private static final double GRAVITY_DRAG = 0.98;
-    // Source: minecraft.wiki/w/Player - terminal = 77.71 m/s = 3.886 b/t
-    private static final double TERMINAL_VELOCITY = 3.886;
+    private static final double FALL_DAMAGE_THRESHOLD = PhysicsConstants.FALL_DAMAGE_THRESHOLD;
+    private static final double GRAVITY_ACCEL = PhysicsConstants.GRAVITY_ACCELERATION;
+    private static final double GRAVITY_DRAG = PhysicsConstants.GRAVITY_DRAG;
+    private static final double TERMINAL_VELOCITY = PhysicsConstants.TERMINAL_VELOCITY;
 
     // Number of consecutive ticks of suspicious behavior before flagging
     private static final int BUFFER_MAX = 5;
@@ -109,6 +108,19 @@ public class NoFallCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
+        performCheck(player, data, null);
+    }
+
+    @Override
+    public void processWithInference(Player player, PlayerData data, InferenceResult inference) {
+        if (inference == InferenceResult.EMPTY) {
+            process(player, data);
+            return;
+        }
+        performCheck(player, data, inference);
+    }
+
+    private void performCheck(Player player, PlayerData data, InferenceResult inference) {
         if (!isEnabled() || data.hasBypass()) return;
 
         String gm = player.getGameMode().name();
@@ -117,10 +129,18 @@ public class NoFallCheck extends Check {
             return;
         }
 
+        boolean useInference = inference != null;
+
         // Exemptions
         if (player.isGliding() || player.isFlying() || player.isInsideVehicle()
                 || player.isInWater() || player.isInLava() || player.isSleeping()
                 || player.isDead() || player.isClimbing()) {
+            resetTracker(player);
+            return;
+        }
+
+        // Inference-driven slow falling check
+        if (useInference && inference.hasSlowFalling()) {
             resetTracker(player);
             return;
         }
@@ -178,7 +198,7 @@ public class NoFallCheck extends Check {
         updatePhysicsPrediction(tracker, deltaY, clientOnGround);
 
         if (clientOnGround) {
-            handleOnGround(player, data, tracker, to);
+            handleOnGround(player, data, tracker, to, inference);
         } else {
             handleInAir(player, data, tracker, deltaY);
         }
@@ -215,13 +235,33 @@ public class NoFallCheck extends Check {
     /**
      * Handle the case where the client claims to be on ground.
      */
-    private void handleOnGround(Player player, PlayerData data, FallTracker tracker, Location to) {
+    private void handleOnGround(Player player, PlayerData data, FallTracker tracker, Location to, InferenceResult inference) {
+        boolean useInference = inference != null;
+
         if (!tracker.wasOnGround && tracker.serverFallDistance > MIN_CHECK_DISTANCE) {
             // Player just landed (transitioned from air to ground)
             // Verify the landing is legitimate
 
             double clientFallDistance = player.getFallDistance();
             double discrepancy = tracker.serverFallDistance - clientFallDistance;
+
+            // Inference-driven ground verification
+            if (useInference && !inference.serverVerifiedGround() && inference.fallDistance() > MIN_CHECK_DISTANCE) {
+                tracker.noFallBuffer++;
+                int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
+                    BUFFER_MAX, COMPENSATION_FACTOR);
+                if (tracker.noFallBuffer >= compensatedBuffer) {
+                    double severity = tracker.serverFallDistance / FALL_DAMAGE_THRESHOLD;
+                    flag(player, data, severity,
+                        String.format("NoFall: 推理引擎检测到虚假着地, 下落 %.1f 格 (连续 %d tick, 延迟 %s)",
+                            tracker.serverFallDistance,
+                            tracker.noFallBuffer,
+                            data.getPingCompensator().getPingStatus()));
+                    tracker.noFallBuffer = 0;
+                }
+                // Don't reset - player is still falling
+                return;
+            }
 
             if (discrepancy > 1.5) {
                 // Significant discrepancy: server tracked much more fall than client

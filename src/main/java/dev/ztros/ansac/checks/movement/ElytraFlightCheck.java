@@ -2,6 +2,9 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.physics.IPhysicsCheck;
+import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
@@ -36,17 +39,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * 5. Linear trajectory: perfectly straight flight (no natural wobble)
  * 6. Speed constancy: speed unchanged for too many ticks
  */
-public class ElytraFlightCheck extends Check {
+public class ElytraFlightCheck extends Check implements IPhysicsCheck {
 
-    // --- Thresholds ---
     private static final double HOVER_SPEED_THRESHOLD = 0.15;
     private static final int HOVER_BUFFER_MAX = 10;
 
-    private static final double MAX_GLIDE_SPEED = 1.5;    // Level flight max (no boost)
-    private static final double FIREWORK_MAX_SPEED = 1.675;
-    private static final double MAX_DIVE_SPEED = 3.365;   // -90° nose dive
-    private static final double MIN_CLIMB_SPEED = 0.36;   // +30° stall threshold
-    private static final double GLIDE_FRICTION = 0.99;
+    private static final double MAX_GLIDE_SPEED = PhysicsConstants.ELYTRA_MAX_LEVEL_SPEED;
+    private static final double FIREWORK_MAX_SPEED = PhysicsConstants.ELYTRA_FIREWORK_BOOST;
+    private static final double MAX_DIVE_SPEED = PhysicsConstants.ELYTRA_MAX_DIVE_SPEED;
+    private static final double MIN_CLIMB_SPEED = PhysicsConstants.ELYTRA_MIN_CLIMB_SPEED;
+    private static final double GLIDE_FRICTION = PhysicsConstants.ELYTRA_FRICTION;
     private static final double MIN_DECEL_RATE = 0.005;
     private static final int STOP_BUFFER_MAX = 5;
     private static final double STOP_SPEED_THRESHOLD = 0.05;
@@ -68,10 +70,32 @@ public class ElytraFlightCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
+        performCheck(player, data, null);
+    }
+
+    @Override
+    public void processWithInference(Player player, PlayerData data, InferenceResult inference) {
+        if (inference == InferenceResult.EMPTY) {
+            process(player, data);
+            return;
+        }
+        performCheck(player, data, inference);
+    }
+
+    private void performCheck(Player player, PlayerData data, InferenceResult inference) {
         if (!isEnabled() || data.hasBypass()) return;
+
+        boolean useInference = inference != null;
 
         if (data.getPingCompensator().shouldSkipCheck()) {
             resetBuffers(data);
+            return;
+        }
+
+        // Inference-driven gliding check
+        if (useInference && !inference.isGliding()) {
+            resetBuffers(data);
+            resetTracker(player.getUniqueId());
             return;
         }
 

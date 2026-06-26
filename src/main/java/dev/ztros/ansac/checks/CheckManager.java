@@ -48,6 +48,9 @@ import dev.ztros.ansac.checks.player.AntiHungerCheck;
 import dev.ztros.ansac.checks.player.AutoEatCheck;
 import dev.ztros.ansac.checks.player.FastUseCheck;
 import dev.ztros.ansac.player.PlayerData;
+import dev.ztros.ansac.physics.IPhysicsCheck;
+import dev.ztros.ansac.physics.PhysicsInferenceService;
+import dev.ztros.ansac.physics.InferenceResult;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -155,7 +158,13 @@ public class CheckManager {
                     for (Check check : checks) {
                         if (check.isEnabled()) {
                             try {
-                                check.process(player, data);
+                                PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
+                                if (check instanceof IPhysicsCheck ipc && inferenceService != null && inferenceService.isEnabled() && inferenceService.isPreferInference()) {
+                                    InferenceResult result = inferenceService.getInferenceResult(player.getUniqueId());
+                                    ipc.processWithInference(player, data, result);
+                                } else {
+                                    check.process(player, data);
+                                }
                             } catch (Exception e) {
                                 plugin.getLogger().warning("检测 " + check.getName() + " 出错：" + e.getMessage());
                             }
@@ -215,7 +224,13 @@ public class CheckManager {
         for (Check check : checks) {
             if (check.isEnabled()) {
                 try {
-                    check.process(player, data);
+                    PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
+                    if (check instanceof IPhysicsCheck ipc && inferenceService != null && inferenceService.isEnabled() && inferenceService.isPreferInference()) {
+                        InferenceResult result = inferenceService.getInferenceResult(player.getUniqueId());
+                        ipc.processWithInference(player, data, result);
+                    } else {
+                        check.process(player, data);
+                    }
                 } catch (Exception e) {
                     plugin.getLogger().warning("检测 " + check.getName() + " 出错：" + e.getMessage());
                 }

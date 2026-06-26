@@ -3,6 +3,7 @@ package dev.ztros.ansac.listeners;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.checks.CheckManager;
+import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.checks.combat.AutoArmorCheck;
 import dev.ztros.ansac.checks.combat.AutoLogCheck;
 import dev.ztros.ansac.checks.combat.AutoTotemCheck;
@@ -113,6 +114,12 @@ public class PlayerListener implements Listener {
 
         // Process movement checks
         plugin.getCheckManager().processPlayer(event.getPlayer());
+
+        // Feed movement data to physics inference service
+        PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
+        if (inferenceService != null) {
+            inferenceService.onPlayerMove(event.getPlayer(), data, from, to);
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

@@ -11,6 +11,7 @@ import dev.ztros.ansac.config.ANSACConfig;
 import dev.ztros.ansac.listeners.PacketListener;
 import dev.ztros.ansac.listeners.PlayerListener;
 import dev.ztros.ansac.player.PlayerDataManager;
+import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.punishment.PunishmentManager;
 import dev.ztros.ansac.scheduler.SchedulerAdapter;
 import lombok.Getter;
@@ -41,6 +42,9 @@ public class ANSACPlugin extends JavaPlugin {
 
     @Getter
     private PunishmentManager punishmentManager;
+
+    @Getter
+    private PhysicsInferenceService physicsInferenceService;
 
     @Override
     public void onLoad() {
@@ -108,6 +112,21 @@ public class ANSACPlugin extends JavaPlugin {
             if (logoutCmd != null) logoutCmd.setExecutor(authCommand);
         }
 
+        // Initialize physics inference service
+        this.physicsInferenceService = new PhysicsInferenceService(this);
+        physicsInferenceService.loadBaseline();
+        syncPhysicsInferenceConfig();
+
+        // Start periodic baseline auto-save
+        int saveInterval = ansacConfig.getPhysicsSaveIntervalMinutes();
+        if (saveInterval > 0) {
+            schedulerAdapter.runTimerAsync(() -> {
+                if (physicsInferenceService != null) {
+                    physicsInferenceService.saveBaseline();
+                }
+            }, saveInterval, saveInterval, java.util.concurrent.TimeUnit.MINUTES);
+        }
+
         getLogger().info("ANSAC 已成功启动！");
     }
 
@@ -136,6 +155,11 @@ public class ANSACPlugin extends JavaPlugin {
             checkManager.shutdown();
         }
 
+        if (physicsInferenceService != null) {
+            physicsInferenceService.saveBaseline();
+            physicsInferenceService.shutdown();
+        }
+
         getLogger().info("ANSAC 已关闭。");
     }
 
@@ -149,6 +173,22 @@ public class ANSACPlugin extends JavaPlugin {
         if (authService != null) {
             authService.reload();
         }
+        if (physicsInferenceService != null) {
+            syncPhysicsInferenceConfig();
+        }
         getLogger().info("ANSAC 配置已重载。");
+    }
+
+    /**
+     * 同步物理推理引擎配置。
+     */
+    private void syncPhysicsInferenceConfig() {
+        if (physicsInferenceService == null || ansacConfig == null) return;
+        physicsInferenceService.setEnabled(ansacConfig.isPhysicsInferenceEnabled());
+        physicsInferenceService.setPreferInference(ansacConfig.isPhysicsPreferInference());
+        physicsInferenceService.setAutoLearn(ansacConfig.isPhysicsAutoLearn());
+        physicsInferenceService.setLearningRate(ansacConfig.getPhysicsLearningRate());
+        physicsInferenceService.setInfluenceWeight(ansacConfig.getPhysicsInfluenceWeight());
+        physicsInferenceService.setMinSamples(ansacConfig.getPhysicsMinSamples());
     }
 }

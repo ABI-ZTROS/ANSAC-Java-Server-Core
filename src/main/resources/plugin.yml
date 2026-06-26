@@ -43,3 +43,12 @@ permissions:
   ansac.command.status:
     description: View ANSAC status
     default: op
+  ansac.command.trust:
+    description: Trust/untrust players for physics learning
+    default: op
+  ansac.command.baseline:
+    description: Manage physics baseline model
+    default: op
+  ansac.command.inference:
+    description: View physics inference status and player data
+    default: op

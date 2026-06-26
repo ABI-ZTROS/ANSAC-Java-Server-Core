@@ -2,6 +2,9 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.physics.IPhysicsCheck;
+import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.util.ServerVersionAdapter;
@@ -29,29 +32,20 @@ import java.util.concurrent.ConcurrentHashMap;
  * When a player jumps, horizontal speed in air should not exceed takeoff speed
  * (no horizontal acceleration in air in vanilla MC).
  */
-public class SpeedCheck extends Check {
+public class SpeedCheck extends Check implements IPhysicsCheck {
 
-    // Base speed constants (blocks/tick) - sourced from minecraft.wiki/w/Player
-    private static final double BASE_WALK = 0.21585;        // wiki: 4.317 m/s
-    private static final double BASE_SPRINT = 0.2806;       // wiki: 5.612 m/s
-    private static final double BASE_SPRINT_JUMP = 0.35635; // wiki: 7.127 m/s
+    // Base speed constants - now delegated to PhysicsConstants
+    private static final double BASE_WALK = PhysicsConstants.BASE_WALK_SPEED;
+    private static final double BASE_SPRINT = PhysicsConstants.BASE_SPRINT_SPEED;
+    private static final double BASE_SPRINT_JUMP = PhysicsConstants.BASE_SPRINT_JUMP_SPEED;
 
-    // Ice multipliers - NOT directly documented on wiki for player walking.
-    // Wiki documents boat speeds (ice=40m/s, blue ice=72.73m/s) and slipperiness.
-    // Player ice speed increase is much smaller (~10-60%).
-    // Old values 9.27/16.85 were boat physics incorrectly applied to players.
-    private static final double ICE_MULTIPLIER = 1.4;
-    private static final double BLUE_ICE_MULTIPLIER = 1.6;
+    private static final double ICE_MULTIPLIER = PhysicsConstants.ICE_SPEED_MULTIPLIER;
+    private static final double BLUE_ICE_MULTIPLIER = PhysicsConstants.BLUE_ICE_SPEED_MULTIPLIER;
 
-    // Soul Speed multiplier - wiki formula: speed *= (1.3 + level * 0.105)
-    // Level 1: 1.405 (+40.5%), Level 2: 1.51 (+51%), Level 3: 1.615 (+61.5%)
-    // Source: minecraft.fandom.com/wiki/Soul_Speed
-    private static final double SOUL_SPEED_BASE_MULT = 1.3;
-    private static final double SOUL_SPEED_PER_LEVEL_MULT = 0.105;
+    private static final double SOUL_SPEED_BASE_MULT = PhysicsConstants.SOUL_SPEED_BASE_MULTIPLIER;
+    private static final double SOUL_SPEED_PER_LEVEL_MULT = PhysicsConstants.SOUL_SPEED_PER_LEVEL;
 
-    // Dolphin's Grace multiplier - wiki: 9.8 m/s underwater
-    // 9.8 / 5.612 (sprint) ≈ 1.746. Old value 5.0 was severely inflated.
-    private static final double DOLPHIN_GRACE_MULTIPLIER = 1.75;
+    private static final double DOLPHIN_GRACE_MULTIPLIER = PhysicsConstants.DOLPHINS_GRACE_MULTIPLIER;
 
     // Detection thresholds
     private static final double LENIENCY = 0.08;
@@ -75,6 +69,19 @@ public class SpeedCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
+        performCheck(player, data, null);
+    }
+
+    @Override
+    public void processWithInference(Player player, PlayerData data, InferenceResult inference) {
+        if (inference == InferenceResult.EMPTY) {
+            process(player, data);
+            return;
+        }
+        performCheck(player, data, inference);
+    }
+
+    private void performCheck(Player player, PlayerData data, InferenceResult inference) {
         if (shouldSkip(player)) return;
 
         Location from = data.getLastLocation();
@@ -136,10 +143,13 @@ public class SpeedCheck extends Check {
 
         // === Compute expected maximum speed ===
         double expected;
+        boolean useInference = inference != null;
 
-        if (tracker.isJumping) {
+        if (useInference && inference.expectedMaxHorizontalSpeed() > 0) {
+            // Use physics engine computed expected speed
+            expected = inference.expectedMaxHorizontalSpeed();
+        } else if (tracker.isJumping) {
             // In air: horizontal speed should not exceed takeoff speed
-            // (no horizontal acceleration in vanilla MC while airborne)
             expected = tracker.jumpTakeoffSpeed * AIR_SPEED_TOLERANCE;
 
             // Ensure minimum threshold - sprint-jump with speed potion
@@ -150,8 +160,6 @@ public class SpeedCheck extends Check {
             PotionEffectType jumpBoost = ServerVersionAdapter.getJumpBoost();
             if (jumpBoost != null && player.hasPotionEffect(jumpBoost)) {
                 int level = player.getPotionEffect(jumpBoost).getAmplifier() + 1;
-                // Jump Boost increases jump height but also affects air time
-                // Give extra leniency: +0.03 per level
                 expected += 0.03 * level;
             }
 
@@ -182,7 +190,15 @@ public class SpeedCheck extends Check {
         int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
             BUFFER_MAX, PingCompensator.COMPENSATION_SPEED);
 
-        if (horizontalDist > expected + compensatedLeniency) {
+        boolean isSpeeding;
+        if (useInference && inference.getSpeedDeviationRatio() > 0) {
+            // Inference-driven detection: use deviation ratio
+            isSpeeding = inference.getSpeedDeviationRatio() > 1.15; // 15% over expected
+        } else {
+            isSpeeding = horizontalDist > expected + compensatedLeniency;
+        }
+
+        if (isSpeeding) {
             int buffer = data.getSpeedBuffer() + 1;
             data.setSpeedBuffer(buffer);
             if (buffer >= compensatedBuffer) {

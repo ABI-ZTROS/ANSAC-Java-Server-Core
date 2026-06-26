@@ -2,6 +2,9 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.physics.IPhysicsCheck;
+import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.util.ServerVersionAdapter;
@@ -39,19 +42,16 @@ import java.util.concurrent.ConcurrentHashMap;
  *   - Compares against dynamic threshold based on Jump Boost level + ping compensation
  *   - Uses buffer system to avoid false positives from single-tick anomalies
  */
-public class HighJumpCheck extends Check {
+public class HighJumpCheck extends Check implements IPhysicsCheck {
 
-    // Normal jump physics constants
-    private static final double BASE_JUMP_INITIAL_VELOCITY = 0.42;
-    private static final double JUMP_BOOST_PER_LEVEL = 0.1;
-    private static final double GRAVITY_SUBTRACT = 0.08;
-    private static final double GRAVITY_MULTIPLIER = 0.98;
+    private static final double BASE_JUMP_INITIAL_VELOCITY = PhysicsConstants.JUMP_INITIAL_VELOCITY;
+    private static final double JUMP_BOOST_PER_LEVEL = PhysicsConstants.JUMP_BOOST_PER_LEVEL;
+    private static final double GRAVITY_SUBTRACT = PhysicsConstants.GRAVITY_ACCELERATION;
+    private static final double GRAVITY_MULTIPLIER = PhysicsConstants.GRAVITY_DRAG;
 
-    // Pre-calculated max heights for common jump boost levels
-    // Source: minecraft.wiki/w/Jumping - max height no boost = 1.2522 blocks
-    private static final double MAX_HEIGHT_NO_BOOST = 1.2522;
-    private static final double MAX_HEIGHT_BOOST_I = 1.518;
-    private static final double MAX_HEIGHT_BOOST_II = 1.835;
+    private static final double MAX_HEIGHT_NO_BOOST = PhysicsConstants.MAX_JUMP_HEIGHT_NO_BOOST;
+    private static final double MAX_HEIGHT_BOOST_I = PhysicsConstants.getMaxJumpHeight(1);
+    private static final double MAX_HEIGHT_BOOST_II = PhysicsConstants.getMaxJumpHeight(2);
 
     // Tolerance for network latency and tick imprecision
     private static final double TOLERANCE = 0.3;
@@ -105,7 +105,22 @@ public class HighJumpCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
+        performCheck(player, data, null);
+    }
+
+    @Override
+    public void processWithInference(Player player, PlayerData data, InferenceResult inference) {
+        if (inference == InferenceResult.EMPTY) {
+            process(player, data);
+            return;
+        }
+        performCheck(player, data, inference);
+    }
+
+    private void performCheck(Player player, PlayerData data, InferenceResult inference) {
         if (shouldSkip(player)) return;
+
+        boolean useInference = inference != null;
 
         // Ping compensation: skip check if latency is too high or spiking
         if (data.getPingCompensator().shouldSkipCheck()) {
@@ -137,6 +152,37 @@ public class HighJumpCheck extends Check {
         if (shouldExempt(player, data, now)) {
             tracker.highJumpBuffer = 0;
             tracker.reset();
+            tracker.wasOnGround = onGround;
+            return;
+        }
+
+        // Inference-driven jump phase check
+        if (useInference && inference.inJumpCycle()) {
+            // Inference says player is in a normal jump cycle - use its data
+            if (inference.jumpPeakY() > 0 && inference.jumpStartY() > 0) {
+                double jumpHeight = inference.jumpPeakY() - inference.jumpStartY();
+                if (jumpHeight > 0) {
+                    double maxAllowed = getMaxAllowedHeight(player);
+                    double compensatedMax = data.getPingCompensator().getCompensatedThreshold(
+                        maxAllowed + TOLERANCE, COMPENSATION_FACTOR);
+
+                    if (jumpHeight > compensatedMax) {
+                        tracker.highJumpBuffer++;
+                        int compensatedBuffer = data.getPingCompensator().getCompensatedBuffer(
+                            BUFFER_FLAG_THRESHOLD, COMPENSATION_FACTOR);
+
+                        if (tracker.highJumpBuffer >= compensatedBuffer) {
+                            double severity = jumpHeight / maxAllowed;
+                            flag(player, data, severity,
+                                String.format("异常高跳(推理): %.2f 格 (上限: %.2f 格, 连续 %d 次, 延迟 %s)",
+                                    jumpHeight, maxAllowed, tracker.highJumpBuffer,
+                                    data.getPingCompensator().getPingStatus()));
+                        }
+                    } else {
+                        tracker.highJumpBuffer = Math.max(0, tracker.highJumpBuffer - 1);
+                    }
+                }
+            }
             tracker.wasOnGround = onGround;
             return;
         }

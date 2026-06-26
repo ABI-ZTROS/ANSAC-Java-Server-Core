@@ -2,6 +2,9 @@ package dev.ztros.ansac.checks.movement;
 
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
+import dev.ztros.ansac.physics.IPhysicsCheck;
+import dev.ztros.ansac.physics.InferenceResult;
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.util.ServerVersionAdapter;
@@ -26,17 +29,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * normal jumping, sprint-jumping, and jump-boosted movement.
  * Jump cycles are tracked precisely using state transitions.
  */
-public class FlyCheck extends Check {
+public class FlyCheck extends Check implements IPhysicsCheck {
 
     private static final double LENIENCY = 0.12;
     private static final int BUFFER_MAX = 8;
 
-    // Gravity constants
-    private static final double GRAVITY_ACCEL = 0.08;
-    private static final double GRAVITY_DRAG = 0.98;
-    private static final double JUMP_INITIAL_VELOCITY = 0.42;
-    // Source: minecraft.wiki/w/Player - terminal falling speed = 77.71 m/s = 3.8855 b/t
-    private static final double TERMINAL_VELOCITY = 3.886;
+    // Gravity constants - delegated to PhysicsConstants
+    private static final double GRAVITY_ACCEL = PhysicsConstants.GRAVITY_ACCELERATION;
+    private static final double GRAVITY_DRAG = PhysicsConstants.GRAVITY_DRAG;
+    private static final double JUMP_INITIAL_VELOCITY = PhysicsConstants.JUMP_INITIAL_VELOCITY;
+    private static final double TERMINAL_VELOCITY = PhysicsConstants.TERMINAL_VELOCITY;
 
     // Jump detection
     private static final double JUMP_DETECTION_DELTA_Y = 0.12;
@@ -56,6 +58,19 @@ public class FlyCheck extends Check {
 
     @Override
     public void process(Player player, PlayerData data) {
+        performCheck(player, data, null);
+    }
+
+    @Override
+    public void processWithInference(Player player, PlayerData data, InferenceResult inference) {
+        if (inference == InferenceResult.EMPTY) {
+            process(player, data);
+            return;
+        }
+        performCheck(player, data, inference);
+    }
+
+    private void performCheck(Player player, PlayerData data, InferenceResult inference) {
         if (shouldSkip(player)) return;
 
         if (data.getPingCompensator().shouldSkipCheck()) {
@@ -73,6 +88,8 @@ public class FlyCheck extends Check {
 
         UUID uuid = player.getUniqueId();
         JumpTracker jumpTracker = jumpTrackers.computeIfAbsent(uuid, k -> new JumpTracker());
+
+        boolean useInference = inference != null;
 
         // === Physics-based jump detection ===
         // Jump start: was on ground, now airborne, moving upward
@@ -141,6 +158,22 @@ public class FlyCheck extends Check {
         // Ground proximity
         double distToGround = distanceToGround(player);
         boolean nearGround = distToGround >= 0 && distToGround < 1.5;
+
+        // Inference-driven levitation / slow falling checks
+        if (useInference) {
+            if (inference.hasLevitation() || inference.hasSlowFalling()) {
+                resetAllBuffers(data);
+                jumpTracker.previousDeltaY = deltaY;
+                jumpTracker.wasOnGround = onGround;
+                return;
+            }
+            if (inference.inJumpCycle()) {
+                resetAllBuffers(data);
+                jumpTracker.previousDeltaY = deltaY;
+                jumpTracker.wasOnGround = onGround;
+                return;
+            }
+        }
 
         // --- Check 1: Sustained hover ---
         // Not on ground, virtually no vertical movement, not in liquid, not climbing, not near ground

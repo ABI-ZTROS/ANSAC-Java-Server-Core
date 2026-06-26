@@ -43,6 +43,37 @@ settings:
   ping-check-interval: 5
 
 # ==========================================
+# 物理推理引擎配置
+# ==========================================
+physics-inference:
+  # 是否启用物理推理引擎
+  enabled: true
+
+  # 是否优先使用推理结果（启用时检查会优先使用 processWithInference）
+  prefer-inference: true
+
+  # 是否启用自动学习（受信任玩家的数据自动喂入基准模型）
+  auto-learn: true
+
+  # 学习率系数（EMA 更新灵敏度，越大对最新数据响应越快）
+  learning-rate: 0.1
+
+  # 推理结果对检查决策的影响权重
+  influence-weight: 1.0
+
+  # 触发学习所需的最小采样数
+  min-samples: 10
+
+  # 校准阈值（总采样数达到此值视为初步校准完成）
+  calibration-threshold: 1000
+
+  # 偏差阈值（学习值与理论值偏差超过此比例时触发修正计数）
+  deviation-threshold: 0.15
+
+  # 自动保存间隔（分钟）
+  save-interval-minutes: 30
+
+# ==========================================
 # 处罚配置
 # ==========================================
 # 参考 AdvancedBan 设计模式，使用 MiniMessage 富文本格式
