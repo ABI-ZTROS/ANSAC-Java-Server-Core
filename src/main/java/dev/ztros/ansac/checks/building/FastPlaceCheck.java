@@ -5,7 +5,6 @@ import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.entity.Player;
 
-import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -99,12 +98,9 @@ public class FastPlaceCheck extends Check {
         long windowStart = now - CHECK_WINDOW_MS;
 
         // Clean up expired timestamps
-        Iterator<Long> it = tracker.placeTimestamps.iterator();
-        while (it.hasNext()) {
-            if (it.next() < windowStart) {
-                it.remove();
-            }
-        }
+        // Note: CopyOnWriteArrayList iterator does NOT support remove().
+        // Use removeIf which operates on the list directly.
+        tracker.placeTimestamps.removeIf(t -> t < windowStart);
     }
 
     /**
@@ -127,12 +123,8 @@ public class FastPlaceCheck extends Check {
         long windowStart = now - CHECK_WINDOW_MS;
 
         // Clean up expired timestamps first
-        Iterator<Long> it = tracker.placeTimestamps.iterator();
-        while (it.hasNext()) {
-            if (it.next() < windowStart) {
-                it.remove();
-            }
-        }
+        // Note: CopyOnWriteArrayList iterator does NOT support remove().
+        tracker.placeTimestamps.removeIf(t -> t < windowStart);
 
         // Add new placement timestamp
         tracker.placeTimestamps.add(now);

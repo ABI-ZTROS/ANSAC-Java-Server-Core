@@ -7,7 +7,6 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
-import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -102,12 +101,8 @@ public class NukerCheck extends Check {
         long windowStart = now - CHECK_WINDOW_MS;
 
         // Clean up expired timestamps
-        Iterator<Long> it = tracker.breakTimestamps.iterator();
-        while (it.hasNext()) {
-            if (it.next() < windowStart) {
-                it.remove();
-            }
-        }
+        // Note: CopyOnWriteArrayList iterator does NOT support remove().
+        tracker.breakTimestamps.removeIf(t -> t < windowStart);
     }
 
     /**
@@ -130,12 +125,8 @@ public class NukerCheck extends Check {
         long windowStart = now - CHECK_WINDOW_MS;
 
         // Clean up expired timestamps first
-        Iterator<Long> it = tracker.breakTimestamps.iterator();
-        while (it.hasNext()) {
-            if (it.next() < windowStart) {
-                it.remove();
-            }
-        }
+        // Note: CopyOnWriteArrayList iterator does NOT support remove().
+        tracker.breakTimestamps.removeIf(t -> t < windowStart);
 
         // Add new break timestamp
         tracker.breakTimestamps.add(now);

@@ -6,7 +6,6 @@ import dev.ztros.ansac.player.PlayerData;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
-import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -101,28 +100,13 @@ public class SurroundCheck extends Check {
         long now = System.currentTimeMillis();
         long windowStart = now - CHECK_WINDOW_MS;
 
-        // Clean up expired entries
-        Iterator<Long> timeIt = tracker.placeTimestamps.iterator();
-        Iterator<Location> locIt = tracker.placeLocations.iterator();
-        while (timeIt.hasNext()) {
-            timeIt.next();
-            locIt.next();
-            if (tracker.placeTimestamps.get(0) != null
-                    && tracker.placeTimestamps.get(0) < windowStart) {
-                timeIt.remove();
-                locIt.remove();
-            } else {
-                break; // Timestamps are in order, so stop at first valid
-            }
-        }
-
-        // Also do a full cleanup pass for any remaining expired entries
-        int removed = 0;
+        // Clean up expired entries.
+        // Note: CopyOnWriteArrayList iterator does NOT support remove().
+        // Remove from back to front so indices remain valid.
         for (int i = tracker.placeTimestamps.size() - 1; i >= 0; i--) {
             if (tracker.placeTimestamps.get(i) < windowStart) {
                 tracker.placeTimestamps.remove(i);
                 tracker.placeLocations.remove(i);
-                removed++;
             }
         }
     }
@@ -147,19 +131,13 @@ public class SurroundCheck extends Check {
         long now = System.currentTimeMillis();
         long windowStart = now - CHECK_WINDOW_MS;
 
-        // Clean up expired entries first
-        Iterator<Long> timeIt = tracker.placeTimestamps.iterator();
-        Iterator<Location> locIt = tracker.placeLocations.iterator();
-        while (timeIt.hasNext()) {
-            timeIt.next();
-            locIt.next();
-            if (!tracker.placeTimestamps.isEmpty()
-                    && tracker.placeTimestamps.get(0) < windowStart) {
-                timeIt.remove();
-                locIt.remove();
-            } else {
-                break;
-            }
+        // Clean up expired entries first.
+        // Note: CopyOnWriteArrayList iterator does NOT support remove().
+        // Timestamps are in chronological order, so expired ones are at the front.
+        while (!tracker.placeTimestamps.isEmpty()
+                && tracker.placeTimestamps.get(0) < windowStart) {
+            tracker.placeTimestamps.remove(0);
+            tracker.placeLocations.remove(0);
         }
 
         // Add new placement
