@@ -779,10 +779,14 @@ public class ANSACCommand implements CommandExecutor {
         }
         MLPSamplingSession session = svc.getSamplingSession();
         sender.sendMessage(Component.text("=== MLP 采样状态 ===", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("运行模式：", NamedTextColor.YELLOW)
+            .append(Component.text(session.isContinuousMode() ? "持续自动" : "手动确认", NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("会话状态：", NamedTextColor.YELLOW)
             .append(Component.text(session.getState().name(), NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("样本进度：", NamedTextColor.YELLOW)
             .append(Component.text(session.getSampleCount() + " / " + session.getTargetSamples(), NamedTextColor.WHITE)));
+        sender.sendMessage(Component.text("训练轮次：", NamedTextColor.YELLOW)
+            .append(Component.text(String.valueOf(session.getTrainRound()), NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("MLP 启用：", NamedTextColor.YELLOW)
             .append(Component.text(svc.isMlpEnabled() ? "是" : "否", NamedTextColor.WHITE)));
     }

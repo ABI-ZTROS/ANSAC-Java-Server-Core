@@ -151,6 +151,22 @@ public class PhysicsInferenceService {
         this.samplingSession = new MLPSamplingSession(samplingTarget);
         this.movementMLP = loadOrCreateMlp();
         this.mlpEnabled = plugin.getAnsacConfig().isMlpEnabled();
+
+        // 注册持续自动训练回调：达到采样目标后自动训练
+        this.samplingSession.setOnTargetReached((round) -> {
+            List<double[]> batch = samplingSession.drainSamples();
+            if (!batch.isEmpty()) {
+                trainMlp(batch);
+            }
+        });
+
+        // MLP 启用时自动开始采集
+        if (this.mlpEnabled) {
+            this.samplingSession.startCollecting();
+            if (plugin != null) {
+                plugin.getLogger().info("MLP 持续推理已启动：自动采集 → 自动训练 → 循环（目标 " + samplingTarget + " 条/轮）");
+            }
+        }
     }
 
     private MovementMLP loadOrCreateMlp() {
@@ -267,7 +283,11 @@ public class PhysicsInferenceService {
                 dev.ztros.ansac.player.PlayerData sampleData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
                 PlayerBehaviorProfile sampleProfile = (sampleData != null) ? sampleData.getBehaviorProfile() : new PlayerBehaviorProfile();
                 double[] features = BehaviorFeatureExtractor.extract(state, sampleProfile);
-                samplingSession.offerSample(features);
+                boolean reached = samplingSession.offerSample(features);
+                if (reached) {
+                    // 达到采样目标，在锁外触发自动训练回调
+                    samplingSession.fireTargetReachedCallback();
+                }
             }
         }
     }
