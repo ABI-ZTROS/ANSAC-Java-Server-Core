@@ -1,7 +1,7 @@
 package dev.ztros.ansac.physics;
 
 import dev.ztros.ansac.ANSACPlugin;
-import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
+
 import dev.ztros.ansac.physics.mlp.*;
 import dev.ztros.ansac.physics.mlp.profile.*;
 import net.kyori.adventure.text.Component;

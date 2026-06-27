@@ -6,7 +6,7 @@ import dev.ztros.ansac.physics.InferenceResult;
 import dev.ztros.ansac.physics.PlayerPhysicsState;
 import dev.ztros.ansac.physics.mlp.BehaviorFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.InferenceInterpreter;
-import dev.ztros.ansac.physics.mlp.MLPFeatureExtractor;
+
 import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
 import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
 import dev.ztros.ansac.physics.mlp.profile.PlayerBehaviorProfile;
