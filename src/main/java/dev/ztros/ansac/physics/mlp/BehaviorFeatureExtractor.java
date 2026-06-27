@@ -210,7 +210,7 @@ public final class BehaviorFeatureExtractor {
                 && physicsState.getHeadBlockCount() > 0;
         f[ENVIRONMENT_OFFSET + 11] = headRoomJump ? 1.0 : 0.0;
         // 速度/预期比 (实际水平速度 / 理论最大速度)
-        double expected = computeExpectedMaxHorizontalSpeed(physicsState);
+        double expected = PhysicsEngine.computeExpectedMaxHorizontalSpeed(physicsState);
         f[ENVIRONMENT_OFFSET + 12] = expected > 0.01
                 ? clamp((hSpeed / expected), 0.0, 2.0) / 2.0 : 0.5;
         // 滑冰 (冰面或蓝冰)

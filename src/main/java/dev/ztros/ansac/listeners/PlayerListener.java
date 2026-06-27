@@ -119,7 +119,7 @@ public class PlayerListener implements Listener {
 
             // 将击退信息同步到物理状态追踪器
             if (inferenceService != null) {
-                dev.ztros.ansac.physics.PlayerPhysicsState pstate = inferenceService.getState(player.getUniqueId());
+                dev.ztros.ansac.physics.PlayerPhysicsState pstate = inferenceService.getState(event.getPlayer().getUniqueId());
                 if (pstate != null) {
                     pstate.setLastKnockbackTime(now);
                     pstate.setKnockbackMagnitude(velLen);
