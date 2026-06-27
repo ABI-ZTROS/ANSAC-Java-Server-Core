@@ -250,6 +250,18 @@ public class PhysicsInferenceService {
         }
 
         UUID uuid = player.getUniqueId();
+
+        // 跳过未认证玩家（auth 模块未通过）
+        if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(uuid)) {
+            return;
+        }
+
+        // 跳过有豁免权的玩家
+        dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);
+        if (playerData != null && playerData.hasBypass()) {
+            return;
+        }
+
         PlayerPhysicsState state = states.computeIfAbsent(uuid, k -> new PlayerPhysicsState());
 
         long now = System.currentTimeMillis();
@@ -267,25 +279,36 @@ public class PhysicsInferenceService {
         state.setLastNormalScore(movementScore);
         state.setLastAnomalyScore(anomalyScore);
 
-        // 纯模型模式：AI自主判罪（10秒冷却避免重复处罚）
-        if (detectionMode == DetectionMode.MODEL_ONLY && anomalyScore > 0.70) {
-            long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
-            if (now - lastPunish > 10000L) {
-                modelPunishCooldown.put(uuid, now);
-                final double finalAnomaly = anomalyScore;
-                plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-                    plugin.getPunishmentManager().punish(player,
-                        "AI模型检测到异常行为", "AnomalyFusion",
-                        (int)(finalAnomaly * 100));
-                });
-                Component aiAlert = miniMessage.deserialize(
-                    "<gray>[<dark_red>ANSAC-AI</dark_red>]</gray> " +
-                    "<red>AI 已自动处罚 <yellow>" + player.getName() + "</yellow> " +
-                    "异常度: <white>" + String.format("%.1f%%", finalAnomaly * 100) + "</white>"
-                );
-                for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
-                    if (p.hasPermission("ansac.admin")) {
-                        p.sendMessage(aiAlert);
+        // 纯模型模式：AI 辅助判罪（需要模型已训练至少一轮）
+        // 未训练的模型输出为随机值，不能用于处罚
+        boolean modelReady = samplingSession.getTrainRound() > 0;
+        if (detectionMode == DetectionMode.MODEL_ONLY && modelReady && anomalyScore > 0.70 && playerData != null) {
+            // 将异常分数映射为 VL 增量，走 Check 层的 VL 累积系统
+            double severity = (anomalyScore - 0.70) / 0.30; // 0.70~1.0 映射到 0~1
+            playerData.addViolation("AnomalyFusion", severity * 2.0);
+
+            // 查看累计 VL，达到阈值才处罚
+            var violationOpt = playerData.getViolation("AnomalyFusion");
+            int totalVL = violationOpt != null ? violationOpt.getTotalVL() : 0;
+            if (totalVL >= 20) {
+                long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
+                if (now - lastPunish > 10000L) {
+                    modelPunishCooldown.put(uuid, now);
+                    final double finalAnomaly = anomalyScore;
+                    final int finalVL = totalVL;
+                    plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                        plugin.getPunishmentManager().punish(player,
+                            "AI模型检测到异常行为", "AnomalyFusion", finalVL);
+                    });
+                    Component aiAlert = miniMessage.deserialize(
+                        "<gray>[<dark_red>ANSAC-AI</dark_red>]</gray> " +
+                        "<red>AI 已自动处罚 <yellow>" + player.getName() + "</yellow> " +
+                        "异常度: <white>" + String.format("%.1f%%", finalAnomaly * 100) + "</white>"
+                    );
+                    for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                        if (p.hasPermission("ansac.admin")) {
+                            p.sendMessage(aiAlert);
+                        }
                     }
                 }
             }

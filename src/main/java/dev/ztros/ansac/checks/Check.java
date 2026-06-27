@@ -105,12 +105,15 @@ public abstract class Check {
         }
 
         double effectiveSeverity = severity;
-        // 混合双打模式：模型异常分数放大规则 severity
+        // 混合双打模式：模型异常分数放大规则 severity（仅在模型训练后才生效）
         if (svc != null && svc.getDetectionMode() == DetectionMode.HYBRID) {
             PlayerPhysicsState state = svc.getState(player.getUniqueId());
             double anomalyScore = (state != null) ? state.getLastAnomalyScore() : 0.0;
-            // anomalyScore 0~1，0.5 时 severity 翻倍，1.0 时三倍
-            effectiveSeverity = severity * (1.0 + anomalyScore * 2.0);
+            // 仅在模型已训练后才放大（未训练时 anomalyScore 为随机值，不应影响规则）
+            if (svc.getSamplingSession().getTrainRound() > 0 && anomalyScore > 0.0) {
+                // anomalyScore 0~1，0.5 时 severity 翻倍，1.0 时三倍
+                effectiveSeverity = severity * (1.0 + anomalyScore * 2.0);
+            }
         }
 
         data.addViolation(name, effectiveSeverity);
