@@ -81,7 +81,6 @@ public class PhysicsInferenceService {
     private final AnomalyFusion anomalyFusion;
     private final MLPSamplingSession samplingSession;
     private final File mlpFile;
-    private volatile boolean mlpEnabled;
 
     /** 检测运行模式: RULE_ONLY / MODEL_ONLY / HYBRID */
     private volatile DetectionMode detectionMode = DetectionMode.HYBRID;
@@ -168,7 +167,6 @@ public class PhysicsInferenceService {
         this.movementMLP = loadOrCreateMlp();
         this.combatMLP = new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, 16, 8, 0.01);
         this.anomalyFusion = new AnomalyFusion(0.01);
-        this.mlpEnabled = plugin.getAnsacConfig().isMlpEnabled();
         this.detectionMode = DetectionMode.fromString(plugin.getConfig().getString("detection-mode", "hybrid"));
 
         // 注册持续自动训练回调：达到采样目标后自动训练
@@ -179,12 +177,8 @@ public class PhysicsInferenceService {
             }
         });
 
-        // MLP 启用时自动开始采集
-        if (this.mlpEnabled) {
-            this.samplingSession.startCollecting();
-            if (plugin != null) {
-                plugin.getLogger().info("MLP 持续推理已启动：自动采集 → 自动训练 → 循环（目标 " + samplingTarget + " 条/轮）");
-            }
+        if (plugin != null) {
+            plugin.getLogger().info("ANSAC 物理推理引擎已启动: 84维输入 → 56→32→1 (MovementMLP + CombatMLP + AnomalyFusion)");
         }
     }
 
@@ -262,38 +256,36 @@ public class PhysicsInferenceService {
         state.updateFromPlayer(player, from, to, now);
 
         // MLP 完整画像推理 (MovementMLP + CombatMLP + AnomalyFusion)
-        if (mlpEnabled) {
-            dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
-            PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
-            double[] features = BehaviorFeatureExtractor.extract(state, profile);
-            double movementScore = movementMLP.forward(features);
-            double[] combatFeatures = BehaviorFeatureExtractor.extractCombatSlice(features);
-            double combatScore = combatMLP.forward(combatFeatures);
-            // 规则分数初始为0（无规则偏离），由 Check 层在 flag 时更新
-            double anomalyScore = anomalyFusion.forward(movementScore, combatScore, 0.0);
-            state.setLastNormalScore(movementScore);
-            state.setLastAnomalyScore(anomalyScore);
+        dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
+        PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
+        double[] features = BehaviorFeatureExtractor.extract(state, profile);
+        double movementScore = movementMLP.forward(features);
+        double[] combatFeatures = BehaviorFeatureExtractor.extractCombatSlice(features);
+        double combatScore = combatMLP.forward(combatFeatures);
+        // 规则分数初始为0（无规则偏离），由 Check 层在 flag 时更新
+        double anomalyScore = anomalyFusion.forward(movementScore, combatScore, 0.0);
+        state.setLastNormalScore(movementScore);
+        state.setLastAnomalyScore(anomalyScore);
 
-            // 纯模型模式：AI自主判罪（10秒冷却避免重复处罚）
-            if (detectionMode == DetectionMode.MODEL_ONLY && anomalyScore > 0.70) {
-                long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
-                if (now - lastPunish > 10000L) {
-                    modelPunishCooldown.put(uuid, now);
-                    final double finalAnomaly = anomalyScore;
-                    plugin.getSchedulerAdapter().runAtEntity(player, () -> {
-                        plugin.getPunishmentManager().punish(player,
-                            "AI模型检测到异常行为", "AnomalyFusion",
-                            (int)(finalAnomaly * 100));
-                    });
-                    Component aiAlert = miniMessage.deserialize(
-                        "<gray>[<dark_red>ANSAC-AI</dark_red>]</gray> " +
-                        "<red>AI 已自动处罚 <yellow>" + player.getName() + "</yellow> " +
-                        "异常度: <white>" + String.format("%.1f%%", finalAnomaly * 100) + "</white>"
-                    );
-                    for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
-                        if (p.hasPermission("ansac.admin")) {
-                            p.sendMessage(aiAlert);
-                        }
+        // 纯模型模式：AI自主判罪（10秒冷却避免重复处罚）
+        if (detectionMode == DetectionMode.MODEL_ONLY && anomalyScore > 0.70) {
+            long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
+            if (now - lastPunish > 10000L) {
+                modelPunishCooldown.put(uuid, now);
+                final double finalAnomaly = anomalyScore;
+                plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                    plugin.getPunishmentManager().punish(player,
+                        "AI模型检测到异常行为", "AnomalyFusion",
+                        (int)(finalAnomaly * 100));
+                });
+                Component aiAlert = miniMessage.deserialize(
+                    "<gray>[<dark_red>ANSAC-AI</dark_red>]</gray> " +
+                    "<red>AI 已自动处罚 <yellow>" + player.getName() + "</yellow> " +
+                    "异常度: <white>" + String.format("%.1f%%", finalAnomaly * 100) + "</white>"
+                );
+                for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                    if (p.hasPermission("ansac.admin")) {
+                        p.sendMessage(aiAlert);
                     }
                 }
             }
@@ -881,7 +873,7 @@ public class PhysicsInferenceService {
      */
     public MLPInferenceDetail getDetailedMlpResult(UUID uuid) {
         PlayerPhysicsState state = states.get(uuid);
-        if (state == null || !mlpEnabled) {
+        if (state == null) {
             return null;
         }
         dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);
@@ -892,14 +884,6 @@ public class PhysicsInferenceService {
 
     public MLPSamplingSession getSamplingSession() {
         return samplingSession;
-    }
-
-    public boolean isMlpEnabled() {
-        return mlpEnabled;
-    }
-
-    public void setMlpEnabled(boolean mlpEnabled) {
-        this.mlpEnabled = mlpEnabled;
     }
 
     // ==================== 实时监控 ====================
@@ -924,7 +908,7 @@ public class PhysicsInferenceService {
                 }
 
                 PlayerPhysicsState state = states.get(targetUuid);
-                if (state == null || !mlpEnabled) return;
+                if (state == null) return;
 
                 double moveScore = state.getLastNormalScore();
                 double anomalyScore = state.getLastAnomalyScore();

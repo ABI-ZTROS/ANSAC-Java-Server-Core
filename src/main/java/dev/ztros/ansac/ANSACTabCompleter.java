@@ -87,7 +87,7 @@ public class ANSACTabCompleter implements TabCompleter {
 
             case "sampling":
                 if (args.length == 2) {
-                    List<String> subs = Arrays.asList("start", "continue", "stop", "status");
+                    List<String> subs = Arrays.asList("start", "stop", "status");
                     return subs.stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
                 }
                 break;

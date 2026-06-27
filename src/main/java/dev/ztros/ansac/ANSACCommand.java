@@ -232,7 +232,7 @@ public class ANSACCommand implements CommandExecutor {
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("── AI 神经网络 ──", NamedTextColor.AQUA));
         sendHelpEntry(sender, "/ansac inference [玩家]", "查看推理状态 / 玩家完整推理报告");
-        sendHelpEntry(sender, "/ansac sampling [start|continue|stop]", "MLP 采样与训练管理");
+        sendHelpEntry(sender, "/ansac sampling <start|stop>", "开启/关闭MLP持续自学习");
         sendHelpEntry(sender, "/ansac mode <rule|model|hybrid>", "切换检测模式");
 
         sender.sendMessage(Component.empty());
@@ -672,11 +672,9 @@ public class ANSACCommand implements CommandExecutor {
         }
         sender.sendMessage(Component.text("=== 物理推理服务状态 ===", NamedTextColor.GOLD));
         sender.sendMessage(Component.text("服务状态：", NamedTextColor.YELLOW)
-            .append(Component.text(svc.isEnabled() ? "启用" : "禁用", svc.isEnabled() ? NamedTextColor.GREEN : NamedTextColor.RED)));
-        sender.sendMessage(Component.text("优先推理：", NamedTextColor.YELLOW)
-            .append(Component.text(svc.isPreferInference() ? "是" : "否", NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("自动学习：", NamedTextColor.YELLOW)
-            .append(Component.text(svc.isAutoLearn() ? "是" : "否", NamedTextColor.WHITE)));
+            .append(Component.text("始终启用", NamedTextColor.GREEN)));
+        sender.sendMessage(Component.text("检测模式：", NamedTextColor.YELLOW)
+            .append(Component.text(svc.getDetectionMode().name(), NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("受信任玩家：", NamedTextColor.YELLOW)
             .append(Component.text(String.valueOf(svc.getTrustedPlayerCount()), NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("学习次数：", NamedTextColor.YELLOW)
@@ -726,7 +724,7 @@ public class ANSACCommand implements CommandExecutor {
             .append(Component.text(String.format("%.2f", result.fallDistance()), NamedTextColor.WHITE)));
 
         // ===== MLP 神经网络推理详情 =====
-        if (svc.isMlpEnabled()) {
+        {
             MLPInferenceDetail detail = svc.getDetailedMlpResult(target.getUniqueId());
             if (detail != null) {
                 sender.sendMessage(Component.text("━━━ MLP 神经网络推理 ━━━", NamedTextColor.DARK_AQUA));
@@ -781,7 +779,7 @@ public class ANSACCommand implements CommandExecutor {
         }
 
         // ===== 多模型融合决策 =====
-        if (svc.isMlpEnabled()) {
+        {
             PlayerPhysicsState pstate = svc.getState(target.getUniqueId());
             if (pstate != null) {
                 sender.sendMessage(Component.text("━━━ 多模型融合决策 ━━━", NamedTextColor.DARK_AQUA));
@@ -933,7 +931,7 @@ public class ANSACCommand implements CommandExecutor {
             return;
         }
         MLPSamplingSession session = svc.getSamplingSession();
-        sender.sendMessage(Component.text("=== MLP 采样状态 ===", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("=== MLP 学习状态 ===", NamedTextColor.GOLD));
         sender.sendMessage(Component.text("运行模式：", NamedTextColor.YELLOW)
             .append(Component.text(session.isContinuousMode() ? "持续自动" : "手动确认", NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("会话状态：", NamedTextColor.YELLOW)
@@ -942,8 +940,6 @@ public class ANSACCommand implements CommandExecutor {
             .append(Component.text(session.getSampleCount() + " / " + session.getTargetSamples(), NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("训练轮次：", NamedTextColor.YELLOW)
             .append(Component.text(String.valueOf(session.getTrainRound()), NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("MLP 启用：", NamedTextColor.YELLOW)
-            .append(Component.text(svc.isMlpEnabled() ? "是" : "否", NamedTextColor.WHITE)));
     }
 
     private void handleSamplingSub(CommandSender sender, String sub) {
@@ -955,26 +951,25 @@ public class ANSACCommand implements CommandExecutor {
         MLPSamplingSession session = svc.getSamplingSession();
         switch (sub.toLowerCase()) {
             case "start":
-                session.startCollecting();
-                sender.sendMessage(Component.text("已开始收集受信任玩家的移动数据用于 MLP 训练。", NamedTextColor.GREEN));
-                break;
-            case "continue":
-                if (session.getState() != MLPSamplingSession.State.WAITING_ADMIN) {
-                    sender.sendMessage(Component.text("当前没有待处理的采样数据。", NamedTextColor.RED));
+                if (session.getState() == MLPSamplingSession.State.COLLECTING) {
+                    sender.sendMessage(Component.text("MLP 持续学习已在运行中。", NamedTextColor.YELLOW));
                     return;
                 }
-                java.util.List<double[]> samples = session.drainSamples();
-                session.adminContinue();
-                sender.sendMessage(Component.text("开始训练 MLP 模型，样本数：" + samples.size(), NamedTextColor.GREEN));
-                svc.trainMlp(samples);
-                sender.sendMessage(Component.text("MLP 训练任务已提交（异步执行中）。", NamedTextColor.GREEN));
+                session.startCollecting();
+                sender.sendMessage(Component.text(
+                    "已开启 MLP 持续自学习：将自动采集受信任玩家数据并持续训练。", NamedTextColor.GREEN));
+                sender.sendMessage(Component.text(
+                    "使用 /ansac sampling stop 可随时停止学习。", NamedTextColor.GRAY));
                 break;
             case "stop":
                 session.adminStop();
-                sender.sendMessage(Component.text("已停止采样并丢弃所有样本。", NamedTextColor.YELLOW));
+                sender.sendMessage(Component.text("已停止 MLP 持续学习。", NamedTextColor.YELLOW));
+                break;
+            case "status":
+                handleSamplingStatus(sender);
                 break;
             default:
-                sender.sendMessage(Component.text("未知子命令。用法: /ansac sampling [start|continue|stop]", NamedTextColor.RED));
+                sender.sendMessage(Component.text("未知子命令。用法: /ansac sampling <start|stop|status>", NamedTextColor.RED));
                 break;
         }
     }
