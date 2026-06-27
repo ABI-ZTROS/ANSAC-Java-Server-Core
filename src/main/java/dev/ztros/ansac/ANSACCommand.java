@@ -774,8 +774,6 @@ public class ANSACCommand implements CommandExecutor {
             } else {
                 sender.sendMessage(Component.text("MLP 推理数据暂不可用。", NamedTextColor.GRAY));
             }
-        } else {
-            sender.sendMessage(Component.text("MLP 推理已禁用。", NamedTextColor.GRAY));
         }
 
         // ===== 多模型融合决策 =====
