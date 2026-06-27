@@ -268,7 +268,6 @@ public class PhysicsInferenceService {
         state.updateFromPlayer(player, from, to, now);
 
         // MLP 完整画像推理 (MovementMLP + CombatMLP + AnomalyFusion)
-        dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
         PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
         double[] features = BehaviorFeatureExtractor.extract(state, profile);
         double movementScore = movementMLP.forward(features);
