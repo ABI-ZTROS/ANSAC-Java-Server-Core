@@ -193,7 +193,7 @@ public class PhysicsInferenceService {
             try {
                 MovementMLP loaded = MLPPersistence.load(mlpFile);
                 if (loaded.getInputSize() == BehaviorFeatureExtractor.FEATURE_COUNT
-                        && loaded.getHidden1Size() == 48
+                        && loaded.getHidden1Size() == 56
                         && loaded.getHidden2Size() == 32) {
                     if (plugin != null) {
                         plugin.getLogger().info("MLP 模型加载成功: " + loaded.getInputSize()
@@ -204,7 +204,7 @@ public class PhysicsInferenceService {
                 if (plugin != null) {
                     plugin.getLogger().warning("MLP 模型维度不匹配 (旧模型 " + loaded.getInputSize()
                         + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size()
-                        + ")，将创建新模型 (" + BehaviorFeatureExtractor.FEATURE_COUNT + "→48→32)");
+                        + ")，将创建新模型 (" + BehaviorFeatureExtractor.FEATURE_COUNT + "→56→32)");
                 }
                 // 删除旧模型文件，防止重复加载
                 mlpFile.delete();
@@ -214,7 +214,7 @@ public class PhysicsInferenceService {
                 }
             }
         }
-        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, 48, 32, 0.01);
+        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, 56, 32, 0.01);
     }
 
     // ==================== 核心处理方法 ====================

@@ -171,7 +171,26 @@ public final class PhysicsEngine {
             baseSpeed *= PhysicsConstants.WATER_SWIM_MULTIPLIER;
         }
 
-        // 环境速度乘数（不与水中减速叠加，取独立判断）
+        // 蜘蛛网：速度降低到 5%
+        if (state.isInCobweb()) {
+            baseSpeed *= PhysicsConstants.COBWEB_SPEED_MULTIPLIER;
+        }
+
+        // 粉雪：速度降低到 ~50%
+        if (state.isInPowderSnow()) {
+            baseSpeed *= 0.5;
+        }
+
+        // 灵魂沙/灵魂土：速度降低到 ~70%
+        if (state.isOnSoulSand()) {
+            baseSpeed *= 0.7;
+        }
+
+        // 粘液块：不直接改变地面速度，但着陆弹跳会产生垂直方向速度
+
+        // 蜂蜜块：不直接改变地面速度，但减速着陆
+
+        // 环境速度乘数（冰面 / 蓝冰）
         if (state.isOnBlueIce()) {
             baseSpeed *= PhysicsConstants.BLUE_ICE_SPEED_MULTIPLIER;
         } else if (state.isOnIce()) {
@@ -189,6 +208,20 @@ public final class PhysicsEngine {
                     + state.getSoulSpeedLevel() * PhysicsConstants.SOUL_SPEED_PER_LEVEL;
             baseSpeed *= soulSpeedMultiplier;
         }
+
+        // 泡泡柱：水下提供向上推力，水平加速
+        if (state.isAboveBubbleColumn()) {
+            baseSpeed *= 1.2;
+        }
+
+        // 击退附加速度：击退后短时间内允许更高速度
+        if (state.getKnockbackMagnitude() > PhysicsConstants.MIN_KNOCKBACK_SPEED) {
+            baseSpeed += state.getKnockbackMagnitude();
+        }
+
+        // 顶格跳加速：头顶有方块时跳跃有额外前冲速度
+        // 在 Minecraft 中，头顶有方块不会改变最大速度，但实际位移因跳跃高度受限而略短
+        // 此处不直接加成 baseSpeed，而是作为特征输入 MLP
 
         return baseSpeed;
     }

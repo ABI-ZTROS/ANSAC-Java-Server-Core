@@ -214,6 +214,36 @@ public class PlayerPhysicsState {
     /** 是否接近地面（用于鞘翅/落地检测） */
     private boolean nearGround;
 
+    /** 是否站在蜘蛛网中 */
+    private boolean inCobweb;
+
+    /** 是否站在灵魂沙上 */
+    private boolean onSoulSand;
+
+    /** 是否站在粘液块上 */
+    private boolean onSlimeBlock;
+
+    /** 是否站在蜂蜜块上 */
+    private boolean onHoneyBlock;
+
+    /** 是否站在粉雪中 */
+    private boolean inPowderSnow;
+
+    /** 是否在泡泡柱上方（海龟蛋/海底神殿下方） */
+    private boolean aboveBubbleColumn;
+
+    /** 头顶方块数量（0=无阻挡，1=低通道，2+=完全封闭） */
+    private int headBlockCount;
+
+    /** 脚下地面方块类型（用于更精细的物理计算） */
+    private Material groundMaterial;
+
+    /** 上次击退产生的速度向量大小（方块/tick），0 = 无击退 */
+    private double knockbackMagnitude;
+
+    /** 上次击退方向（度数） */
+    private float knockbackYaw;
+
     // ==================== 历史采样 ====================
 
     /** 移动采样滑动窗口（最多 20 个采样） */
@@ -382,17 +412,46 @@ public class PlayerPhysicsState {
      * @param player 玩家实例
      */
     public void refreshEnvironment(Player player) {
-        if (currentLocation == null) {
-            return;
-        }
+        if (currentLocation == null) return;
 
-        // 检测脚下方块
+        // 脚下方块
         Block belowBlock = currentLocation.clone().subtract(0, 0.01, 0).getBlock();
         Material belowType = belowBlock.getType();
+        this.groundMaterial = belowType;
 
         // 冰面检测
         this.onIce = (belowType == Material.ICE || belowType == Material.FROSTED_ICE);
         this.onBlueIce = (belowType == Material.BLUE_ICE);
+
+        // 蜘蛛网
+        this.inCobweb = (belowType == Material.COBWEB || belowType == Material.MANGROVE_ROOTS);
+
+        // 灵魂沙
+        this.onSoulSand = (belowType == Material.SOUL_SAND || belowType == Material.SOUL_SOIL);
+
+        // 粘液块
+        this.onSlimeBlock = (belowType == Material.SLIME_BLOCK);
+
+        // 蜂蜜块
+        this.onHoneyBlock = (belowType == Material.HONEY_BLOCK);
+
+        // 粉雪 — 需要检查玩家所在方块（脚到头顶）
+        Block feetBlock = currentLocation.getBlock();
+        this.inPowderSnow = (feetBlock.getType() == Material.POWDER_SNOW);
+
+        // 泡泡柱 — 检查脚下一格和脚下两格
+        Block below1 = currentLocation.clone().subtract(0, 1, 0).getBlock();
+        Block below2 = currentLocation.clone().subtract(0, 2, 0).getBlock();
+        this.aboveBubbleColumn = (below1.getType() == Material.BUBBLE_COLUMN
+                || below2.getType() == Material.BUBBLE_COLUMN);
+
+        // 头顶方块检测（检查脚+1 到 脚+2 的方块）
+        int headCount = 0;
+        Block headBlock1 = currentLocation.clone().add(0, 1, 0).getBlock();
+        Block headBlock2 = currentLocation.clone().add(0, 2, 0).getBlock();
+        if (isSolidForHead(headBlock1.getType())) headCount++;
+        if (isSolidForHead(headBlock2.getType())) headCount++;
+        this.headBlockCount = headCount;
 
         // 爬梯检测
         this.isClimbing = (belowType == Material.LADDER
@@ -401,11 +460,32 @@ public class PlayerPhysicsState {
                 || belowType == Material.TWISTING_VINES
                 || belowType == Material.WEEPING_VINES);
 
-        // 接近地面检测（脚下 2 格内有实体方块）
+        // 接近地面检测
         this.nearGround = PhysicsEngine.verifyGroundState(currentLocation.clone().subtract(0, 2.0, 0));
 
         // 格挡检测
         this.isBlocking = player.isBlocking();
+
+        // 击退衰减：击退速度每 tick 乘以衰减系数
+        if (this.knockbackMagnitude > 0.001) {
+            this.knockbackMagnitude *= PhysicsConstants.KNOCKBACK_DECAY;
+        } else {
+            this.knockbackMagnitude = 0.0;
+        }
+    }
+
+    /**
+     * 判断方块类型是否算作头顶阻挡（顶格跳加速判断）。
+     */
+    private static boolean isSolidForHead(Material mat) {
+        if (mat.isAir()) return false;
+        if (mat == Material.WATER || mat == Material.LAVA) return false;
+        if (mat == Material.TORCH || mat == Material.SOUL_TORCH) return false;
+        if (mat == Material.REDSTONE_TORCH || mat == Material.REDSTONE_WALL_TORCH) return false;
+        if (mat == Material.WALL_TORCH) return false;
+        if (mat == Material.FERN || mat == Material.LARGE_FERN) return false;
+        if (mat == Material.DEAD_BUSH || mat == Material.TALL_GRASS) return false;
+        return true;
     }
 
     /**
@@ -607,6 +687,16 @@ public class PlayerPhysicsState {
         this.onIce = false;
         this.onBlueIce = false;
         this.nearGround = false;
+        this.inCobweb = false;
+        this.onSoulSand = false;
+        this.onSlimeBlock = false;
+        this.onHoneyBlock = false;
+        this.inPowderSnow = false;
+        this.aboveBubbleColumn = false;
+        this.headBlockCount = 0;
+        this.groundMaterial = Material.AIR;
+        this.knockbackMagnitude = 0.0;
+        this.knockbackYaw = 0.0f;
 
         this.movementSamples.clear();
 
@@ -658,6 +748,16 @@ public class PlayerPhysicsState {
     public boolean isOnIce() { return onIce; }
     public boolean isOnBlueIce() { return onBlueIce; }
     public boolean isNearGround() { return nearGround; }
+    public boolean isInCobweb() { return inCobweb; }
+    public boolean isOnSoulSand() { return onSoulSand; }
+    public boolean isOnSlimeBlock() { return onSlimeBlock; }
+    public boolean isOnHoneyBlock() { return onHoneyBlock; }
+    public boolean isInPowderSnow() { return inPowderSnow; }
+    public boolean isAboveBubbleColumn() { return aboveBubbleColumn; }
+    public int getHeadBlockCount() { return headBlockCount; }
+    public Material getGroundMaterial() { return groundMaterial; }
+    public double getKnockbackMagnitude() { return knockbackMagnitude; }
+    public float getKnockbackYaw() { return knockbackYaw; }
     public Deque<MovementSample> getMovementSamples() { return movementSamples; }
     public long getLastGroundTime() { return lastGroundTime; }
     public long getLastKnockbackTime() { return lastKnockbackTime; }
@@ -690,6 +790,14 @@ public class PlayerPhysicsState {
 
     public void setLastKnockbackTime(long lastKnockbackTime) {
         this.lastKnockbackTime = lastKnockbackTime;
+    }
+
+    public void setKnockbackMagnitude(double magnitude) {
+        this.knockbackMagnitude = magnitude;
+    }
+
+    public void setKnockbackYaw(float yaw) {
+        this.knockbackYaw = yaw;
     }
 
     public double getLastNormalScore() { return lastNormalScore; }

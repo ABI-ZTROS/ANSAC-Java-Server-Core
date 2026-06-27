@@ -1,6 +1,8 @@
 package dev.ztros.ansac.physics.mlp;
 
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.physics.PlayerPhysicsState;
+import dev.ztros.ansac.physics.PhysicsEngine;
 import dev.ztros.ansac.physics.mlp.profile.PlayerBehaviorProfile;
 
 /**
@@ -8,7 +10,7 @@ import dev.ztros.ansac.physics.mlp.profile.PlayerBehaviorProfile;
  * 从移动 + 战斗 + 建造 + 交互 + 网络 五个维度提取 72 维归一化特征。
  */
 public final class BehaviorFeatureExtractor {
-    public static final int FEATURE_COUNT = 72;
+    public static final int FEATURE_COUNT = 84;
 
     // 各维度偏移和数量
     public static final int MOVEMENT_COUNT = 24;
@@ -16,13 +18,15 @@ public final class BehaviorFeatureExtractor {
     public static final int BUILDING_COUNT = 10;
     public static final int INTERACTION_COUNT = 10;
     public static final int NETWORK_COUNT = 10;
+    public static final int ENVIRONMENT_COUNT = 16; // 新增环境物理维度
 
     public static final int COMBAT_OFFSET = MOVEMENT_COUNT;
     public static final int BUILDING_OFFSET = MOVEMENT_COUNT + COMBAT_COUNT;
     public static final int INTERACTION_OFFSET = BUILDING_OFFSET + BUILDING_COUNT;
     public static final int NETWORK_OFFSET = INTERACTION_OFFSET + INTERACTION_COUNT;
+    public static final int ENVIRONMENT_OFFSET = NETWORK_OFFSET + NETWORK_COUNT;
 
-    /** 72 维特征的人类可读名称 */
+    /** 84 维特征的人类可读名称 */
     public static final String[] FEATURE_NAMES = {
         // 移动维度 (24)
         "水平速度", "Y轴速度", "预测Y速度", "速度药水", "跳跃增益",
@@ -46,7 +50,12 @@ public final class BehaviorFeatureExtractor {
         // 网络维度 (10)
         "飞行包间隔均值", "飞行包间隔标准差", "包丢失率均值",
         "计时器余额均值", "包速率稳定性", "网络抖动",
-        "延迟补偿量", "包序异常率", "飞行包规律性", "计时器漂移"
+        "延迟补偿量", "包序异常率", "飞行包规律性", "计时器漂移",
+        // 环境物理维度 (16)
+        "头顶方块数", "蜘蛛网", "灵魂沙", "粘液块",
+        "蜂蜜块", "粉雪", "泡泡柱", "爬梯",
+        "击退力度", "击退方向", "击退活跃", "顶格跳适用",
+        "速度/预期比", "滑冰", "在台阶上", "脚下方块摩擦"
     };
 
     private BehaviorFeatureExtractor() {
@@ -170,6 +179,55 @@ public final class BehaviorFeatureExtractor {
         while (i < FEATURE_COUNT) {
             f[i++] = 0.0;
         }
+
+        // ==================== 环境物理维度 (16) ====================
+
+        // 头顶方块数 (0~2 归一化到 0~1)
+        f[ENVIRONMENT_OFFSET + 0] = clamp(physicsState.getHeadBlockCount() / 2.0, 0.0, 1.0);
+        // 蜘蛛网
+        f[ENVIRONMENT_OFFSET + 1] = physicsState.isInCobweb() ? 1.0 : 0.0;
+        // 灵魂沙
+        f[ENVIRONMENT_OFFSET + 2] = physicsState.isOnSoulSand() ? 1.0 : 0.0;
+        // 粘液块
+        f[ENVIRONMENT_OFFSET + 3] = physicsState.isOnSlimeBlock() ? 1.0 : 0.0;
+        // 蜂蜜块
+        f[ENVIRONMENT_OFFSET + 4] = physicsState.isOnHoneyBlock() ? 1.0 : 0.0;
+        // 粉雪
+        f[ENVIRONMENT_OFFSET + 5] = physicsState.isInPowderSnow() ? 1.0 : 0.0;
+        // 泡泡柱
+        f[ENVIRONMENT_OFFSET + 6] = physicsState.isAboveBubbleColumn() ? 1.0 : 0.0;
+        // 爬梯
+        f[ENVIRONMENT_OFFSET + 7] = physicsState.isClimbing() ? 1.0 : 0.0;
+        // 击退力度 (归一化到 0~1, 最大约 1.0 b/t)
+        f[ENVIRONMENT_OFFSET + 8] = clamp(physicsState.getKnockbackMagnitude() / 1.0, 0.0, 1.0);
+        // 击退方向 (角度归一化到 0~1)
+        f[ENVIRONMENT_OFFSET + 9] = clamp((physicsState.getKnockbackYaw() + 180.0) / 360.0, 0.0, 1.0);
+        // 击退活跃 (最近500ms内是否受过击退)
+        long now = System.currentTimeMillis();
+        f[ENVIRONMENT_OFFSET + 10] = (now - physicsState.getLastKnockbackTime() < 500) ? 1.0 : 0.0;
+        // 顶格跳适用 (跳跃中且头顶有方块)
+        boolean headRoomJump = physicsState.getJumpPhase() != PlayerPhysicsState.JumpPhase.NONE
+                && physicsState.getHeadBlockCount() > 0;
+        f[ENVIRONMENT_OFFSET + 11] = headRoomJump ? 1.0 : 0.0;
+        // 速度/预期比 (实际水平速度 / 理论最大速度)
+        double expected = computeExpectedMaxHorizontalSpeed(physicsState);
+        f[ENVIRONMENT_OFFSET + 12] = expected > 0.01
+                ? clamp((hSpeed / expected), 0.0, 2.0) / 2.0 : 0.5;
+        // 滑冰 (冰面或蓝冰)
+        f[ENVIRONMENT_OFFSET + 13] = (physicsState.isOnIce() || physicsState.isOnBlueIce()) ? 1.0 : 0.0;
+        // 在台阶上 (在自动台阶高度内的垂直位移)
+        boolean onStep = !physicsState.isClientOnGround()
+                && physicsState.getVelocityY() > 0
+                && physicsState.getVelocityY() < PhysicsConstants.AUTO_STEP_HEIGHT
+                && physicsState.getJumpPhase() == PlayerPhysicsState.JumpPhase.NONE;
+        f[ENVIRONMENT_OFFSET + 14] = onStep ? 1.0 : 0.0;
+        // 脚下方块摩擦系数 (低摩擦=滑, 高摩擦=正常)
+        double friction = 1.0;
+        if (physicsState.isOnIce()) friction = 0.98;
+        else if (physicsState.isOnBlueIce()) friction = 0.99;
+        else if (physicsState.isOnSlimeBlock()) friction = 0.8;
+        else if (physicsState.isOnHoneyBlock()) friction = 0.4;
+        f[ENVIRONMENT_OFFSET + 15] = clamp(friction, 0.0, 1.0);
 
         return f;
     }

@@ -3,6 +3,7 @@ package dev.ztros.ansac.listeners;
 import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.checks.CheckManager;
+import dev.ztros.ansac.physics.PhysicsConstants;
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.checks.combat.AutoArmorCheck;
 import dev.ztros.ansac.checks.combat.AutoLogCheck;
@@ -109,10 +110,22 @@ public class PlayerListener implements Listener {
         data.getPingCompensator().addPingSample(data.getPing());
 
         // Detect sudden velocity changes (wind charge, explosion knockback, etc.)
+        PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
         Vector velocity = event.getPlayer().getVelocity();
         double velLen = velocity.length();
-        if (velLen > 1.5) {
-            data.setLastKnockbackTime(System.currentTimeMillis());
+        if (velLen > PhysicsConstants.MIN_KNOCKBACK_SPEED) {
+            long now = System.currentTimeMillis();
+            data.setLastKnockbackTime(now);
+
+            // 将击退信息同步到物理状态追踪器
+            if (inferenceService != null) {
+                dev.ztros.ansac.physics.PlayerPhysicsState pstate = inferenceService.getState(player.getUniqueId());
+                if (pstate != null) {
+                    pstate.setLastKnockbackTime(now);
+                    pstate.setKnockbackMagnitude(velLen);
+                    pstate.setKnockbackYaw((float) Math.toDegrees(Math.atan2(velocity.getZ(), velocity.getX())));
+                }
+            }
         }
 
         // Update location data
@@ -122,7 +135,6 @@ public class PlayerListener implements Listener {
         plugin.getCheckManager().processPlayer(event.getPlayer());
 
         // Feed movement data to physics inference service
-        PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
         if (inferenceService != null) {
             inferenceService.onPlayerMove(event.getPlayer(), data, from, to);
         }
