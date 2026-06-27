@@ -322,8 +322,8 @@ public class PhysicsInferenceService {
             if (samplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
                 dev.ztros.ansac.player.PlayerData sampleData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
                 PlayerBehaviorProfile sampleProfile = (sampleData != null) ? sampleData.getBehaviorProfile() : new PlayerBehaviorProfile();
-                double[] features = BehaviorFeatureExtractor.extract(state, sampleProfile);
-                boolean reached = samplingSession.offerSample(features);
+                double[] sampleFeatures = BehaviorFeatureExtractor.extract(state, sampleProfile);
+                boolean reached = samplingSession.offerSample(sampleFeatures);
                 if (reached) {
                     // 达到采样目标，在锁外触发自动训练回调
                     samplingSession.fireTargetReachedCallback();
