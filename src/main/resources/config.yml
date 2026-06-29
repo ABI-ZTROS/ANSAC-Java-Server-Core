@@ -77,6 +77,40 @@ physics-inference:
   mlp-enabled: true
   mlp-sampling-target: 5000
 
+  # ========================================
+  # 神经网络详细参数
+  # 注意：输入维度由特征提取器决定，不可配置
+  #   MovementMLP 输入 = 84 (自动)
+  #   CombatMLP   输入 = 14 (自动)
+  #   CausalFusion 输入 = 8 (自动)
+  # 修改隐藏层维度后旧模型文件会自动检测并重建
+  # ========================================
+  mlp-network:
+    # MovementMLP: 移动行为正常度网络
+    movement:
+      hidden1: 56         # 第一隐藏层神经元数 (建议 32~128, 范围 4~256)
+      hidden2: 32         # 第二隐藏层神经元数 (建议 16~64, 范围 4~256)
+      learning-rate: 0.01 # 学习率 (建议 0.001~0.05)
+
+    # CombatMLP: 战斗行为正常度网络
+    combat:
+      hidden1: 16
+      hidden2: 8
+      learning-rate: 0.01
+
+    # CausalFusion: 因果融合决策网络
+    # 输入: movementScore, combatScore, ruleScore, 环境解释力, 速度/预期比, 击退力度, 顶格跳, 冲击事件
+    fusion:
+      hidden1: 12         # 隐藏层神经元数 (建议 8~32, 范围 4~64)
+      learning-rate: 0.01
+
+    # 训练安全参数（所有网络共享）
+    grad-clip: 5.0        # 梯度裁剪阈值 (防止梯度爆炸)
+    weight-clip: 50.0     # 权重裁剪阈值 (防止极端权重)
+    train-epochs: 200      # 每轮采样训练迭代次数
+    model-punish-vl: 20    # 模型处罚所需累计VL
+    anomaly-threshold: 0.70 # 异常判定阈值 (0~1, 越高越宽松)
+
 # ==========================================
 # 处罚配置
 # ==========================================

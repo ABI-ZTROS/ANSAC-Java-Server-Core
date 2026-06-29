@@ -242,6 +242,62 @@ public final class BehaviorFeatureExtractor {
         return combat;
     }
 
+    /**
+     * 提取因果输入向量(8维)给 CausalFusion 网络。
+     * 核心思想：不仅看行为异常度，还看环境能否解释这些异常。
+     *
+     * @param state          玩家物理状态
+     * @param movementScore  MovementMLP 正常度 (0~1)
+     * @param combatScore    CombatMLP 正常度 (0~1)
+     * @param ruleScore      规则层偏离度 (0~1)
+     * @return 8维因果输入
+     */
+    public static double[] extractCausalInputs(PlayerPhysicsState state,
+            double movementScore, double combatScore, double ruleScore) {
+        double[] inputs = new double[8];
+
+        // [0] movementScore
+        inputs[0] = clamp(movementScore, 0.0, 1.0);
+        // [1] combatScore
+        inputs[1] = clamp(combatScore, 0.0, 1.0);
+        // [2] ruleScore
+        inputs[2] = clamp(ruleScore, 0.0, 1.0);
+
+        // [3] 环境解释力：综合评估当前环境能在多大程度上解释速度异常
+        // 环境因素越多，解释力越高，越不应该判为作弊
+        double envExplain = 0.0;
+        if (state.isOnBlueIce()) envExplain += 0.35;         // 蓝冰最大加速16x
+        if (state.isOnIce()) envExplain += 0.25;              // 冰面9x
+        if (state.getSpeedPotionLevel() > 0) envExplain += 0.15; // 速度药水
+        if (state.hasSoulSpeed()) envExplain += 0.15;        // 灵魂疾行
+        if (state.hasDolphinsGrace()) envExplain += 0.20;     // 海豚恩惠
+        if (state.isAboveBubbleColumn()) envExplain += 0.10;  // 泡泡柱
+        if (state.getKnockbackMagnitude() > 0.01) envExplain += 0.30; // 击退
+        inputs[3] = clamp(envExplain, 0.0, 1.0);
+
+        // [4] 速度/预期比 (实际水平速度 / 理论最大速度)
+        double hSpeed = Math.sqrt(state.getVelocityX() * state.getVelocityX()
+                + state.getVelocityZ() * state.getVelocityZ());
+        double expected = PhysicsEngine.computeExpectedMaxHorizontalSpeed(state);
+        inputs[4] = expected > 0.01
+                ? clamp((hSpeed / expected) / 2.0, 0.0, 1.0) // 归一化到0~1, 1.0=两倍理论速度
+                : 0.5;
+
+        // [5] 击退力度
+        inputs[5] = clamp(state.getKnockbackMagnitude() / 1.0, 0.0, 1.0);
+
+        // [6] 顶格跳适用 (跳跃中 + 头顶有方块)
+        boolean headJump = state.getJumpPhase() != PlayerPhysicsState.JumpPhase.NONE
+                && state.getHeadBlockCount() > 0;
+        inputs[6] = headJump ? 1.0 : 0.0;
+
+        // [7] 冲击事件活跃 (最近500ms内是否受过击退或被弹射)
+        long now = System.currentTimeMillis();
+        inputs[7] = (now - state.getLastKnockbackTime() < 500) ? 1.0 : 0.0;
+
+        return inputs;
+    }
+
     private static double clamp(double v, double min, double max) {
         return Math.max(min, Math.min(max, v));
     }

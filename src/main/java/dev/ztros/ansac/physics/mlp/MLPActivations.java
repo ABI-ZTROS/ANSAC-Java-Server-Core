@@ -6,10 +6,18 @@ package dev.ztros.ansac.physics.mlp;
  */
 public final class MLPActivations {
 
-    /** 梯度裁剪阈值 */
-    public static final double GRAD_CLIP = 5.0;
+    /** 梯度裁剪阈值（可通过 setGradClip 动态调整） */
+    private static double GRAD_CLIP = 5.0;
+
+    /** 权重裁剪阈值（可通过 setWeightClip 动态调整） */
+    private static double WEIGHT_CLIP = 50.0;
 
     private MLPActivations() {}
+
+    public static double getGradClip() { return GRAD_CLIP; }
+    public static double getWeightClip() { return WEIGHT_CLIP; }
+    public static void setGradClip(double v) { GRAD_CLIP = v; }
+    public static void setWeightClip(double v) { WEIGHT_CLIP = v; }
 
     /**
      * 数值稳定的 sigmoid。
@@ -54,6 +62,6 @@ public final class MLPActivations {
      */
     public static double clampWeight(double w) {
         if (Double.isNaN(w) || Double.isInfinite(w)) return 0.0;
-        return Math.max(-50.0, Math.min(50.0, w));
+        return Math.max(-WEIGHT_CLIP, Math.min(WEIGHT_CLIP, w));
     }
 }

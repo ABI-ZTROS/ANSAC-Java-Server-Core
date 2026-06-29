@@ -741,7 +741,10 @@ public class ANSACCommand implements CommandExecutor {
                 // 网络结构概览
                 sender.sendMessage(Component.text("网络结构：", NamedTextColor.YELLOW)
                     .append(Component.text(
-                        "84(输入) → 56(ReLU) → 32(ReLU) → 1(Sigmoid)", NamedTextColor.GRAY)));
+                        svc.getMovementMLP().getInputSize() + "(输入) → "
+                        + svc.getMovementMLP().getHidden1Size() + "(ReLU) → "
+                        + svc.getMovementMLP().getHidden2Size() + "(ReLU) → 1(Sigmoid)",
+                        NamedTextColor.GRAY)));
 
                 // 隐藏层1激活值热力图
                 sender.sendMessage(Component.text("隐藏层1 激活值 (24神经元)：", NamedTextColor.YELLOW));
@@ -794,11 +797,11 @@ public class ANSACCommand implements CommandExecutor {
                     sender.sendMessage(Component.text("CombatMLP 正常度：", NamedTextColor.YELLOW)
                         .append(Component.text(String.format("%.4f", combatScore), combatScore >= 0.5 ? NamedTextColor.GREEN : NamedTextColor.RED)));
                 }
-                String fusionVerdict = dev.ztros.ansac.physics.mlp.AnomalyFusion.getVerdictLabel(anomalyScore);
+                String fusionVerdict = dev.ztros.ansac.physics.mlp.CausalFusion.getVerdictLabel(anomalyScore);
                 NamedTextColor fusionColor = anomalyScore >= 0.65 ? NamedTextColor.DARK_RED
                     : anomalyScore >= 0.45 ? NamedTextColor.RED
                     : anomalyScore >= 0.25 ? NamedTextColor.YELLOW : NamedTextColor.GREEN;
-                sender.sendMessage(Component.text("AnomalyFusion 异常度：", NamedTextColor.YELLOW)
+                sender.sendMessage(Component.text("CausalFusion 异常度：", NamedTextColor.YELLOW)
                     .append(Component.text(String.format("%.4f (%s)", anomalyScore, fusionVerdict), fusionColor)));
                 sender.sendMessage(Component.text("检测模式：", NamedTextColor.YELLOW)
                     .append(Component.text(svc.getDetectionMode().name(), NamedTextColor.WHITE)));

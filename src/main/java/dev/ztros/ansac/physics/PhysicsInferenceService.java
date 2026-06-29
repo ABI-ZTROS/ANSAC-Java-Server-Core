@@ -1,6 +1,7 @@
 package dev.ztros.ansac.physics;
 
 import dev.ztros.ansac.ANSACPlugin;
+import dev.ztros.ansac.config.ANSACConfig;
 
 import dev.ztros.ansac.physics.mlp.*;
 import dev.ztros.ansac.physics.mlp.profile.*;
@@ -78,9 +79,14 @@ public class PhysicsInferenceService {
 
     private final MovementMLP movementMLP;
     private final CombatMLP combatMLP;
-    private final AnomalyFusion anomalyFusion;
+    private final CausalFusion causalFusion;
     private final MLPSamplingSession samplingSession;
     private final File mlpFile;
+    private final File combatMlpFile;
+    private final File fusionMlpFile;
+    private final int trainEpochs;
+    private final int modelPunishVL;
+    private final double anomalyThreshold;
 
     /** 检测运行模式: RULE_ONLY / MODEL_ONLY / HYBRID */
     private volatile DetectionMode detectionMode = DetectionMode.HYBRID;
@@ -162,11 +168,23 @@ public class PhysicsInferenceService {
         this.iterationCount = 0;
 
         this.mlpFile = new File(plugin.getDataFolder(), "mlp-model.bin");
+        this.combatMlpFile = new File(plugin.getDataFolder(), "combat-mlp-model.bin");
+        this.fusionMlpFile = new File(plugin.getDataFolder(), "fusion-mlp-model.bin");
         int samplingTarget = plugin.getAnsacConfig().getMlpSamplingTarget();
         this.samplingSession = new MLPSamplingSession(samplingTarget);
-        this.movementMLP = loadOrCreateMlp();
-        this.combatMLP = new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, 16, 8, 0.01);
-        this.anomalyFusion = new AnomalyFusion(0.01);
+
+        ANSACConfig cfg = plugin.getAnsacConfig();
+        this.movementMLP = loadOrCreateMovementMlp(cfg);
+        this.combatMLP = loadOrCreateCombatMlp(cfg);
+        this.causalFusion = loadOrCreateFusionMlp(cfg);
+        this.trainEpochs = cfg.getTrainEpochs();
+        this.modelPunishVL = cfg.getModelPunishVL();
+        this.anomalyThreshold = cfg.getAnomalyThreshold();
+
+        // 更新 MLPActivations 的裁剪阈值
+        MLPActivations.setGradClip(cfg.getGradClip());
+        MLPActivations.setWeightClip(cfg.getWeightClip());
+
         this.detectionMode = DetectionMode.fromString(plugin.getConfig().getString("detection-mode", "hybrid"));
 
         // 注册持续自动训练回调：达到采样目标后自动训练
@@ -178,37 +196,95 @@ public class PhysicsInferenceService {
         });
 
         if (plugin != null) {
-            plugin.getLogger().info("ANSAC 物理推理引擎已启动: 84维输入 → 56→32→1 (MovementMLP + CombatMLP + AnomalyFusion)");
+            plugin.getLogger().info("ANSAC 物理推理引擎已启动: " + BehaviorFeatureExtractor.FEATURE_COUNT
+                + "维输入 → " + movementMLP.getHidden1Size() + "→" + movementMLP.getHidden2Size()
+                + "→1 (MovementMLP + CombatMLP + CausalFusion)");
         }
     }
 
-    private MovementMLP loadOrCreateMlp() {
+    private MovementMLP loadOrCreateMovementMlp(ANSACConfig cfg) {
+        int h1 = cfg.getMovementHidden1();
+        int h2 = cfg.getMovementHidden2();
+        double lr = cfg.getMovementLearningRate();
         if (mlpFile.exists()) {
             try {
-                MovementMLP loaded = MLPPersistence.load(mlpFile);
+                MovementMLP loaded = MLPPersistence.loadMovement(mlpFile);
                 if (loaded.getInputSize() == BehaviorFeatureExtractor.FEATURE_COUNT
-                        && loaded.getHidden1Size() == 56
-                        && loaded.getHidden2Size() == 32) {
+                        && loaded.getHidden1Size() == h1
+                        && loaded.getHidden2Size() == h2) {
                     if (plugin != null) {
-                        plugin.getLogger().info("MLP 模型加载成功: " + loaded.getInputSize()
+                        plugin.getLogger().info("MovementMLP 模型加载成功: " + loaded.getInputSize()
                             + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size());
                     }
                     return loaded;
                 }
                 if (plugin != null) {
-                    plugin.getLogger().warning("MLP 模型维度不匹配 (旧模型 " + loaded.getInputSize()
-                        + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size()
-                        + ")，将创建新模型 (" + BehaviorFeatureExtractor.FEATURE_COUNT + "→56→32)");
+                    plugin.getLogger().warning("MovementMLP 模型维度不匹配 (旧模型 "
+                        + loaded.getInputSize() + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size()
+                        + ")，将创建新模型 (" + BehaviorFeatureExtractor.FEATURE_COUNT + "→" + h1 + "→" + h2 + ")");
                 }
-                // 删除旧模型文件，防止重复加载
                 mlpFile.delete();
             } catch (IOException e) {
                 if (plugin != null) {
-                    plugin.getLogger().warning("加载 MLP 模型失败，将创建新模型: " + e.getMessage());
+                    plugin.getLogger().warning("加载 MovementMLP 模型失败，将创建新模型: " + e.getMessage());
                 }
             }
         }
-        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, 56, 32, 0.01);
+        return new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, h1, h2, lr);
+    }
+
+    private CombatMLP loadOrCreateCombatMlp(ANSACConfig cfg) {
+        int h1 = cfg.getCombatHidden1();
+        int h2 = cfg.getCombatHidden2();
+        double lr = cfg.getCombatLearningRate();
+        if (combatMlpFile.exists()) {
+            try {
+                CombatMLP loaded = MLPPersistence.loadCombat(combatMlpFile);
+                if (loaded.getInputSize() == BehaviorFeatureExtractor.COMBAT_COUNT
+                        && loaded.getHidden1Size() == h1
+                        && loaded.getHidden2Size() == h2) {
+                    if (plugin != null) {
+                        plugin.getLogger().info("CombatMLP 模型加载成功: " + loaded.getInputSize()
+                            + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size());
+                    }
+                    return loaded;
+                }
+                if (plugin != null) {
+                    plugin.getLogger().warning("CombatMLP 模型维度不匹配，将创建新模型");
+                }
+                combatMlpFile.delete();
+            } catch (IOException e) {
+                if (plugin != null) {
+                    plugin.getLogger().warning("加载 CombatMLP 模型失败: " + e.getMessage());
+                }
+            }
+        }
+        return new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, h1, h2, lr);
+    }
+
+    private CausalFusion loadOrCreateFusionMlp(ANSACConfig cfg) {
+        int h1 = cfg.getFusionHidden1();
+        double lr = cfg.getFusionLearningRate();
+        if (fusionMlpFile.exists()) {
+            try {
+                CausalFusion loaded = MLPPersistence.loadFusion(fusionMlpFile);
+                if (loaded.getHiddenSize() == h1) {
+                    if (plugin != null) {
+                        plugin.getLogger().info("CausalFusion 模型加载成功: 隐藏层=" + h1);
+                    }
+                    return loaded;
+                }
+                if (plugin != null) {
+                    plugin.getLogger().warning("CausalFusion 模型维度不匹配，将创建新模型");
+                }
+                fusionMlpFile.delete();
+            } catch (IOException e) {
+                if (plugin != null) {
+                    plugin.getLogger().warning("加载 CausalFusion 模型失败: " + e.getMessage());
+                }
+            }
+        }
+        return new CausalFusion(h1, lr);
     }
 
     // ==================== 核心处理方法 ====================
@@ -267,29 +343,30 @@ public class PhysicsInferenceService {
         long now = System.currentTimeMillis();
         state.updateFromPlayer(player, from, to, now);
 
-        // MLP 完整画像推理 (MovementMLP + CombatMLP + AnomalyFusion)
+        // MLP 完整画像推理 (MovementMLP + CombatMLP + CausalFusion)
         PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
         double[] features = BehaviorFeatureExtractor.extract(state, profile);
         double movementScore = movementMLP.forward(features);
         double[] combatFeatures = BehaviorFeatureExtractor.extractCombatSlice(features);
         double combatScore = combatMLP.forward(combatFeatures);
-        // 规则分数初始为0（无规则偏离），由 Check 层在 flag 时更新
-        double anomalyScore = anomalyFusion.forward(movementScore, combatScore, 0.0);
+        // 因果特征：环境解释力、速度/预期比、击退力度、顶格跳、冲击事件等
+        double[] causalInputs = BehaviorFeatureExtractor.extractCausalInputs(state, movementScore, combatScore, 0.0);
+        double anomalyScore = causalFusion.forward(causalInputs);
         state.setLastNormalScore(movementScore);
         state.setLastAnomalyScore(anomalyScore);
 
         // 纯模型模式：AI 辅助判罪（需要模型已训练至少一轮）
         // 未训练的模型输出为随机值，不能用于处罚
         boolean modelReady = samplingSession.getTrainRound() > 0;
-        if (detectionMode == DetectionMode.MODEL_ONLY && modelReady && anomalyScore > 0.70 && playerData != null) {
+        if (detectionMode == DetectionMode.MODEL_ONLY && modelReady && anomalyScore > anomalyThreshold && playerData != null) {
             // 将异常分数映射为 VL 增量，走 Check 层的 VL 累积系统
-            double severity = (anomalyScore - 0.70) / 0.30; // 0.70~1.0 映射到 0~1
+            double severity = (anomalyScore - anomalyThreshold) / (1.0 - anomalyThreshold); // 映射到 0~1
             playerData.addViolation("AnomalyFusion", severity * 2.0);
 
             // 查看累计 VL，达到阈值才处罚
             var violationOpt = playerData.getViolation("AnomalyFusion");
             int totalVL = violationOpt != null ? violationOpt.getTotalVL() : 0;
-            if (totalVL >= 20) {
+            if (totalVL >= modelPunishVL) {
                 long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
                 if (now - lastPunish > 10000L) {
                     modelPunishCooldown.put(uuid, now);
@@ -815,20 +892,39 @@ public class PhysicsInferenceService {
     public void trainMlp(List<double[]> samples) {
         plugin.getSchedulerAdapter().runAsync(() -> {
             try {
-                final int epochs = 200;
+                final int epochs = trainEpochs;
+                double totalLossFusion = 0.0;
+                int fusionCount = 0;
                 for (int epoch = 0; epoch < epochs; epoch++) {
                     double totalLossMove = 0.0;
                     double totalLossCombat = 0.0;
+                    double epochFusionLoss = 0.0;
+                    int epochFusionCount = 0;
                     for (double[] sample : samples) {
                         totalLossMove += movementMLP.train(sample, 1.0);
                         double[] combatSlice = BehaviorFeatureExtractor.extractCombatSlice(sample);
                         totalLossCombat += combatMLP.train(combatSlice, 1.0);
+
+                        // CausalFusion 训练: 构建8维因果输入
+                        // 从样本特征中提取移动/战斗分数 + 环境特征
+                        double moveScore = movementMLP.forward(sample);
+                        double combatScore = combatMLP.forward(combatSlice);
+                        double ruleScore = 0.0; // 受信任玩家训练样本, 无规则偏离
+                        // 因果输入: envExplain=0, speedRatio=0.5, knockback=0, headJump=0, impact=0
+                        // (训练样本是正常玩家, 环境上下文已编码在84维特征中)
+                        double[] causalInputs = new double[]{
+                            moveScore, combatScore, ruleScore,
+                            0.3, 0.5, 0.0, 0.0, 0.0
+                        };
+                        epochFusionLoss += causalFusion.train(causalInputs, 0.0);
+                        epochFusionCount++;
                     }
                     double avgLoss = totalLossMove / samples.size();
                     if (epoch % 20 == 0 || epoch == epochs - 1) {
                         plugin.getLogger().info(String.format(
-                            "MLP 训练 epoch %d/%d, 移动损失: %.6f, 战斗损失: %.6f",
-                            epoch + 1, epochs, avgLoss, totalLossCombat / samples.size()));
+                            "MLP 训练 epoch %d/%d, 移动损失: %.6f, 战斗损失: %.6f, 融合损失: %.6f",
+                            epoch + 1, epochs, avgLoss, totalLossCombat / samples.size(),
+                            epochFusionCount > 0 ? epochFusionLoss / epochFusionCount : 0.0));
 
                         // 每20个epoch通知在线管理员训练进度
                         int finalEpoch = epoch;
@@ -858,8 +954,11 @@ public class PhysicsInferenceService {
                         });
                     }
                 }
-                MLPPersistence.save(movementMLP, mlpFile);
-                plugin.getLogger().info("MLP 模型已保存至 " + mlpFile.getName());
+                // 保存三个模型
+                MLPPersistence.saveMovement(movementMLP, mlpFile);
+                MLPPersistence.saveCombat(combatMLP, combatMlpFile);
+                MLPPersistence.saveFusion(causalFusion, fusionMlpFile);
+                plugin.getLogger().info("三个 MLP 模型已保存");
                 samplingSession.markReady();
             } catch (IOException e) {
                 plugin.getLogger().severe("MLP 模型保存失败: " + e.getMessage());
@@ -879,7 +978,7 @@ public class PhysicsInferenceService {
 
     public MovementMLP getMovementMLP() { return movementMLP; }
     public CombatMLP getCombatMLP() { return combatMLP; }
-    public AnomalyFusion getAnomalyFusion() { return anomalyFusion; }
+    public CausalFusion getCausalFusion() { return causalFusion; }
 
     public DetectionMode getDetectionMode() { return detectionMode; }
     public void setDetectionMode(DetectionMode mode) {

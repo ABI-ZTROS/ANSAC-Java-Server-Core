@@ -161,4 +161,11 @@ public final class CombatMLP {
     public int getInputSize()  { return inputSize; }
     public int getHidden1Size() { return hidden1Size; }
     public int getHidden2Size() { return hidden2Size; }
+    public double getLearningRate() { return learningRate; }
+    public double[][] getW1() { return W1; }
+    public double[] getB1() { return b1; }
+    public double[][] getW2() { return W2; }
+    public double[] getB2() { return b2; }
+    public double[][] getW3() { return W3; }
+    public double[] getB3() { return b3; }
 }
