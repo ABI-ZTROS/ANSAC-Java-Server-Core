@@ -55,8 +55,8 @@ class MovementMLPTest {
         for (int i = 0; i < 24; i++) input[i] = 0.33;
         double expected = original.forward(input);
 
-        MLPPersistence.save(original, temp);
-        MovementMLP loaded = MLPPersistence.load(temp);
+        MLPPersistence.saveMovement(original, temp);
+        MovementMLP loaded = MLPPersistence.loadMovement(temp);
         double actual = loaded.forward(input);
 
         assertEquals(expected, actual, 1e-9,
