@@ -186,24 +186,17 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
         }
 
         // --- Check 4: Pitch-speed mismatch ---
-        // 烟花加速后跳过此检查：加速后速度自然偏离 pitch 模型
-        if (tracker.boostCooldown > 0) {
-            tracker.boostCooldown--;
-            tracker.pitchMismatchBuffer = 0;
-        } else {
-            checkPitchSpeedMismatch(player, data, horizontalSpeed, pitch, tracker);
-        }
-
-        // 检测烟花加速：速度突增
-        if (horizontalSpeed > tracker.lastSpeed + 0.3 && horizontalSpeed > 0.5) {
-            tracker.boostCooldown = BOOST_COOLDOWN_TICKS;
-        }
+        // 已禁用：简化物理模型在真实游戏中不可靠
+        // 烟花加速、风弹、初始惯性、Folia多线程tick差异都会导致严重误报
+        // 只保留速度上限检查（Check 3）和悬停检查（Check 1）
+        // checkPitchSpeedMismatch(player, data, horizontalSpeed, pitch, tracker);
 
         // --- Check 5: Linear trajectory (perfectly straight flight) ---
         checkLinearTrajectory(player, data, yaw, pitch, horizontalSpeed, tracker);
 
         // --- Check 6: Speed constancy (unnaturally constant speed) ---
-        checkSpeedConstancy(player, data, horizontalSpeed, tracker);
+        // 已禁用：正常鞘翅飞行在短窗口内速度也可以非常恒定
+        // checkSpeedConstancy(player, data, horizontalSpeed, tracker);
 
         // Update tracking state
         tracker.lastYaw = yaw;
