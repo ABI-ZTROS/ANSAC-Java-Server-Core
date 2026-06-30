@@ -1288,11 +1288,12 @@ public class PhysicsInferenceService {
                         // 通知在线管理员
                         int finalEpoch = epoch;
                         boolean isLast = (epoch == epochs - 1);
+                        final double finalLoss = lastLoss;
                         plugin.getSchedulerAdapter().runAsync(() -> {
                             Component msg = miniMessage.deserialize(
                                 "<gray>[<dark_purple>ANSAC-ThreatMLP</dark_purple>]</gray> " +
                                 "<dark_purple>威胁模型训练</dark_purple> " +
-                                String.format("epoch %d/%d 损失: %.6f", finalEpoch + 1, epochs, lastLoss) +
+                                String.format("epoch %d/%d 损失: %.6f", finalEpoch + 1, epochs, finalLoss) +
                                 (isLast ? " <green>✓ 训练完成</green>" : " <gray>继续训练中...</gray>")
                             );
                             for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
