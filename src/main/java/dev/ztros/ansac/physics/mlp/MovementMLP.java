@@ -1,6 +1,6 @@
 package dev.ztros.ansac.physics.mlp;
 
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 轻量多层感知机（MLP），用于分析玩家移动行为正常度。
@@ -10,7 +10,6 @@ import java.util.Random;
  * <p>支持单样本在线训练（SGD）。</p>
  */
 public final class MovementMLP {
-    private static final long SEED = 0x4E5341434D4C5000L;
 
     private final int inputSize;
     private final int hidden1Size;
@@ -48,20 +47,22 @@ public final class MovementMLP {
     }
 
     private void xavierInit(double[][] matrix, int fanIn) {
-        Random rand = new Random(SEED ^ matrix.length ^ matrix[0].length);
-        double limit = Math.sqrt(6.0 / fanIn);
+        int fanOut = matrix[0].length;
+        double limit = Math.sqrt(6.0 / (fanIn + fanOut));
+        ThreadLocalRandom rand = ThreadLocalRandom.current();
         for (int i = 0; i < matrix.length; i++) {
             for (int j = 0; j < matrix[i].length; j++) {
-                matrix[i][j] = (rand.nextDouble() * 2.0 - 1.0) * limit;
+                matrix[i][j] = rand.nextDouble(-limit, limit);
             }
         }
     }
 
     private void xavierInit(double[] vector, int fanIn) {
-        Random rand = new Random(SEED ^ vector.length);
-        double limit = Math.sqrt(6.0 / fanIn);
+        int fanOut = 1;
+        double limit = Math.sqrt(6.0 / (fanIn + fanOut));
+        ThreadLocalRandom rand = ThreadLocalRandom.current();
         for (int i = 0; i < vector.length; i++) {
-            vector[i] = (rand.nextDouble() * 2.0 - 1.0) * limit;
+            vector[i] = rand.nextDouble(-limit, limit);
         }
     }
 

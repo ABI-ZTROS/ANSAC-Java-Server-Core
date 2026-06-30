@@ -675,10 +675,14 @@ public class PhysicsInferenceService {
         // ==================== 高危玩家数据收集（B模型训练） ====================
         // 高危玩家（已确认作弊者）的行为数据用于训练威胁模型
         // B模型学习作弊行为模式，辅助正常推理
+        // 注意：实时在线学习使用 synchronized 保护，因为 Folia 多线程下
+        // 不同玩家的 onPlayerMove 跑在不同区域线程上，并发 train() 会损坏权重
         if (dualModelEnabled && highRiskPlayers.containsKey(uuid)) {
             // 实时在线学习：逐tick单样本SGD（而非批量异步）
             if (realtimeOnlineLearning) {
-                threatModelBundle.trainOnCheater(features);
+                synchronized (threatModelBundle) {
+                    threatModelBundle.trainOnCheater(features);
+                }
             } else {
                 // 批量采样模式
                 if (threatSamplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
@@ -693,15 +697,22 @@ public class PhysicsInferenceService {
         // ==================== 实时同步推理（被标记为合法的玩家） ====================
         // 对标记为合法的玩家进行实时同步双模型推理 + 在线学习
         // 这提供了最高精度的检测：模型逐tick学习其行为模式
+        // synchronized 保护 A/B 模型的并发写入
         if (dualModelEnabled && realtimeInferencePlayers.containsKey(uuid)) {
             // 合法玩家行为作为负样本喂入B模型（target=0.0 = 非作弊）
             if (realtimeOnlineLearning) {
-                threatModelBundle.trainOnNormal(features);
+                synchronized (threatModelBundle) {
+                    threatModelBundle.trainOnNormal(features);
+                }
             }
             // A模型也做在线学习（逐tick强化正常行为认知）
             if (modelReady) {
-                movementMLP.train(features, 1.0);
-                combatMLP.train(combatFeatures, 1.0);
+                synchronized (movementMLP) {
+                    movementMLP.train(features, 1.0);
+                }
+                synchronized (combatMLP) {
+                    combatMLP.train(combatFeatures, 1.0);
+                }
             }
         }
     }

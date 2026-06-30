@@ -266,8 +266,9 @@ public final class BehaviorFeatureExtractor {
         // [3] 环境解释力：综合评估当前环境能在多大程度上解释速度异常
         // 环境因素越多，解释力越高，越不应该判为作弊
         double envExplain = 0.0;
+        // 蓝冰和普通冰互斥，只取最大的一个，避免双重计数
         if (state.isOnBlueIce()) envExplain += 0.35;         // 蓝冰最大加速16x
-        if (state.isOnIce()) envExplain += 0.25;              // 冰面9x
+        else if (state.isOnIce()) envExplain += 0.25;         // 冰面9x (仅非蓝冰)
         if (state.getSpeedPotionLevel() > 0) envExplain += 0.15; // 速度药水
         if (state.hasSoulSpeed()) envExplain += 0.15;        // 灵魂疾行
         if (state.hasDolphinsGrace()) envExplain += 0.20;     // 海豚恩惠

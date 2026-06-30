@@ -103,7 +103,7 @@ public final class CombatMLP {
         }
 
         double outSum = b3[0];
-        for (int j = 0; j < hidden2Size; j++) outSum += h2[j];
+        for (int j = 0; j < hidden2Size; j++) outSum += W3[0][j] * h2[j];
         double output = sigmoid(outSum);
 
         // 反向
@@ -112,7 +112,7 @@ public final class CombatMLP {
 
         double[] deltaH2 = new double[hidden2Size];
         for (int i = 0; i < hidden2Size; i++) {
-            deltaH2[i] = deltaOut * (h2Pre[i] > 0 ? 1.0 : 0.0);
+            deltaH2[i] = deltaOut * W3[0][i] * (h2Pre[i] > 0 ? 1.0 : 0.0);
         }
 
         double[] deltaH1 = new double[hidden1Size];

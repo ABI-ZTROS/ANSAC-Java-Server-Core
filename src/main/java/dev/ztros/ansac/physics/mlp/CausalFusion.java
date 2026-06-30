@@ -108,7 +108,7 @@ public final class CausalFusion implements Serializable {
 
         double[] deltaH = new double[hiddenSize];
         for (int i = 0; i < hiddenSize; i++) {
-            deltaH[i] = deltaOut * (hPre[i] > 0 ? 1.0 : 0.0);
+            deltaH[i] = deltaOut * W2[0][i] * (hPre[i] > 0 ? 1.0 : 0.0);
         }
 
         // 更新 W2, b2
