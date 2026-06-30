@@ -105,6 +105,12 @@ tasks.register('fatJar') {
     dependsOn tasks.shadowJar
 }
 
+// 禁用普通 jar task，只保留 shadowJar 作为唯一产物
+// 避免 build/libs/ 中出现两个 jar（plain + shadow）
+tasks.named('jar') {
+    enabled = false
+}
+
 tasks.named('build') {
     dependsOn tasks.named('shadowJar')
 }
