@@ -83,7 +83,11 @@ public class ANSACTabCompleter implements TabCompleter {
 
             case "inference":
                 if (args.length == 2) {
-                    return filterPlayers(prefix);
+                    List<String> subs = Arrays.asList("stop", "list");
+                    List<String> matched = subs.stream().filter(s -> s.startsWith(prefix.toLowerCase())).collect(Collectors.toList());
+                    List<String> players = filterPlayers(prefix);
+                    matched.addAll(players);
+                    return matched;
                 }
                 break;
 

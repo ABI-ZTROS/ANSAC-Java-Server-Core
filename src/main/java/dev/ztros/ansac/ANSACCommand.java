@@ -153,7 +153,13 @@ public class ANSACCommand implements CommandExecutor {
                     return true;
                 }
                 if (args.length >= 2) {
-                    handleInferencePlayer(sender, args[1]);
+                    if (args[1].equalsIgnoreCase("stop")) {
+                        handleInferenceScoreboardStop(sender);
+                    } else if (args[1].equalsIgnoreCase("list")) {
+                        handleInferenceScoreboardList(sender);
+                    } else {
+                        handleInferenceScoreboardStart(sender, args[1]);
+                    }
                 } else {
                     handleInferenceStatus(sender);
                 }
@@ -279,7 +285,9 @@ public class ANSACCommand implements CommandExecutor {
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("── AI 神经网络 ──", NamedTextColor.AQUA));
-        sendHelpEntry(sender, "/ansac inference [玩家]", "查看推理状态 / 玩家完整推理报告");
+        sendHelpEntry(sender, "/ansac inference <玩家>", "开启推理分数板实时监控目标玩家");
+        sendHelpEntry(sender, "/ansac inference stop", "关闭推理分数板");
+        sendHelpEntry(sender, "/ansac inference list", "查看所有推理分数板");
         sendHelpEntry(sender, "/ansac sampling <start|stop>", "开启/关闭MLP持续自学习");
         sendHelpEntry(sender, "/ansac mode <rule|model|hybrid>", "切换检测模式");
 
@@ -853,6 +861,69 @@ public class ANSACCommand implements CommandExecutor {
             default:
                 sender.sendMessage(Component.text("未知子命令。用法: /ansac baseline [reset|save]", NamedTextColor.RED));
                 break;
+        }
+    }
+
+    // ==================== 推理分数板 ====================
+
+    private void handleInferenceScoreboardStart(CommandSender sender, String playerName) {
+        if (!(sender instanceof Player admin)) {
+            sender.sendMessage(Component.text("此命令只能由玩家执行。", NamedTextColor.RED));
+            return;
+        }
+        Player target = Bukkit.getPlayerExact(playerName);
+        if (target == null || !target.isOnline()) {
+            sender.sendMessage(Component.text("找不到玩家或玩家不在线: " + playerName, NamedTextColor.RED));
+            return;
+        }
+
+        var sbManager = plugin.getInferenceScoreboardManager();
+        UUID existingTarget = sbManager.getWatchTarget(admin.getUniqueId());
+        if (existingTarget != null) {
+            // 已在监控，切换目标
+            sbManager.stopWatching(admin.getUniqueId());
+        }
+
+        sbManager.startWatching(admin, target);
+        sender.sendMessage(Component.text(
+            "已开启 " + target.getName() + " 的推理分数板。", NamedTextColor.AQUA));
+        sender.sendMessage(Component.text(
+            "分数板每 2 秒实时更新双模型 AB 架构推理结果。", NamedTextColor.GRAY));
+        sender.sendMessage(Component.text(
+            "使用 /ansac inference stop 关闭分数板。", NamedTextColor.GRAY));
+    }
+
+    private void handleInferenceScoreboardStop(CommandSender sender) {
+        if (!(sender instanceof Player admin)) {
+            sender.sendMessage(Component.text("此命令只能由玩家执行。", NamedTextColor.RED));
+            return;
+        }
+        var sbManager = plugin.getInferenceScoreboardManager();
+        if (!sbManager.isWatching(admin.getUniqueId())) {
+            sender.sendMessage(Component.text("你没有开启任何推理分数板。", NamedTextColor.YELLOW));
+            return;
+        }
+        sbManager.stopWatching(admin.getUniqueId());
+        sender.sendMessage(Component.text("推理分数板已关闭。", NamedTextColor.GREEN));
+    }
+
+    private void handleInferenceScoreboardList(CommandSender sender) {
+        var sbManager = plugin.getInferenceScoreboardManager();
+        var admins = sbManager.getWatchingAdmins();
+        if (admins.isEmpty()) {
+            sender.sendMessage(Component.text("当前没有管理员开启推理分数板。", NamedTextColor.GRAY));
+            return;
+        }
+        sender.sendMessage(Component.text("=== 推理分数板列表 (" + admins.size() + ") ===",
+            NamedTextColor.AQUA));
+        for (UUID adminUuid : admins) {
+            Player admin = Bukkit.getPlayer(adminUuid);
+            UUID targetUuid = sbManager.getWatchTarget(adminUuid);
+            Player target = targetUuid != null ? Bukkit.getPlayer(targetUuid) : null;
+            String adminName = admin != null ? admin.getName() : adminUuid.toString().substring(0, 8);
+            String targetName = target != null ? target.getName() : "离线";
+            sender.sendMessage(Component.text("- " + adminName + " → " + targetName,
+                NamedTextColor.AQUA));
         }
     }
 
