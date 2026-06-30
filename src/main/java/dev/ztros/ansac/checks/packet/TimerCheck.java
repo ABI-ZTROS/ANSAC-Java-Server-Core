@@ -73,21 +73,43 @@ public class TimerCheck extends Check {
             return;
         }
 
+        // 跳过极端小的间隔（< 5ms）
+        // 这通常是网络层包堆积/批量送达，而非真正的 Timer 加速
         if (diff < 5) return;
 
         // TPS 补偿：根据服务器实际 TPS 调整 expected interval
         long expectedInterval = getCompensatedExpectedInterval();
 
+        int count = data.getFlyingPacketCount() + 1;
+        data.setFlyingPacketCount(count);
+
+        // 短期爆发检测窗口始终记录数据
+        addToIntervalWindow(data, diff);
+
+        // Grace period：前 MIN_PACKETS 个包只收集数据，不累积 balance 也不检测
+        // 这避免了由静转动、登录后初始过渡期等场景的误报
+        if (count < MIN_PACKETS) {
+            data.setLastFlyingPacket(now);
+            return;
+        }
+
+        // Grace period 刚结束时重置窗口，从干净状态开始检测
+        if (count == MIN_PACKETS) {
+            data.setTimerBalance(0);
+            clearIntervalWindow(data);
+            addToIntervalWindow(data, diff);
+            data.setLastFlyingPacket(now);
+            return;
+        }
+
+        // --- Grace period 过后才开始真正的检测 ---
+
         long balance = data.getTimerBalance() + (expectedInterval - diff);
         balance = Math.max(-MAX_BALANCE, Math.min(MAX_BALANCE, balance));
         data.setTimerBalance(balance);
 
-        int count = data.getFlyingPacketCount() + 1;
-        data.setFlyingPacketCount(count);
-
-        // 短期爆发检测：最近 20 包平均间隔
-        addToIntervalWindow(data, diff);
-        if (count >= BURST_WINDOW) {
+        // 短期爆发检测：最近 BURST_WINDOW 包平均间隔
+        if (count >= MIN_PACKETS + BURST_WINDOW) {
             double avgInterval = getAverageInterval(data);
             if (avgInterval < expectedInterval * 0.85) { // 加速超过 15%
                 double severity = (expectedInterval - avgInterval) / (double) expectedInterval;
@@ -99,11 +121,6 @@ public class TimerCheck extends Check {
         }
 
         // 累积偏移检测
-        if (count < MIN_PACKETS) {
-            data.setLastFlyingPacket(now);
-            return;
-        }
-
         long compensatedThreshold = (long) data.getPingCompensator().getCompensatedThreshold(
             BALANCE_THRESHOLD, PingCompensator.COMPENSATION_TIMER);
         long compensatedMaxBalance = (long) data.getPingCompensator().getCompensatedThreshold(
