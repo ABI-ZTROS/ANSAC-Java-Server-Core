@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -96,6 +97,34 @@ public class PhysicsInferenceService {
 
     /** 实时监控间隔（tick），默认 40 tick = 2 秒 */
     private static final int WATCH_INTERVAL_TICKS = 40;
+
+    // ==================== 双模型 AB 架构 ====================
+
+    /** B模型（威胁模型）束 */
+    private final ThreatModelBundle threatModelBundle;
+
+    /** B模型采样会话 */
+    private final MLPSamplingSession threatSamplingSession;
+
+    /** 威胁模型持久化文件 */
+    private final File threatMlpFile;
+    private final File threatCombatMlpFile;
+    private final File threatFusionMlpFile;
+
+    /** 智能模型选择器 */
+    private final ModelSelector modelSelector;
+
+    /** 高危玩家映射表（已确认的作弊者，其数据用于B模型训练） */
+    private final ConcurrentHashMap<UUID, Boolean> highRiskPlayers;
+
+    /** 实时同步推理玩家映射表（被标记为合法的玩家，逐tick实时推理+在线学习） */
+    private final ConcurrentHashMap<UUID, Boolean> realtimeInferencePlayers;
+
+    /** 双模型是否启用 */
+    private volatile boolean dualModelEnabled;
+
+    /** 实时在线学习是否启用 */
+    private volatile boolean realtimeOnlineLearning;
 
     // ==================== 配置参数 ====================
 
@@ -186,6 +215,45 @@ public class PhysicsInferenceService {
         MLPActivations.setWeightClip(cfg.getWeightClip());
 
         this.detectionMode = DetectionMode.fromString(plugin.getConfig().getString("detection-mode", "hybrid"));
+
+        // ==================== 双模型 AB 架构初始化 ====================
+        this.dualModelEnabled = cfg.isDualModelEnabled();
+        this.realtimeOnlineLearning = cfg.isRealtimeOnlineLearning();
+        this.highRiskPlayers = new ConcurrentHashMap<>();
+        this.realtimeInferencePlayers = new ConcurrentHashMap<>();
+
+        // 威胁模型文件路径
+        this.threatMlpFile = new File(plugin.getDataFolder(), "threat-mlp-model.bin");
+        this.threatCombatMlpFile = new File(plugin.getDataFolder(), "threat-combat-mlp-model.bin");
+        this.threatFusionMlpFile = new File(plugin.getDataFolder(), "threat-fusion-mlp-model.bin");
+
+        // 初始化B模型（威胁模型）
+        this.threatModelBundle = loadOrCreateThreatBundle(cfg);
+
+        // B模型采样会话
+        int threatTarget = cfg.getThreatSamplingTarget();
+        this.threatSamplingSession = new MLPSamplingSession(threatTarget);
+
+        // 智能模型选择器
+        this.modelSelector = new ModelSelector(
+            cfg.getDualModelAWeight(),
+            cfg.getDualModelBWeight(),
+            cfg.getDualModelRuleWeight(),
+            cfg.getDualConfirmThreshold(),
+            cfg.getSingleConvictThreshold(),
+            cfg.getHighRiskBWeightBoost()
+        );
+
+        // B模型持续自动训练回调
+        this.threatSamplingSession.setOnTargetReached((round) -> {
+            List<double[]> batch = threatSamplingSession.drainSamples();
+            if (!batch.isEmpty()) {
+                trainThreatMlp(batch);
+            }
+        });
+
+        // 加载B模型
+        loadThreatModels();
 
         // 注册持续自动训练回调：达到采样目标后自动训练
         this.samplingSession.setOnTargetReached((round) -> {
@@ -287,6 +355,111 @@ public class PhysicsInferenceService {
         return new CausalFusion(h1, lr);
     }
 
+    // ==================== 威胁模型 (B模型) 加载/创建 ====================
+
+    private ThreatModelBundle loadOrCreateThreatBundle(ANSACConfig cfg) {
+        int moveH1 = cfg.getThreatMovementHidden1();
+        int moveH2 = cfg.getThreatMovementHidden2();
+        double moveLR = cfg.getThreatMovementLearningRate();
+        int combatH1 = cfg.getThreatCombatHidden1();
+        int combatH2 = cfg.getThreatCombatHidden2();
+        double combatLR = cfg.getThreatCombatLearningRate();
+        int fusionH = cfg.getThreatFusionHidden1();
+        double fusionLR = cfg.getThreatFusionLearningRate();
+
+        // 尝试从文件加载已持久化的威胁模型
+        MovementMLP threatMove = null;
+        CombatMLP threatCombat = null;
+        CausalFusion threatFusion = null;
+
+        if (threatMlpFile.exists()) {
+            try {
+                MovementMLP loaded = MLPPersistence.loadThreatMovement(threatMlpFile);
+                if (loaded.getInputSize() == BehaviorFeatureExtractor.FEATURE_COUNT
+                        && loaded.getHidden1Size() == moveH1
+                        && loaded.getHidden2Size() == moveH2) {
+                    if (plugin != null) {
+                        plugin.getLogger().info("ThreatMovementMLP (B模型) 加载成功: "
+                            + loaded.getInputSize() + "→" + loaded.getHidden1Size() + "→" + loaded.getHidden2Size());
+                    }
+                    threatMove = loaded;
+                } else {
+                    if (plugin != null) plugin.getLogger().warning("ThreatMovementMLP 维度不匹配，将创建新模型");
+                    threatMlpFile.delete();
+                }
+            } catch (IOException e) {
+                if (plugin != null) plugin.getLogger().warning("加载 ThreatMovementMLP 失败: " + e.getMessage());
+            }
+        }
+        if (threatMove == null) {
+            threatMove = new MovementMLP(BehaviorFeatureExtractor.FEATURE_COUNT, moveH1, moveH2, moveLR);
+        }
+
+        if (threatCombatMlpFile.exists()) {
+            try {
+                CombatMLP loaded = MLPPersistence.loadThreatCombat(threatCombatMlpFile);
+                if (loaded.getInputSize() == BehaviorFeatureExtractor.COMBAT_COUNT
+                        && loaded.getHidden1Size() == combatH1
+                        && loaded.getHidden2Size() == combatH2) {
+                    if (plugin != null) {
+                        plugin.getLogger().info("ThreatCombatMLP (B模型) 加载成功");
+                    }
+                    threatCombat = loaded;
+                } else {
+                    if (plugin != null) plugin.getLogger().warning("ThreatCombatMLP 维度不匹配，将创建新模型");
+                    threatCombatMlpFile.delete();
+                }
+            } catch (IOException e) {
+                if (plugin != null) plugin.getLogger().warning("加载 ThreatCombatMLP 失败: " + e.getMessage());
+            }
+        }
+        if (threatCombat == null) {
+            threatCombat = new CombatMLP(BehaviorFeatureExtractor.COMBAT_COUNT, combatH1, combatH2, combatLR);
+        }
+
+        if (threatFusionMlpFile.exists()) {
+            try {
+                CausalFusion loaded = MLPPersistence.loadThreatFusion(threatFusionMlpFile);
+                if (loaded.getHiddenSize() == fusionH) {
+                    if (plugin != null) plugin.getLogger().info("ThreatCausalFusion (B模型) 加载成功");
+                    threatFusion = loaded;
+                } else {
+                    if (plugin != null) plugin.getLogger().warning("ThreatCausalFusion 维度不匹配，将创建新模型");
+                    threatFusionMlpFile.delete();
+                }
+            } catch (IOException e) {
+                if (plugin != null) plugin.getLogger().warning("加载 ThreatCausalFusion 失败: " + e.getMessage());
+            }
+        }
+        if (threatFusion == null) {
+            threatFusion = new CausalFusion(fusionH, fusionLR);
+        }
+
+        return new ThreatModelBundle(threatMove, threatCombat, threatFusion);
+    }
+
+    /** 从文件加载威胁模型 */
+    private void loadThreatModels() {
+        // loadOrCreateThreatBundle 已经在构造函数中完成了加载
+        if (plugin != null) {
+            plugin.getLogger().info("威胁模型 (B模型) 初始化完成: "
+                + threatModelBundle.getThreatMovementMLP().getInputSize() + "维输入 → "
+                + threatModelBundle.getThreatMovementMLP().getHidden1Size() + "→"
+                + threatModelBundle.getThreatMovementMLP().getHidden2Size() + "→1");
+        }
+    }
+
+    /** 保存威胁模型到文件 */
+    public void saveThreatModels() {
+        try {
+            MLPPersistence.saveThreatMovement(threatModelBundle.getThreatMovementMLP(), threatMlpFile);
+            MLPPersistence.saveThreatCombat(threatModelBundle.getThreatCombatMLP(), threatCombatMlpFile);
+            MLPPersistence.saveThreatFusion(threatModelBundle.getThreatCausalFusion(), threatFusionMlpFile);
+        } catch (IOException e) {
+            if (plugin != null) plugin.getLogger().warning("保存威胁模型失败: " + e.getMessage());
+        }
+    }
+
     // ==================== 核心处理方法 ====================
 
     /**
@@ -355,6 +528,37 @@ public class PhysicsInferenceService {
         state.setLastNormalScore(movementScore);
         state.setLastAnomalyScore(anomalyScore);
 
+        // ==================== B模型（威胁模型）推理 ====================
+        double threatMovementScore = 0.0;
+        double threatCombatScore = 0.0;
+        double threatFusionScore = 0.0;
+        DualInferenceResult dualResult = null;
+
+        if (dualModelEnabled) {
+            threatMovementScore = threatModelBundle.forwardMovement(features);
+            threatCombatScore = threatModelBundle.forwardCombat(combatFeatures);
+            double[] threatCausalInputs = BehaviorFeatureExtractor.extractCausalInputs(
+                state, threatMovementScore, threatCombatScore, 0.0);
+            threatFusionScore = threatModelBundle.forwardFusion(threatCausalInputs);
+
+            // ModelSelector 智能评估：综合A和B模型结果决定定罪策略
+            boolean isHighRisk = highRiskPlayers.containsKey(uuid);
+            double ruleFactor = 0.0;
+            if (playerData != null) {
+                int totalVL = playerData.getTotalVL();
+                ruleFactor = Math.min(1.0, totalVL / (double) modelPunishVL);
+            }
+            ModelSelector.ModelSelectorResult selectorResult = modelSelector.evaluate(
+                movementScore, threatFusionScore, ruleFactor, isHighRisk
+            );
+
+            dualResult = new DualInferenceResult(
+                movementScore, combatScore, anomalyScore,
+                threatMovementScore, threatCombatScore, threatFusionScore,
+                selectorResult, isHighRisk, realtimeInferencePlayers.containsKey(uuid)
+            );
+        }
+
         // 纯模型模式：AI 辅助判罪（需要模型已训练至少一轮）
         // 未训练的模型输出为随机值，不能用于处罚
         boolean modelReady = samplingSession.getTrainRound() > 0;
@@ -384,6 +588,44 @@ public class PhysicsInferenceService {
                     for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
                         if (p.hasPermission("ansac.admin")) {
                             p.sendMessage(aiAlert);
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==================== 双模型 AB 定罪逻辑 ====================
+        // 当 ModelSelector 建议定罪时，走 VL 累积系统进行处罚
+        if (dualModelEnabled && dualResult != null && dualResult.shouldConvict()
+                && playerData != null) {
+            double confidence = dualResult.getConfidence();
+            double severity = (confidence - modelSelector.getSingleConvictThreshold())
+                    / (1.0 - modelSelector.getSingleConvictThreshold());
+            severity = Math.max(0.1, Math.min(1.0, severity));
+            playerData.addViolation("DualModelAI", severity * 2.0);
+
+            var dualViolation = playerData.getViolation("DualModelAI");
+            int dualTotalVL = dualViolation != null ? dualViolation.getTotalVL() : 0;
+            if (dualTotalVL >= modelPunishVL) {
+                long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
+                if (now - lastPunish > 10000L) {
+                    modelPunishCooldown.put(uuid, now);
+                    final double finalConfidence = confidence;
+                    final int finalVL = dualTotalVL;
+                    final String verdictSource = dualResult.getVerdictSource().name();
+                    plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                        plugin.getPunishmentManager().punish(player,
+                            "双模型AI检测确认作弊 [" + verdictSource + "]", "DualModelAI", finalVL);
+                    });
+                    Component dualAlert = miniMessage.deserialize(
+                        "<gray>[<dark_red>ANSAC-DualAI</dark_red>]</gray> " +
+                        "<red>双模型AI已处罚 <yellow>" + player.getName() + "</yellow> " +
+                        "置信度: <white>" + String.format("%.1f%%", finalConfidence * 100) + "</white> " +
+                        "来源: <gold>" + verdictSource + "</gold>"
+                    );
+                    for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                        if (p.hasPermission("ansac.admin")) {
+                            p.sendMessage(dualAlert);
                         }
                     }
                 }
@@ -427,6 +669,39 @@ public class PhysicsInferenceService {
                     // 达到采样目标，在锁外触发自动训练回调
                     samplingSession.fireTargetReachedCallback();
                 }
+            }
+        }
+
+        // ==================== 高危玩家数据收集（B模型训练） ====================
+        // 高危玩家（已确认作弊者）的行为数据用于训练威胁模型
+        // B模型学习作弊行为模式，辅助正常推理
+        if (dualModelEnabled && highRiskPlayers.containsKey(uuid)) {
+            // 实时在线学习：逐tick单样本SGD（而非批量异步）
+            if (realtimeOnlineLearning) {
+                threatModelBundle.trainOnCheater(features);
+            } else {
+                // 批量采样模式
+                if (threatSamplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
+                    boolean reached = threatSamplingSession.offerSample(features);
+                    if (reached) {
+                        threatSamplingSession.fireTargetReachedCallback();
+                    }
+                }
+            }
+        }
+
+        // ==================== 实时同步推理（被标记为合法的玩家） ====================
+        // 对标记为合法的玩家进行实时同步双模型推理 + 在线学习
+        // 这提供了最高精度的检测：模型逐tick学习其行为模式
+        if (dualModelEnabled && realtimeInferencePlayers.containsKey(uuid)) {
+            // 合法玩家行为作为负样本喂入B模型（target=0.0 = 非作弊）
+            if (realtimeOnlineLearning) {
+                threatModelBundle.trainOnNormal(features);
+            }
+            // A模型也做在线学习（逐tick强化正常行为认知）
+            if (modelReady) {
+                movementMLP.train(features, 1.0);
+                combatMLP.train(combatFeatures, 1.0);
             }
         }
     }
@@ -648,6 +923,12 @@ public class PhysicsInferenceService {
         watchActive.clear();
         states.clear();
         trustedPlayers.clear();
+        highRiskPlayers.clear();
+        realtimeInferencePlayers.clear();
+        // 保存威胁模型
+        if (dualModelEnabled) {
+            saveThreatModels();
+        }
     }
 
     /**
@@ -977,6 +1258,179 @@ public class PhysicsInferenceService {
     }
 
     public MovementMLP getMovementMLP() { return movementMLP; }
+
+    // ==================== 双模型 AB 架构管理方法 ====================
+
+    /**
+     * 训练威胁模型（B模型）。
+     * <p>
+     * 使用高危玩家（已确认作弊者）的行为数据进行批量训练。
+     * 训练目标: target=1.0 表示作弊行为模式。
+     * </p>
+     *
+     * @param samples 作弊玩家行为特征样本列表
+     */
+    public void trainThreatMlp(List<double[]> samples) {
+        plugin.getSchedulerAdapter().runAsync(() -> {
+            try {
+                final int epochs = trainEpochs;
+                double lastLoss = 0.0;
+                for (int epoch = 0; epoch < epochs; epoch++) {
+                    double totalLoss = 0.0;
+                    for (double[] sample : samples) {
+                        totalLoss += threatModelBundle.trainOnCheater(sample);
+                    }
+                    lastLoss = totalLoss / samples.size();
+                    if (epoch % 20 == 0 || epoch == epochs - 1) {
+                        plugin.getLogger().info(String.format(
+                            "威胁模型 (B模型) 训练 epoch %d/%d, 平均损失: %.6f",
+                            epoch + 1, epochs, lastLoss));
+                        // 通知在线管理员
+                        int finalEpoch = epoch;
+                        boolean isLast = (epoch == epochs - 1);
+                        plugin.getSchedulerAdapter().runAsync(() -> {
+                            Component msg = miniMessage.deserialize(
+                                "<gray>[<dark_purple>ANSAC-ThreatMLP</dark_purple>]</gray> " +
+                                "<dark_purple>威胁模型训练</dark_purple> " +
+                                String.format("epoch %d/%d 损失: %.6f", finalEpoch + 1, epochs, lastLoss) +
+                                (isLast ? " <green>✓ 训练完成</green>" : " <gray>继续训练中...</gray>")
+                            );
+                            for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                                if (p.hasPermission("ansac.admin")) {
+                                    p.sendMessage(msg);
+                                }
+                            }
+                        });
+                    }
+                }
+                // 保存威胁模型
+                saveThreatModels();
+                plugin.getLogger().info("威胁模型 (B模型) 已保存, 训练样本数: " + samples.size());
+                threatSamplingSession.markReady();
+            } catch (Exception e) {
+                plugin.getLogger().severe("威胁模型训练失败: " + e.getMessage());
+                threatSamplingSession.adminStop();
+            }
+        });
+    }
+
+    /**
+     * 标记玩家为高危（已确认作弊者）。
+     * <p>
+     * 高危玩家的行为数据将自动喂入B模型进行训练，
+     * 且B模型推理权重自动提升。
+     * </p>
+     */
+    public boolean markHighRisk(UUID uuid) {
+        if (highRiskPlayers.containsKey(uuid)) return false;
+        highRiskPlayers.put(uuid, true);
+        return true;
+    }
+
+    /**
+     * 取消高危标记。
+     */
+    public boolean unmarkHighRisk(UUID uuid) {
+        return highRiskPlayers.remove(uuid) != null;
+    }
+
+    /** 玩家是否被标记为高危 */
+    public boolean isHighRisk(UUID uuid) {
+        return highRiskPlayers.containsKey(uuid);
+    }
+
+    /** 获取所有高危玩家UUID */
+    public Set<UUID> getHighRiskPlayers() {
+        return highRiskPlayers.keySet();
+    }
+
+    /**
+     * 启用实时同步推理（被标记为合法的玩家逐tick实时推理+在线学习）。
+     */
+    public boolean enableRealtimeInference(UUID uuid) {
+        if (realtimeInferencePlayers.containsKey(uuid)) return false;
+        realtimeInferencePlayers.put(uuid, true);
+        return true;
+    }
+
+    /**
+     * 禁用实时同步推理。
+     */
+    public boolean disableRealtimeInference(UUID uuid) {
+        return realtimeInferencePlayers.remove(uuid) != null;
+    }
+
+    /** 玩家是否启用了实时同步推理 */
+    public boolean isRealtimeInference(UUID uuid) {
+        return realtimeInferencePlayers.containsKey(uuid);
+    }
+
+    /** 获取所有实时推理玩家UUID */
+    public Set<UUID> getRealtimeInferencePlayers() {
+        return realtimeInferencePlayers.keySet();
+    }
+
+    /**
+     * 获取玩家双模型推理结果。
+     * <p>
+     * 返回A模型和B模型的完整推理快照，包含ModelSelector的综合评估结论。
+     * </p>
+     */
+    public DualInferenceResult getDualInferenceResult(UUID uuid) {
+        PlayerPhysicsState state = states.get(uuid);
+        if (state == null) return DualInferenceResult.EMPTY;
+
+        dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);
+        PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
+        double[] features = BehaviorFeatureExtractor.extract(state, profile);
+
+        double movementScore = movementMLP.forward(features);
+        double[] combatFeatures = BehaviorFeatureExtractor.extractCombatSlice(features);
+        double combatScore = combatMLP.forward(combatFeatures);
+        double[] causalInputs = BehaviorFeatureExtractor.extractCausalInputs(state, movementScore, combatScore, 0.0);
+        double anomalyScore = causalFusion.forward(causalInputs);
+
+        if (!dualModelEnabled) {
+            return new DualInferenceResult(
+                movementScore, combatScore, anomalyScore,
+                0.0, 0.0, 0.0, null, false, false
+            );
+        }
+
+        double threatMovementScore = threatModelBundle.forwardMovement(features);
+        double threatCombatScore = threatModelBundle.forwardCombat(combatFeatures);
+        double[] threatCausalInputs = BehaviorFeatureExtractor.extractCausalInputs(
+            state, threatMovementScore, threatCombatScore, 0.0);
+        double threatFusionScore = threatModelBundle.forwardFusion(threatCausalInputs);
+
+        boolean isHighRisk = highRiskPlayers.containsKey(uuid);
+        double ruleFactor = 0.0;
+        if (playerData != null) {
+            int totalVL = playerData.getTotalVL();
+            ruleFactor = Math.min(1.0, totalVL / (double) modelPunishVL);
+        }
+        ModelSelector.ModelSelectorResult selectorResult = modelSelector.evaluate(
+            movementScore, threatFusionScore, ruleFactor, isHighRisk
+        );
+
+        return new DualInferenceResult(
+            movementScore, combatScore, anomalyScore,
+            threatMovementScore, threatCombatScore, threatFusionScore,
+            selectorResult, isHighRisk, realtimeInferencePlayers.containsKey(uuid)
+        );
+    }
+
+    /** 获取威胁模型束 */
+    public ThreatModelBundle getThreatModelBundle() { return threatModelBundle; }
+
+    /** 获取模型选择器 */
+    public ModelSelector getModelSelector() { return modelSelector; }
+
+    /** 获取B模型采样会话 */
+    public MLPSamplingSession getThreatSamplingSession() { return threatSamplingSession; }
+
+    /** 双模型是否启用 */
+    public boolean isDualModelEnabled() { return dualModelEnabled; }
     public CombatMLP getCombatMLP() { return combatMLP; }
     public CausalFusion getCausalFusion() { return causalFusion; }
 

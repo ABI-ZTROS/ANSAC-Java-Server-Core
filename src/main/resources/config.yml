@@ -104,12 +104,63 @@ physics-inference:
       hidden1: 12         # 隐藏层神经元数 (建议 8~32, 范围 4~64)
       learning-rate: 0.01
 
+    # 威胁模型网络参数 (B模型, 从确认作弊者训练)
+    # 与A模型结构相同, 但训练标签相反: target=1.0表示作弊
+    threat-movement:
+      hidden1: 56
+      hidden2: 32
+      learning-rate: 0.01
+    threat-combat:
+      hidden1: 16
+      hidden2: 8
+      learning-rate: 0.01
+    threat-fusion:
+      hidden1: 12
+      learning-rate: 0.01
+
     # 训练安全参数（所有网络共享）
     grad-clip: 5.0        # 梯度裁剪阈值 (防止梯度爆炸)
     weight-clip: 50.0     # 权重裁剪阈值 (防止极端权重)
     train-epochs: 200      # 每轮采样训练迭代次数
     model-punish-vl: 20    # 模型处罚所需累计VL
     anomaly-threshold: 0.70 # 异常判定阈值 (0~1, 越高越宽松)
+
+  # ========================================
+  # 双模型 AB 架构配置
+  # ========================================
+  # A模型: 从受信任玩家训练, 学习"正常行为"分布 (target=1.0=正常)
+  # B模型: 从确认作弊者训练, 学习"作弊行为"分布 (target=1.0=作弊)
+  # 两种模型同时训练和使用, ModelSelector智能决策定罪策略
+  # - 双模型一致 (A异常+B匹配) → 最高置信度定罪
+  # - 仅B匹配 → 威胁模式命中
+  # - 仅A异常 → 行为异常但无已知作弊模式
+  # 高危玩家(已确认作弊者)的B模型权重自动提升
+  dual-model:
+    enabled: true
+
+    # A模型(正常)在综合评估中的权重
+    model-a-weight: 0.4
+
+    # B模型(威胁)在综合评估中的权重
+    model-b-weight: 0.4
+
+    # 规则层在综合评估中的权重
+    rule-weight: 0.2
+
+    # 双模型确认阈值 (A异常度和B匹配度都超过此值时为最高置信度)
+    dual-confirm-threshold: 0.6
+
+    # 单模型定罪阈值 (综合置信度超过此值才建议定罪)
+    single-convict-threshold: 0.75
+
+    # 高危玩家B模型权重加成倍数 (已确认作弊者用B模型推理更精准)
+    highrisk-b-weight-boost: 1.5
+
+    # 威胁模型采样目标 (从高危玩家收集多少样本后触发批量训练)
+    threat-sampling-target: 2000
+
+    # 实时在线学习 (标记为合法的玩家逐tick在线学习, 而非批量异步)
+    realtime-online-learning: true
 
 # ==========================================
 # 处罚配置

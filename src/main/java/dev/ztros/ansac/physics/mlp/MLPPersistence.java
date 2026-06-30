@@ -151,6 +151,139 @@ public final class MLPPersistence {
         }
     }
 
+    // ==================== ThreatModelBundle (B模型) ====================
+    // 威胁模型使用与 A 模型相同的 MLP 结构，但训练标签相反
+    // 网络类型: 4=ThreatMovement, 5=ThreatCombat, 6=ThreatFusion
+
+    public static void saveThreatMovement(MovementMLP mlp, File file) throws IOException {
+        writeHeader(file);
+        try (DataOutputStream out = new DataOutputStream(
+                new BufferedOutputStream(new FileOutputStream(file)))) {
+            out.writeInt(FILE_VERSION);
+            out.writeInt(4); // 网络类型: 4=ThreatMovementMLP
+            out.writeInt(mlp.getInputSize());
+            out.writeInt(mlp.getHidden1Size());
+            out.writeInt(mlp.getHidden2Size());
+            out.writeDouble(mlp.getLearningRate());
+
+            writeMatrix(out, mlp.getW1());
+            writeVector(out, mlp.getB1());
+            writeMatrix(out, mlp.getW2());
+            writeVector(out, mlp.getB2());
+            writeVector(out, mlp.getW3());
+            out.writeDouble(mlp.getB3());
+        }
+    }
+
+    public static MovementMLP loadThreatMovement(File file) throws IOException {
+        try (DataInputStream in = new DataInputStream(
+                new BufferedInputStream(new FileInputStream(file)))) {
+            int version = in.readInt();
+            if (version != FILE_VERSION) throw new IOException("Unsupported file version: " + version);
+            int type = in.readInt();
+            if (type != 4) throw new IOException("Expected ThreatMovementMLP type=4, got " + type);
+
+            int inputSize = in.readInt();
+            int hidden1Size = in.readInt();
+            int hidden2Size = in.readInt();
+            double learningRate = in.readDouble();
+
+            MovementMLP mlp = new MovementMLP(inputSize, hidden1Size, hidden2Size, learningRate);
+
+            readMatrix(in, mlp.getW1());
+            readVector(in, mlp.getB1());
+            readMatrix(in, mlp.getW2());
+            readVector(in, mlp.getB2());
+            readVector(in, mlp.getW3());
+            mlp.setB3(sanitizeWeight(in.readDouble()));
+            return mlp;
+        }
+    }
+
+    public static void saveThreatCombat(CombatMLP mlp, File file) throws IOException {
+        writeHeader(file);
+        try (DataOutputStream out = new DataOutputStream(
+                new BufferedOutputStream(new FileOutputStream(file)))) {
+            out.writeInt(FILE_VERSION);
+            out.writeInt(5); // 网络类型: 5=ThreatCombatMLP
+            out.writeInt(mlp.getInputSize());
+            out.writeInt(mlp.getHidden1Size());
+            out.writeInt(mlp.getHidden2Size());
+            out.writeDouble(mlp.getLearningRate());
+
+            writeMatrix(out, mlp.getW1());
+            writeVector(out, mlp.getB1());
+            writeMatrix(out, mlp.getW2());
+            writeVector(out, mlp.getB2());
+            writeMatrix(out, mlp.getW3());
+            writeVector(out, mlp.getB3());
+        }
+    }
+
+    public static CombatMLP loadThreatCombat(File file) throws IOException {
+        try (DataInputStream in = new DataInputStream(
+                new BufferedInputStream(new FileInputStream(file)))) {
+            int version = in.readInt();
+            if (version != FILE_VERSION) throw new IOException("Unsupported file version: " + version);
+            int type = in.readInt();
+            if (type != 5) throw new IOException("Expected ThreatCombatMLP type=5, got " + type);
+
+            int inputSize = in.readInt();
+            int hidden1Size = in.readInt();
+            int hidden2Size = in.readInt();
+            double learningRate = in.readDouble();
+
+            CombatMLP mlp = new CombatMLP(inputSize, hidden1Size, hidden2Size, learningRate);
+
+            readMatrix(in, mlp.getW1());
+            readVector(in, mlp.getB1());
+            readMatrix(in, mlp.getW2());
+            readVector(in, mlp.getB2());
+            readMatrix(in, mlp.getW3());
+            readVector(in, mlp.getB3());
+            return mlp;
+        }
+    }
+
+    public static void saveThreatFusion(CausalFusion fusion, File file) throws IOException {
+        writeHeader(file);
+        try (DataOutputStream out = new DataOutputStream(
+                new BufferedOutputStream(new FileOutputStream(file)))) {
+            out.writeInt(FILE_VERSION);
+            out.writeInt(6); // 网络类型: 6=ThreatCausalFusion
+            out.writeInt(fusion.getInputSize());
+            out.writeInt(fusion.getHiddenSize());
+            out.writeDouble(fusion.getLearningRate());
+
+            writeMatrix(out, fusion.getW1());
+            writeVector(out, fusion.getB1());
+            writeMatrix(out, fusion.getW2());
+            writeVector(out, fusion.getB2());
+        }
+    }
+
+    public static CausalFusion loadThreatFusion(File file) throws IOException {
+        try (DataInputStream in = new DataInputStream(
+                new BufferedInputStream(new FileInputStream(file)))) {
+            int version = in.readInt();
+            if (version != FILE_VERSION) throw new IOException("Unsupported file version: " + version);
+            int type = in.readInt();
+            if (type != 6) throw new IOException("Expected ThreatCausalFusion type=6, got " + type);
+
+            int inputSize = in.readInt();
+            int hiddenSize = in.readInt();
+            double learningRate = in.readDouble();
+
+            CausalFusion fusion = new CausalFusion(hiddenSize, learningRate);
+
+            readMatrix(in, fusion.getW1());
+            readVector(in, fusion.getB1());
+            readMatrix(in, fusion.getW2());
+            readVector(in, fusion.getB2());
+            return fusion;
+        }
+    }
+
     // ==================== IO 工具 ====================
 
     private static void writeHeader(File file) {

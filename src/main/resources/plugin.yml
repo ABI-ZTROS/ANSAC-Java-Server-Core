@@ -52,3 +52,9 @@ permissions:
   ansac.command.inference:
     description: View physics inference status and player data
     default: op
+  ansac.command.mark:
+    description: Mark/unmark players as high-risk (confirmed cheaters for B-model training)
+    default: op
+  ansac.command.realtime:
+    description: Enable/disable real-time sync inference for players
+    default: op

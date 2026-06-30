@@ -195,6 +195,54 @@ public class ANSACCommand implements CommandExecutor {
                 handleWatchSub(sender, args);
                 break;
 
+            case "mark":
+                if (!sender.hasPermission("ansac.command.mark")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    handleMarkList(sender);
+                    return true;
+                }
+                handleMarkSub(sender, args);
+                break;
+
+            case "unmark":
+                if (!sender.hasPermission("ansac.command.mark")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(Component.text("用法：/ansac unmark <玩家名>", NamedTextColor.RED));
+                    return true;
+                }
+                handleUnmark(sender, args[1]);
+                break;
+
+            case "realtime":
+                if (!sender.hasPermission("ansac.command.realtime")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    handleRealtimeList(sender);
+                    return true;
+                }
+                handleRealtimeSub(sender, args);
+                break;
+
+            case "unrealtime":
+                if (!sender.hasPermission("ansac.command.realtime")) {
+                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
+                    return true;
+                }
+                if (args.length < 2) {
+                    sender.sendMessage(Component.text("用法：/ansac unrealtime <玩家名>", NamedTextColor.RED));
+                    return true;
+                }
+                handleUnrealtime(sender, args[1]);
+                break;
+
             default:
                 sendHelp(sender);
                 break;
@@ -234,6 +282,15 @@ public class ANSACCommand implements CommandExecutor {
         sendHelpEntry(sender, "/ansac inference [玩家]", "查看推理状态 / 玩家完整推理报告");
         sendHelpEntry(sender, "/ansac sampling <start|stop>", "开启/关闭MLP持续自学习");
         sendHelpEntry(sender, "/ansac mode <rule|model|hybrid>", "切换检测模式");
+
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("── 双模型 AB 架构 ──", NamedTextColor.LIGHT_PURPLE));
+        sendHelpEntry(sender, "/ansac mark <玩家>", "标记为高危玩家(已确认作弊, 数据用于B模型训练)");
+        sendHelpEntry(sender, "/ansac unmark <玩家>", "取消高危标记");
+        sendHelpEntry(sender, "/ansac marklist", "查看高危玩家列表");
+        sendHelpEntry(sender, "/ansac realtime <玩家>", "启用实时同步推理(逐tick在线学习)");
+        sendHelpEntry(sender, "/ansac unrealtime <玩家>", "禁用实时同步推理");
+        sendHelpEntry(sender, "/ansac realtimelist", "查看实时推理玩家列表");
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("── 实时监控 ──", NamedTextColor.AQUA));
@@ -354,6 +411,141 @@ public class ANSACCommand implements CommandExecutor {
             sender.sendMessage(Component.text("- " + name, NamedTextColor.YELLOW));
         }
         sender.sendMessage(Component.text("AI思维状态每2秒推送到 ActionBar。", NamedTextColor.GRAY));
+    }
+
+    // ==================== 高危玩家标记 ====================
+
+    private void handleMarkSub(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(Component.text("用法：/ansac mark <玩家名>", NamedTextColor.RED));
+            return;
+        }
+        Player target = Bukkit.getPlayer(args[1]);
+        if (target == null) {
+            sender.sendMessage(Component.text("找不到玩家: " + args[1], NamedTextColor.RED));
+            return;
+        }
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (!svc.isDualModelEnabled()) {
+            sender.sendMessage(Component.text("双模型架构未启用，请在配置中开启 dual-model.enabled", NamedTextColor.RED));
+            return;
+        }
+        boolean added = svc.markHighRisk(target.getUniqueId());
+        if (added) {
+            sender.sendMessage(Component.text(
+                "已将 " + target.getName() + " 标记为高危玩家。", NamedTextColor.LIGHT_PURPLE));
+            sender.sendMessage(Component.text(
+                "其行为数据将自动喂入B模型(威胁模型)进行训练。", NamedTextColor.GRAY));
+        } else {
+            sender.sendMessage(Component.text(
+                target.getName() + " 已经是高危玩家。", NamedTextColor.YELLOW));
+        }
+    }
+
+    private void handleUnmark(CommandSender sender, String playerName) {
+        Player target = Bukkit.getPlayer(playerName);
+        if (target == null) {
+            sender.sendMessage(Component.text("找不到玩家: " + playerName, NamedTextColor.RED));
+            return;
+        }
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        boolean removed = svc.unmarkHighRisk(target.getUniqueId());
+        if (removed) {
+            sender.sendMessage(Component.text(
+                "已取消 " + target.getName() + " 的高危标记。", NamedTextColor.GREEN));
+        } else {
+            sender.sendMessage(Component.text(
+                target.getName() + " 未被标记为高危玩家。", NamedTextColor.YELLOW));
+        }
+    }
+
+    private void handleMarkList(CommandSender sender) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        java.util.Set<java.util.UUID> marked = svc.getHighRiskPlayers();
+        if (marked.isEmpty()) {
+            sender.sendMessage(Component.text("当前没有高危标记玩家。", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("用法: /ansac mark <玩家名>", NamedTextColor.GRAY));
+            return;
+        }
+        sender.sendMessage(Component.text("=== 高危玩家列表 (" + marked.size() + "人) ===",
+            NamedTextColor.LIGHT_PURPLE));
+        for (java.util.UUID uuid : marked) {
+            Player p = Bukkit.getPlayer(uuid);
+            String name = p != null ? p.getName() : uuid.toString().substring(0, 8);
+            sender.sendMessage(Component.text("- " + name + " [B模型训练中]", NamedTextColor.LIGHT_PURPLE));
+        }
+    }
+
+    // ==================== 实时同步推理 ====================
+
+    private void handleRealtimeSub(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(Component.text("用法：/ansac realtime <玩家名>", NamedTextColor.RED));
+            return;
+        }
+        Player target = Bukkit.getPlayer(args[1]);
+        if (target == null) {
+            sender.sendMessage(Component.text("找不到玩家: " + args[1], NamedTextColor.RED));
+            return;
+        }
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (!svc.isDualModelEnabled()) {
+            sender.sendMessage(Component.text("双模型架构未启用，请在配置中开启 dual-model.enabled", NamedTextColor.RED));
+            return;
+        }
+        boolean enabled = svc.enableRealtimeInference(target.getUniqueId());
+        if (enabled) {
+            sender.sendMessage(Component.text(
+                "已为 " + target.getName() + " 启用实时同步推理。", NamedTextColor.AQUA));
+            sender.sendMessage(Component.text(
+                "模型将逐tick实时推理该玩家行为，并进行在线学习。", NamedTextColor.GRAY));
+        } else {
+            sender.sendMessage(Component.text(
+                target.getName() + " 已启用实时同步推理。", NamedTextColor.YELLOW));
+        }
+    }
+
+    private void handleUnrealtime(CommandSender sender, String playerName) {
+        Player target = Bukkit.getPlayer(playerName);
+        if (target == null) {
+            sender.sendMessage(Component.text("找不到玩家: " + playerName, NamedTextColor.RED));
+            return;
+        }
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        boolean disabled = svc.disableRealtimeInference(target.getUniqueId());
+        if (disabled) {
+            sender.sendMessage(Component.text(
+                "已为 " + target.getName() + " 禁用实时同步推理。", NamedTextColor.GREEN));
+        } else {
+            sender.sendMessage(Component.text(
+                target.getName() + " 未启用实时同步推理。", NamedTextColor.YELLOW));
+        }
+    }
+
+    private void handleRealtimeList(CommandSender sender) {
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        if (svc == null) {
+            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
+            return;
+        }
+        java.util.Set<java.util.UUID> players = svc.getRealtimeInferencePlayers();
+        if (players.isEmpty()) {
+            sender.sendMessage(Component.text("当前没有实时同步推理玩家。", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("用法: /ansac realtime <玩家名>", NamedTextColor.GRAY));
+            return;
+        }
+        sender.sendMessage(Component.text("=== 实时同步推理列表 (" + players.size() + "人) ===",
+            NamedTextColor.AQUA));
+        for (java.util.UUID uuid : players) {
+            Player p = Bukkit.getPlayer(uuid);
+            String name = p != null ? p.getName() : uuid.toString().substring(0, 8);
+            sender.sendMessage(Component.text("- " + name + " [逐tick实时推理+在线学习]",
+                NamedTextColor.AQUA));
+        }
     }
 
     private void sendStatus(CommandSender sender) {
@@ -810,6 +1002,69 @@ public class ANSACCommand implements CommandExecutor {
                 sender.sendMessage(miniMessage.deserialize(
                     InferenceInterpreter.buildDetailedThought(
                         moveScore, anomalyScore, anomalyScore, pstate)));
+            }
+        }
+
+        // ===== 双模型 AB 架构推理 =====
+        if (svc.isDualModelEnabled()) {
+            dev.ztros.ansac.physics.mlp.DualInferenceResult dual = svc.getDualInferenceResult(target.getUniqueId());
+            if (dual != dev.ztros.ansac.physics.mlp.DualInferenceResult.EMPTY) {
+                sender.sendMessage(Component.text("━━━ 双模型 AB 架构推理 ━━━", NamedTextColor.LIGHT_PURPLE));
+
+                // A模型（正常模型）
+                sender.sendMessage(Component.text("A模型移动正常度：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f%%", dual.normalMovementScore() * 100),
+                        dual.normalMovementScore() >= 0.5 ? NamedTextColor.GREEN : NamedTextColor.RED)));
+                sender.sendMessage(Component.text("A模型战斗正常度：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f%%", dual.normalCombatScore() * 100),
+                        dual.normalCombatScore() >= 0.5 ? NamedTextColor.GREEN : NamedTextColor.RED)));
+                sender.sendMessage(Component.text("A模型融合异常度：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f%%", dual.normalAnomalyScore() * 100),
+                        dual.normalAnomalyScore() >= 0.5 ? NamedTextColor.RED : NamedTextColor.GREEN)));
+
+                // B模型（威胁模型）
+                sender.sendMessage(Component.text("B模型移动威胁匹配：", NamedTextColor.LIGHT_PURPLE)
+                    .append(Component.text(String.format("%.2f%%", dual.threatMovementScore() * 100),
+                        dual.threatMovementScore() >= 0.5 ? NamedTextColor.RED : NamedTextColor.GREEN)));
+                sender.sendMessage(Component.text("B模型战斗威胁匹配：", NamedTextColor.LIGHT_PURPLE)
+                    .append(Component.text(String.format("%.2f%%", dual.threatCombatScore() * 100),
+                        dual.threatCombatScore() >= 0.5 ? NamedTextColor.RED : NamedTextColor.GREEN)));
+                sender.sendMessage(Component.text("B模型融合威胁度：", NamedTextColor.LIGHT_PURPLE)
+                    .append(Component.text(String.format("%.2f%%", dual.threatFusionScore() * 100),
+                        dual.threatFusionScore() >= 0.5 ? NamedTextColor.RED : NamedTextColor.GREEN)));
+
+                // ModelSelector 综合评估
+                if (dual.selectorResult() != null) {
+                    var sr = dual.selectorResult();
+                    NamedTextColor srcColor = switch (sr.source()) {
+                        case DUAL_CONFIRM -> NamedTextColor.DARK_RED;
+                        case MODEL_B_ONLY -> NamedTextColor.RED;
+                        case MODEL_A_ONLY -> NamedTextColor.YELLOW;
+                        case INSUFFICIENT -> NamedTextColor.GREEN;
+                    };
+                    sender.sendMessage(Component.text("定罪来源：", NamedTextColor.GOLD)
+                        .append(Component.text(sr.source().name(), srcColor)));
+                    sender.sendMessage(Component.text("综合置信度：", NamedTextColor.GOLD)
+                        .append(Component.text(
+                            String.format("%.2f%% (%s)", sr.confidence() * 100,
+                                dev.ztros.ansac.physics.mlp.ModelSelector.getConfidenceLabel(sr.confidence()),
+                            sr.confidence() >= 0.75 ? NamedTextColor.RED : NamedTextColor.YELLOW)));
+                    sender.sendMessage(Component.text("建议定罪：", NamedTextColor.GOLD)
+                        .append(Component.text(sr.shouldConvict() ? "是" : "否",
+                            sr.shouldConvict() ? NamedTextColor.RED : NamedTextColor.GREEN)));
+                    sender.sendMessage(miniMessage.deserialize(
+                        "<gray>推理: " + sr.reasoning() + "</gray>"));
+                }
+
+                // 状态标记
+                if (dual.isHighRisk()) {
+                    sender.sendMessage(Component.text("[高危玩家] B模型权重已自动提升。",
+                        NamedTextColor.DARK_RED));
+                }
+                if (dual.isRealtimeInference()) {
+                    sender.sendMessage(Component.text("[实时同步推理] 逐tick在线学习中。",
+                        NamedTextColor.AQUA));
+                }
             }
         }
 
