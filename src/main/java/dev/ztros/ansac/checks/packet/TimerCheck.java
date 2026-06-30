@@ -25,8 +25,8 @@ import java.util.Deque;
 public class TimerCheck extends Check {
 
     private static final long EXPECTED_MS = 50L; // 20 TPS
-    private static final long BALANCE_THRESHOLD = 1000L; // 真正的Timer作弊会累积几千ms
-    private static final long MAX_BALANCE = 5000L;
+    private static final long BALANCE_THRESHOLD = 2000L; // 真正的Timer作弊会累积几千ms
+    private static final long MAX_BALANCE = 10000L;
     private static final long LAG_SPIKE_MS = 250L;
     private static final int MIN_PACKETS = 60; // 3秒 grace period
     private static final int BURST_WINDOW = 20;

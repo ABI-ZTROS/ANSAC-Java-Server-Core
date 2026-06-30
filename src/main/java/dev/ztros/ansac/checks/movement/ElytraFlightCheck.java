@@ -41,8 +41,9 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ElytraFlightCheck extends Check implements IPhysicsCheck {
 
-    private static final double HOVER_SPEED_THRESHOLD = 0.15;
-    private static final int HOVER_BUFFER_MAX = 10;
+    private static final double HOVER_SPEED_THRESHOLD = 0.1;
+    private static final double HOVER_VERTICAL_THRESHOLD = 0.15; // 上仰减速时有垂直下降，不是悬停
+    private static final int HOVER_BUFFER_MAX = 40;  // 2秒才触发，避免上仰减速误报
 
     private static final double MAX_GLIDE_SPEED = PhysicsConstants.ELYTRA_MAX_LEVEL_SPEED;
     private static final double FIREWORK_MAX_SPEED = PhysicsConstants.ELYTRA_FIREWORK_BOOST;
@@ -132,7 +133,9 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
             FIREWORK_MAX_SPEED, PingCompensator.COMPENSATION_ELYTRA);
 
         // --- Check 1: Elytra hover ---
-        if (horizontalSpeed < compensatedHoverThreshold && Math.abs(verticalSpeed) < 0.05) {
+        // 真正的悬停：水平和垂直速度都接近 0
+        // 上仰减速时水平速度低但有垂直运动，不是悬停
+        if (horizontalSpeed < compensatedHoverThreshold && Math.abs(verticalSpeed) < HOVER_VERTICAL_THRESHOLD) {
             int buffer = data.getElytraHoverBuffer() + 1;
             data.setElytraHoverBuffer(buffer);
             if (buffer >= compensatedHoverBuffer) {
