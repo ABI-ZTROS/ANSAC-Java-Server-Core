@@ -1047,7 +1047,7 @@ public class ANSACCommand implements CommandExecutor {
                     sender.sendMessage(Component.text("综合置信度：", NamedTextColor.GOLD)
                         .append(Component.text(
                             String.format("%.2f%% (%s)", sr.confidence() * 100,
-                                dev.ztros.ansac.physics.mlp.ModelSelector.getConfidenceLabel(sr.confidence()),
+                                dev.ztros.ansac.physics.mlp.ModelSelector.getConfidenceLabel(sr.confidence())),
                             sr.confidence() >= 0.75 ? NamedTextColor.RED : NamedTextColor.YELLOW)));
                     sender.sendMessage(Component.text("建议定罪：", NamedTextColor.GOLD)
                         .append(Component.text(sr.shouldConvict() ? "是" : "否",
