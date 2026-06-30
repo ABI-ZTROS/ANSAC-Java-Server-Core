@@ -1,7 +1,7 @@
 name: ANSAC
 version: ${version}
 main: dev.ztros.ansac.ANSACPlugin
-description: 'Advanced Network Security Anti-Cheat for Folia with built-in authentication'
+description: 'Advanced Network Security Anti-Cheat for Folia with built-in authentication and dual-model AI'
 author: ZTROS-Team
 website: https://github.com/ABI-ZTROS/ANSAC-Java-Server-Core
 folia-supported: true
