@@ -157,14 +157,30 @@ public class InferenceScoreboardManager {
     private void updateWatch(UUID adminUuid, WatchData data, String targetName) {
         if (data.bossBar == null) return;
 
-        DualInferenceResult result = plugin.getPhysicsInferenceService()
-            .getDualInferenceResult(data.targetUuid);
+        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
+        DualInferenceResult result = svc.getDualInferenceResult(data.targetUuid);
 
         if (result == DualInferenceResult.EMPTY) {
+            // 诊断原因
+            PlayerPhysicsState state = svc.getState(data.targetUuid);
+            String reason;
+            if (state == null) {
+                // 检查是否被 auth 拦截
+                boolean authEnabled = plugin.getAuthService().isEnabled();
+                boolean authed = !authEnabled || plugin.getAuthService().isAuthenticated(data.targetUuid);
+                if (!authed) {
+                    reason = "玩家未登录认证";
+                } else {
+                    reason = "玩家未移动(无物理数据)";
+                }
+            } else {
+                reason = "状态异常";
+            }
+
             data.bossBar.setTitle(
                 ChatColor.DARK_AQUA + "" + ChatColor.BOLD + "ANSAC AI: " +
                 ChatColor.WHITE + targetName + " " +
-                ChatColor.GRAY + "(等待数据...)"
+                ChatColor.GRAY + "(" + reason + ")"
             );
             data.bossBar.setProgress(0.0);
             data.bossBar.setColor(BarColor.WHITE);
