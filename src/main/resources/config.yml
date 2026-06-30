@@ -88,34 +88,34 @@ physics-inference:
   mlp-network:
     # MovementMLP: 移动行为正常度网络
     movement:
-      hidden1: 56         # 第一隐藏层神经元数 (建议 32~128, 范围 4~256)
-      hidden2: 32         # 第二隐藏层神经元数 (建议 16~64, 范围 4~256)
+      hidden1: 128        # 第一隐藏层神经元数 (建议 64~256, 范围 4~512)
+      hidden2: 64         # 第二隐藏层神经元数 (建议 32~128, 范围 4~512)
       learning-rate: 0.01 # 学习率 (建议 0.001~0.05)
 
     # CombatMLP: 战斗行为正常度网络
     combat:
-      hidden1: 16
-      hidden2: 8
+      hidden1: 32
+      hidden2: 16
       learning-rate: 0.01
 
     # CausalFusion: 因果融合决策网络
     # 输入: movementScore, combatScore, ruleScore, 环境解释力, 速度/预期比, 击退力度, 顶格跳, 冲击事件
     fusion:
-      hidden1: 12         # 隐藏层神经元数 (建议 8~32, 范围 4~64)
+      hidden1: 24         # 隐藏层神经元数 (建议 8~32, 范围 4~64)
       learning-rate: 0.01
 
     # 威胁模型网络参数 (B模型, 从确认作弊者训练)
     # 与A模型结构相同, 但训练标签相反: target=1.0表示作弊
     threat-movement:
-      hidden1: 56
-      hidden2: 32
+      hidden1: 128
+      hidden2: 64
       learning-rate: 0.01
     threat-combat:
-      hidden1: 16
-      hidden2: 8
+      hidden1: 32
+      hidden2: 16
       learning-rate: 0.01
     threat-fusion:
-      hidden1: 12
+      hidden1: 24
       learning-rate: 0.01
 
     # 训练安全参数（所有网络共享）

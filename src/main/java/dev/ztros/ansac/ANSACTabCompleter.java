@@ -21,8 +21,8 @@ public class ANSACTabCompleter implements TabCompleter {
         "reload", "status", "info", "ban", "kick", "unban", "banlist",
         "trust", "untrust", "trustlist", "baseline", "inference",
         "sampling", "mode", "watch",
-        "mark", "unmark", "marklist",
-        "realtime", "unrealtime", "realtimelist"
+        "mark", "marklist",
+        "realtime", "realtimelist"
     );
 
     @Override
@@ -117,10 +117,27 @@ public class ANSACTabCompleter implements TabCompleter {
                 break;
 
             case "mark":
-            case "unmark":
-            case "realtime":
-            case "unrealtime":
                 if (args.length == 2) {
+                    List<String> markSubs = Arrays.asList("add", "remove");
+                    List<String> matched = markSubs.stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
+                    matched.addAll(filterPlayers(prefix));
+                    return matched;
+                }
+                // mark add/remove 后面补全玩家名
+                if (args.length == 3 && (args[1].equalsIgnoreCase("add") || args[1].equalsIgnoreCase("remove"))) {
+                    return filterPlayers(prefix);
+                }
+                break;
+
+            case "realtime":
+                if (args.length == 2) {
+                    List<String> rtSubs = Arrays.asList("on", "off");
+                    List<String> matched = rtSubs.stream().filter(s -> s.startsWith(prefix)).collect(Collectors.toList());
+                    matched.addAll(filterPlayers(prefix));
+                    return matched;
+                }
+                // realtime on/off 后面补全玩家名
+                if (args.length == 3 && (args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off"))) {
                     return filterPlayers(prefix);
                 }
                 break;

@@ -1,5 +1,8 @@
 package dev.ztros.ansac.physics.mlp;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 智能模型选择算法。
  * <p>
@@ -97,6 +100,7 @@ public final class ModelSelector {
         VerdictSource source;
         boolean shouldConvict;
         StringBuilder reasoning = new StringBuilder();
+        List<ConvictionFactor> factors = new ArrayList<>();
 
         boolean aAbnormal = abnA >= dualConfirmThreshold;
         boolean bMatched = matchB >= dualConfirmThreshold;
@@ -109,6 +113,10 @@ public final class ModelSelector {
                     .append(String.format("%.2f%%", abnA * 100))
                     .append(", B模型威胁匹配=")
                     .append(String.format("%.2f%%", matchB * 100));
+            factors.add(new ConvictionFactor("A_MODEL", "行为异常(正常度"
+                    + String.format("%.0f%%", normalScore * 100) + ")", wA));
+            factors.add(new ConvictionFactor("B_MODEL", "威胁模式匹配("
+                    + String.format("%.0f%%", matchB * 100) + ")", wB));
         } else if (bMatched) {
             // 仅B模型命中：威胁模式匹配，但A模型未报异常
             source = VerdictSource.MODEL_B_ONLY;
@@ -117,6 +125,8 @@ public final class ModelSelector {
                     .append(String.format("%.2f%%", matchB * 100))
                     .append(", A模型正常度=")
                     .append(String.format("%.2f%%", normalScore * 100));
+            factors.add(new ConvictionFactor("B_MODEL", "威胁模式匹配("
+                    + String.format("%.0f%%", matchB * 100) + ")", wB));
         } else if (aAbnormal) {
             // 仅A模型异常：行为异常但未匹配已知作弊模式
             source = VerdictSource.MODEL_A_ONLY;
@@ -125,6 +135,8 @@ public final class ModelSelector {
             reasoning.append("A模型行为异常: 异常度=")
                     .append(String.format("%.2f%%", abnA * 100))
                     .append(", B模型未匹配已知作弊模式");
+            factors.add(new ConvictionFactor("A_MODEL", "行为异常(异常度"
+                    + String.format("%.0f%%", abnA * 100) + ")", wA));
         } else {
             // 证据不足
             source = VerdictSource.INSUFFICIENT;
@@ -142,8 +154,14 @@ public final class ModelSelector {
                     .append("]");
         }
 
+        // 规则层 factor（如果有 VL 贡献）
+        if (rule > 0.0) {
+            factors.add(new ConvictionFactor("RULE_LAYER", "规则层偏离(VL="
+                    + String.format("%.0f%%", rule * 100) + ")", wR));
+        }
+
         return new ModelSelectorResult(
-            source, confidence, abnA, matchB, rule, shouldConvict, reasoning.toString()
+            source, confidence, abnA, matchB, rule, shouldConvict, reasoning.toString(), factors
         );
     }
 
@@ -200,6 +218,7 @@ public final class ModelSelector {
      * @param ruleFactor   规则层偏离因子 (0~1)
      * @param shouldConvict 是否建议定罪
      * @param reasoning     人类可读的推理过程
+     * @param factors      结构化定罪原因列表（按贡献度降序）
      */
     public record ModelSelectorResult(
         VerdictSource source,
@@ -208,6 +227,15 @@ public final class ModelSelector {
         double threatMatchB,
         double ruleFactor,
         boolean shouldConvict,
-        String reasoning
+        String reasoning,
+        List<ConvictionFactor> factors
     ) {}
+
+    /**
+     * 结构化定罪因子。
+     * @param source  来源: A_MODEL, B_MODEL, RULE_LAYER, CAUSAL
+     * @param name    具体因素名称（如"移动速度异常"、"击退不匹配"）
+     * @param weight  该因素对最终置信度的贡献权重 (0~1)
+     */
+    public record ConvictionFactor(String source, String name, double weight) {}
 }

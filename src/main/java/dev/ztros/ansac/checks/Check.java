@@ -97,6 +97,8 @@ public abstract class Check {
 
         // 受信任玩家豁免：照常收集行为画像数据，但不累加VL、不报警、不处罚
         if (svc != null && svc.isTrusted(player.getUniqueId())) return;
+        // 危险玩家豁免规则层：危险玩家数据用于B模型训练，不应被规则层拷打
+        if (svc != null && svc.isHighRisk(player.getUniqueId())) return;
 
         // 纯模型模式：规则层只记录微量参考，不处罚、不回拉、不报警
         if (svc != null && svc.getDetectionMode() == DetectionMode.MODEL_ONLY) {

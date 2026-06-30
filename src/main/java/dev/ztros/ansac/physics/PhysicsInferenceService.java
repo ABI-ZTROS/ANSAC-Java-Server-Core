@@ -674,9 +674,12 @@ public class PhysicsInferenceService {
                         modelPunishCooldown.put(uuid, now);
                         final double finalThreat = threatFusionScore;
                         final int finalVL = threatTotalVL;
+                        // 构建结构化封禁理由
+                        StringBuilder banReason = new StringBuilder("威胁模型无条件定罪 [危险玩家] ");
+                        banReason.append("威胁度: ").append(String.format("%.1f%%", finalThreat * 100));
                         plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                             plugin.getPunishmentManager().punish(player,
-                                "威胁模型无条件定罪 [危险玩家]", "ThreatModelTrusted", finalVL);
+                                banReason.toString(), "ThreatModelTrusted", finalVL);
                         });
                         Component threatAlert = miniMessage.deserialize(
                             "<gray>[<dark_red>ANSAC-Threat</dark_red>]</gray> " +
@@ -724,9 +727,12 @@ public class PhysicsInferenceService {
                     modelPunishCooldown.put(uuid, now);
                     final double finalAnomaly = anomalyScore;
                     final int finalVL = totalVL;
+                    // 构建结构化封禁理由
+                    StringBuilder banReason = new StringBuilder("AI模型检测到异常行为 ");
+                    banReason.append("异常度: ").append(String.format("%.1f%%", finalAnomaly * 100));
                     plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                         plugin.getPunishmentManager().punish(player,
-                            "AI模型检测到异常行为", "AnomalyFusion", finalVL);
+                            banReason.toString(), "AnomalyFusion", finalVL);
                     });
                     Component aiAlert = miniMessage.deserialize(
                         "<gray>[<dark_red>ANSAC-AI</dark_red>]</gray> " +
@@ -761,9 +767,20 @@ public class PhysicsInferenceService {
                     final double finalConfidence = confidence;
                     final int finalVL = dualTotalVL;
                     final String verdictSource = dualResult.getVerdictSource().name();
+                    // 构建结构化封禁理由
+                    StringBuilder banReason = new StringBuilder("双模型AI定罪 [");
+                    banReason.append(verdictSource).append("] ");
+                    if (dualResult.selectorResult() != null
+                        && dualResult.selectorResult().factors() != null) {
+                        for (var factor : dualResult.selectorResult().factors()) {
+                            banReason.append(factor.name()).append("(")
+                                   .append(String.format("%.0f%%", factor.weight() * 100)).append(") ");
+                        }
+                    }
+                    banReason.append("置信度: ").append(String.format("%.1f%%", finalConfidence * 100));
                     plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                         plugin.getPunishmentManager().punish(player,
-                            "双模型AI检测确认作弊 [" + verdictSource + "]", "DualModelAI", finalVL);
+                            banReason.toString(), "DualModelAI", finalVL);
                     });
                     Component dualAlert = miniMessage.deserialize(
                         "<gray>[<dark_red>ANSAC-DualAI</dark_red>]</gray> " +

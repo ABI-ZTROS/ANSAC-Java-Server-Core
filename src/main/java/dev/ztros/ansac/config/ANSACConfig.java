@@ -119,13 +119,13 @@ public class ANSACConfig {
         this.mlpSamplingTarget = config.getInt("physics-inference.mlp-sampling-target", 5000);
 
         // MLP 网络参数
-        this.movementHidden1 = clampInt(config.getInt("physics-inference.mlp-network.movement.hidden1", 56), 4, 256);
-        this.movementHidden2 = clampInt(config.getInt("physics-inference.mlp-network.movement.hidden2", 32), 4, 256);
+        this.movementHidden1 = clampInt(config.getInt("physics-inference.mlp-network.movement.hidden1", 128), 4, 512);
+        this.movementHidden2 = clampInt(config.getInt("physics-inference.mlp-network.movement.hidden2", 64), 4, 512);
         this.movementLearningRate = clampDouble(config.getDouble("physics-inference.mlp-network.movement.learning-rate", 0.01), 0.0001, 0.5);
-        this.combatHidden1 = clampInt(config.getInt("physics-inference.mlp-network.combat.hidden1", 16), 4, 256);
-        this.combatHidden2 = clampInt(config.getInt("physics-inference.mlp-network.combat.hidden2", 8), 4, 256);
+        this.combatHidden1 = clampInt(config.getInt("physics-inference.mlp-network.combat.hidden1", 32), 4, 512);
+        this.combatHidden2 = clampInt(config.getInt("physics-inference.mlp-network.combat.hidden2", 16), 4, 512);
         this.combatLearningRate = clampDouble(config.getDouble("physics-inference.mlp-network.combat.learning-rate", 0.01), 0.0001, 0.5);
-        this.fusionHidden1 = clampInt(config.getInt("physics-inference.mlp-network.fusion.hidden1", 12), 4, 64);
+        this.fusionHidden1 = clampInt(config.getInt("physics-inference.mlp-network.fusion.hidden1", 24), 4, 64);
         this.fusionLearningRate = clampDouble(config.getDouble("physics-inference.mlp-network.fusion.learning-rate", 0.01), 0.0001, 0.5);
         this.gradClip = clampDouble(config.getDouble("physics-inference.mlp-network.grad-clip", 5.0), 0.1, 100.0);
         this.weightClip = clampDouble(config.getDouble("physics-inference.mlp-network.weight-clip", 50.0), 1.0, 1000.0);
@@ -145,13 +145,13 @@ public class ANSACConfig {
         this.realtimeOnlineLearning = config.getBoolean("physics-inference.dual-model.realtime-online-learning", true);
 
         // 威胁模型网络参数 (B模型)
-        this.threatMovementHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-movement.hidden1", 56), 4, 256);
-        this.threatMovementHidden2 = clampInt(config.getInt("physics-inference.mlp-network.threat-movement.hidden2", 32), 4, 256);
+        this.threatMovementHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-movement.hidden1", 128), 4, 512);
+        this.threatMovementHidden2 = clampInt(config.getInt("physics-inference.mlp-network.threat-movement.hidden2", 64), 4, 512);
         this.threatMovementLearningRate = clampDouble(config.getDouble("physics-inference.mlp-network.threat-movement.learning-rate", 0.01), 0.0001, 0.5);
-        this.threatCombatHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-combat.hidden1", 16), 4, 256);
-        this.threatCombatHidden2 = clampInt(config.getInt("physics-inference.mlp-network.threat-combat.hidden2", 8), 4, 256);
+        this.threatCombatHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-combat.hidden1", 32), 4, 512);
+        this.threatCombatHidden2 = clampInt(config.getInt("physics-inference.mlp-network.threat-combat.hidden2", 16), 4, 512);
         this.threatCombatLearningRate = clampDouble(config.getDouble("physics-inference.mlp-network.threat-combat.learning-rate", 0.01), 0.0001, 0.5);
-        this.threatFusionHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-fusion.hidden1", 12), 4, 64);
+        this.threatFusionHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-fusion.hidden1", 24), 4, 64);
         this.threatFusionLearningRate = clampDouble(config.getDouble("physics-inference.mlp-network.threat-fusion.learning-rate", 0.01), 0.0001, 0.5);
     }
 
