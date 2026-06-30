@@ -116,14 +116,21 @@ public class NoClipCheck extends Check {
         Location to = data.getCurrentLocation();
         if (from == null || to == null) return;
 
-        // Check if player has moved significantly
-        double moveDistSq = from.distanceSquared(to);
-        boolean hasMovedForFlag = moveDistSq >= MIN_MOVE_FOR_FLAG * MIN_MOVE_FOR_FLAG;
-
         long now = System.currentTimeMillis();
 
         NoClipTracker tracker = trackers.computeIfAbsent(
             player.getUniqueId(), k -> new NoClipTracker());
+
+        // 跨世界安全检查：from 和 to 不在同一世界时跳过距离计算
+        if (from.getWorld() != null && to.getWorld() != null
+                && !from.getWorld().equals(to.getWorld())) {
+            tracker.reset();
+            return;
+        }
+
+        // Check if player has moved significantly
+        double moveDistSq = from.distanceSquared(to);
+        boolean hasMovedForFlag = moveDistSq >= MIN_MOVE_FOR_FLAG * MIN_MOVE_FOR_FLAG;
 
         // --- Exemption checks ---
         if (shouldExempt(player, data, now)) {

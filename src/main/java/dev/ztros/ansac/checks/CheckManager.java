@@ -51,6 +51,7 @@ import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.physics.IPhysicsCheck;
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceResult;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -155,6 +156,16 @@ public class CheckManager {
 
                 // Use runAtEntity to ensure thread safety on Folia
                 plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                    // 跨世界安全检查：如果 PlayerData 中的位置不在玩家当前世界，
+                    // 更新位置以避免跨世界方块读取和距离计算。
+                    Location playerLoc = player.getLocation();
+                    Location dataLoc = data.getCurrentLocation();
+                    if (dataLoc != null && dataLoc.getWorld() != null
+                            && playerLoc.getWorld() != null
+                            && !dataLoc.getWorld().equals(playerLoc.getWorld())) {
+                        data.updateLocation(playerLoc);
+                    }
+
                     for (Check check : checks) {
                         if (check.isEnabled()) {
                             try {

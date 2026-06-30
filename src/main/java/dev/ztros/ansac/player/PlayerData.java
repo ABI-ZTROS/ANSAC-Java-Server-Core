@@ -291,10 +291,21 @@ public class PlayerData {
     }
 
     /**
-     * Update location from movement
+     * Update location from movement.
+     * 当玩家跨越世界（如下界传送门）时，重置 lastLocation 为当前位置，
+     * 避免跨世界 distanceSquared 调用和方块读取报错。
      */
     public void updateLocation(Location newLocation) {
         if (this.currentLocation != null) {
+            // 检测世界切换：如果新旧位置不在同一世界，重置 lastLocation
+            if (this.currentLocation.getWorld() != null
+                    && newLocation.getWorld() != null
+                    && !this.currentLocation.getWorld().equals(newLocation.getWorld())) {
+                this.lastLocation = newLocation.clone();
+                this.currentLocation = newLocation.clone();
+                this.lastMoveTime = System.currentTimeMillis();
+                return;
+            }
             this.lastLocation = this.currentLocation.clone();
         }
         this.currentLocation = newLocation.clone();
