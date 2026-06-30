@@ -21,6 +21,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.UUID;
+
 /**
  * ANSAC command handler.
  * Uses Adventure Component API (required for Paper/Folia 1.21+).
