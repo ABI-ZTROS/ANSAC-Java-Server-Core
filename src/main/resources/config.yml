@@ -162,6 +162,22 @@ physics-inference:
     # 实时在线学习 (标记为合法的玩家逐tick在线学习, 而非批量异步)
     realtime-online-learning: true
 
+    # 模型文件大小上限(MB)，超过则跳过保存
+    # 神经网络权重以double(8字节)存储，大小取决于隐藏层维度
+    # MovementMLP(84→56→32→1): ~38KB
+    # CombatMLP(14→16→8→1): ~3KB
+    # CausalFusion(8→12→1): ~1KB
+    # 默认50MB足够，可按需调整
+    max-model-size-mb: 50
+
+    # 信任/危险玩家无条件信任模式
+    # 标记为合法的玩家(isTrusted): 无条件信任A模型(正常模型)输出为合法
+    #   跳过所有处罚和异常判定，但仍参与A模型训练
+    # 标记为危险的玩家(isHighRisk): 无条件信任B模型(威胁模型)输出为作弊
+    #   跳过A模型评估，threatFusionScore直接作为定罪依据
+    trusted-player-unconditional: true
+    dangerous-player-unconditional: true
+
 # ==========================================
 # 处罚配置
 # ==========================================

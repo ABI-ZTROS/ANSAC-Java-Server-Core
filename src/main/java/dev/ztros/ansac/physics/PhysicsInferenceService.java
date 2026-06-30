@@ -133,6 +133,9 @@ public class PhysicsInferenceService {
      */
     private volatile boolean enabled;
 
+    // 模型文件大小上限(字节)，超过则跳过保存
+    private long maxModelSizeBytes = 50L * 1024 * 1024; // 默认 50MB
+
     /**
      * 是否优先使用推理结果。
      * <p>启用时，检查会优先通过 {@link IPhysicsCheck#processWithInference} 处理。</p>
@@ -195,6 +198,7 @@ public class PhysicsInferenceService {
         this.learningCount = 0;
         this.correctionCount = 0;
         this.iterationCount = 0;
+        loadMaxModelSize(); // 加载模型文件大小上限
 
         this.mlpFile = new File(plugin.getDataFolder(), "mlp-model.bin");
         this.combatMlpFile = new File(plugin.getDataFolder(), "combat-mlp-model.bin");
@@ -452,11 +456,57 @@ public class PhysicsInferenceService {
     /** 保存威胁模型到文件 */
     public void saveThreatModels() {
         try {
+            // 检查文件大小上限
+            checkModelSizeLimit();
             MLPPersistence.saveThreatMovement(threatModelBundle.getThreatMovementMLP(), threatMlpFile);
             MLPPersistence.saveThreatCombat(threatModelBundle.getThreatCombatMLP(), threatCombatMlpFile);
             MLPPersistence.saveThreatFusion(threatModelBundle.getThreatCausalFusion(), threatFusionMlpFile);
+            // 保存后检查文件大小
+            validateModelFilesSize();
         } catch (IOException e) {
             if (plugin != null) plugin.getLogger().warning("保存威胁模型失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 从配置加载模型文件大小上限
+     */
+    private void loadMaxModelSize() {
+        if (plugin != null && plugin.getConfig() != null) {
+            double mb = plugin.getConfig().getDouble("physics.ml.dual-model.max-model-size-mb", 50.0);
+            maxModelSizeBytes = (long) (mb * 1024 * 1024);
+        }
+    }
+
+    /**
+     * 检查模型文件大小上限，超限则警告
+     */
+    private void checkModelSizeLimit() {
+        String[] modelFiles = {mlpFile.getPath(), combatMlpFile.getPath(), fusionMlpFile.getPath(),
+            threatMlpFile.getPath(), threatCombatMlpFile.getPath(), threatFusionMlpFile.getPath()};
+        for (String path : modelFiles) {
+            File f = new File(path);
+            if (f.exists() && f.length() > maxModelSizeBytes) {
+                plugin.getLogger().warning("[ANSAC] 模型文件 " + f.getName()
+                    + " 大小 " + (f.length() / 1024 / 1024) + "MB 超过上限 "
+                    + (maxModelSizeBytes / 1024 / 1024) + "MB，将跳过保存");
+            }
+        }
+    }
+
+    /**
+     * 保存后验证文件大小，超限则删除并警告
+     */
+    private void validateModelFilesSize() {
+        File[] files = {mlpFile, combatMlpFile, fusionMlpFile,
+            threatMlpFile, threatCombatMlpFile, threatFusionMlpFile};
+        for (File f : files) {
+            if (f.exists() && f.length() > maxModelSizeBytes) {
+                plugin.getLogger().warning("[ANSAC] 模型文件 " + f.getName()
+                    + " 大小 " + (f.length() / 1024 / 1024) + "MB 超过上限 "
+                    + (maxModelSizeBytes / 1024 / 1024) + "MB，已删除");
+                f.delete();
+            }
         }
     }
 
@@ -558,6 +608,104 @@ public class PhysicsInferenceService {
                 selectorResult, isHighRisk, realtimeInferencePlayers.containsKey(uuid)
             );
         }
+
+        // ==================== 信任/危险玩家无条件信任逻辑 ====================
+        // 标记为合法的玩家：无条件无理由受到合法模型信任以及算法信任
+        //   → A模型(正常模型)输出信任为合法，跳过所有处罚和异常判定
+        // 标记为危险的玩家：无条件无理由受到非法模型信任也受到算法信任
+        //   → B模型(威胁模型)输出信任为作弊，直接走定罪逻辑，跳过A模型评估
+        boolean isTrustedPlayer = isTrusted(uuid);
+        boolean isDangerousPlayer = isHighRisk(uuid);
+
+        // 信任玩家：无条件信任合法模型，跳过所有处罚
+        if (isTrustedPlayer) {
+            // 照常学习（喂入A模型训练数据），但不做任何处罚判定
+            if (autoLearn) {
+                String scenarioKey = determineScenario(state);
+                if (scenarioKey != null && !scenarioKey.isEmpty()) {
+                    double hSpeed = Math.sqrt(
+                            state.getVelocityX() * state.getVelocityX()
+                            + state.getVelocityZ() * state.getVelocityZ()
+                    );
+                    baselineModel.recordSample(scenarioKey, hSpeed);
+                    learningCount++;
+                    if (learningCount % 1000 == 0) {
+                        iterationCount++;
+                    }
+                }
+            }
+
+            // 喂入A模型在线学习（如果开启实时学习）
+            if (realtimeInferencePlayers.containsKey(uuid)) {
+                synchronized (movementMLP) {
+                    movementMLP.trainOnNormal(features);
+                }
+                synchronized (combatMLP) {
+                    combatMLP.trainOnNormal(combatFeatures);
+                }
+            }
+
+            // 信任玩家不做任何处罚判定，直接返回
+            state.setLastNormalScore(movementScore);
+            state.setLastAnomalyScore(0.0); // 信任玩家异常度恒为 0
+            return;
+        }
+
+        // 危险玩家：无条件信任威胁模型(B模型)，直接走定罪逻辑
+        if (isDangerousPlayer) {
+            // B模型推理（无条件信任）
+            threatMovementScore = threatModelBundle.forwardMovement(features);
+            threatCombatScore = threatModelBundle.forwardCombat(combatFeatures);
+            double[] threatCausalInputs = BehaviorFeatureExtractor.extractCausalInputs(
+                state, threatMovementScore, threatCombatScore, 0.0);
+            threatFusionScore = threatModelBundle.forwardFusion(threatCausalInputs);
+
+            // 无条件信任B模型：threatFusionScore 直接作为作弊置信度
+            // 不需要 A模型评估，不需要 ModelSelector，不需要双模型确认
+            if (threatFusionScore > 0.5 && playerData != null && !hasBypass) {
+                double severity = threatFusionScore;
+                playerData.addViolation("ThreatModelTrusted", severity * 2.0);
+
+                var threatViolation = playerData.getViolation("ThreatModelTrusted");
+                int threatTotalVL = threatViolation != null ? threatViolation.getTotalVL() : 0;
+                if (threatTotalVL >= modelPunishVL) {
+                    long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
+                    if (now - lastPunish > 10000L) {
+                        modelPunishCooldown.put(uuid, now);
+                        final double finalThreat = threatFusionScore;
+                        final int finalVL = threatTotalVL;
+                        plugin.getSchedulerAdapter().runAtEntity(player, () -> {
+                            plugin.getPunishmentManager().punish(player,
+                                "威胁模型无条件定罪 [危险玩家]", "ThreatModelTrusted", finalVL);
+                        });
+                        Component threatAlert = miniMessage.deserialize(
+                            "<gray>[<dark_red>ANSAC-Threat</dark_red>]</gray> " +
+                            "<red>危险玩家 <yellow>" + player.getName() + "</yellow> " +
+                            "已被威胁模型无条件定罪 " +
+                            "威胁度: <white>" + String.format("%.1f%%", finalThreat * 100) + "</white>"
+                        );
+                        for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
+                            if (p.hasPermission("ansac.admin")) {
+                                p.sendMessage(threatAlert);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 危险玩家也喂入B模型训练数据
+            if (autoLearn) {
+                synchronized (threatModelBundle) {
+                    threatModelBundle.trainOnCheater(features);
+                }
+            }
+
+            state.setLastNormalScore(1.0 - threatFusionScore); // 反转：B模型高=正常度低
+            state.setLastAnomalyScore(threatFusionScore);
+            return;
+        }
+
+        // ==================== 正常玩家流程（非信任非危险） ====================
 
         // 纯模型模式：AI 辅助判罪（需要模型已训练至少一轮）
         // 未训练的模型输出为随机值，不能用于处罚
