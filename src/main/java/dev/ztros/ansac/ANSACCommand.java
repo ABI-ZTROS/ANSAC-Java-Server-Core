@@ -287,9 +287,9 @@ public class ANSACCommand implements CommandExecutor {
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("── AI 神经网络 ──", NamedTextColor.AQUA));
-        sendHelpEntry(sender, "/ansac inference <玩家>", "开启推理分数板实时监控目标玩家");
-        sendHelpEntry(sender, "/ansac inference stop", "关闭推理分数板");
-        sendHelpEntry(sender, "/ansac inference list", "查看所有推理分数板");
+        sendHelpEntry(sender, "/ansac inference <玩家>", "开启推理BossBar实时监控目标玩家");
+        sendHelpEntry(sender, "/ansac inference stop", "关闭推理BossBar");
+        sendHelpEntry(sender, "/ansac inference list", "查看所有推理BossBar");
         sendHelpEntry(sender, "/ansac sampling <start|stop>", "开启/关闭MLP持续自学习");
         sendHelpEntry(sender, "/ansac mode <rule|model|hybrid>", "切换检测模式");
 
@@ -888,11 +888,11 @@ public class ANSACCommand implements CommandExecutor {
 
         sbManager.startWatching(admin, target);
         sender.sendMessage(Component.text(
-            "已开启 " + target.getName() + " 的推理分数板。", NamedTextColor.AQUA));
+            "已开启 " + target.getName() + " 的推理 BossBar。", NamedTextColor.AQUA));
         sender.sendMessage(Component.text(
-            "分数板每 2 秒实时更新双模型 AB 架构推理结果。", NamedTextColor.GRAY));
+            "BossBar 每 2 秒实时更新双模型 AB 架构推理结果。", NamedTextColor.GRAY));
         sender.sendMessage(Component.text(
-            "使用 /ansac inference stop 关闭分数板。", NamedTextColor.GRAY));
+            "使用 /ansac inference stop 关闭 BossBar。", NamedTextColor.GRAY));
     }
 
     private void handleInferenceScoreboardStop(CommandSender sender) {
@@ -902,21 +902,21 @@ public class ANSACCommand implements CommandExecutor {
         }
         var sbManager = plugin.getInferenceScoreboardManager();
         if (!sbManager.isWatching(admin.getUniqueId())) {
-            sender.sendMessage(Component.text("你没有开启任何推理分数板。", NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("你没有开启任何推理 BossBar。", NamedTextColor.YELLOW));
             return;
         }
         sbManager.stopWatching(admin.getUniqueId());
-        sender.sendMessage(Component.text("推理分数板已关闭。", NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("推理 BossBar 已关闭。", NamedTextColor.GREEN));
     }
 
     private void handleInferenceScoreboardList(CommandSender sender) {
         var sbManager = plugin.getInferenceScoreboardManager();
         var admins = sbManager.getWatchingAdmins();
         if (admins.isEmpty()) {
-            sender.sendMessage(Component.text("当前没有管理员开启推理分数板。", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("当前没有管理员开启推理 BossBar。", NamedTextColor.GRAY));
             return;
         }
-        sender.sendMessage(Component.text("=== 推理分数板列表 (" + admins.size() + ") ===",
+        sender.sendMessage(Component.text("=== 推理 BossBar 列表 (" + admins.size() + ") ===",
             NamedTextColor.AQUA));
         for (UUID adminUuid : admins) {
             Player admin = Bukkit.getPlayer(adminUuid);

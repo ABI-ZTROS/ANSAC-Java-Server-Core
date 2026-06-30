@@ -125,7 +125,7 @@ public class ANSACPlugin extends JavaPlugin {
         // Initialize inference scoreboard manager
         this.inferenceScoreboardManager = new InferenceScoreboardManager(this);
         inferenceScoreboardManager.start();
-        getLogger().info("推理分数板管理器已启动。");
+        getLogger().info("推理 BossBar 管理器已启动。");
 
         // Start periodic baseline auto-save
         int saveInterval = ansacConfig.getPhysicsSaveIntervalMinutes();
