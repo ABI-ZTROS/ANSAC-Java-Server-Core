@@ -510,6 +510,14 @@ checks:
       max-vl: 20
       setback-threshold: 10.0
       alert-threshold: 3.0
+      # 漂移容忍(毫秒)：余额可落后墙钟时间的最大值
+      # GrimAC 默认 120ms，适合真实网络(低抖动)
+      # 本地双JVM测试环境建议提高到 200-300ms(高抖动)
+      drift-ms: 120
+      # Ping 自适应漂移：玩家 ping 越高，额外漂移越大
+      # 额外漂移 = min(ping * ping-drift-factor, max-ping-drift)
+      ping-drift-factor: 0.5
+      max-ping-drift: 200
 
     badpackets:
       enabled: true
