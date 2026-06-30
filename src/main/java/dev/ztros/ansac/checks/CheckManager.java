@@ -157,13 +157,14 @@ public class CheckManager {
                 // Use runAtEntity to ensure thread safety on Folia
                 plugin.getSchedulerAdapter().runAtEntity(player, () -> {
                     // 跨世界安全检查：如果 PlayerData 中的位置不在玩家当前世界，
-                    // 更新位置以避免跨世界方块读取和距离计算。
+                    // 直接重置 lastLocation 和 currentLocation 为当前世界位置。
+                    // 不能用 updateLocation，因为它会把旧世界位置存为 lastLocation。
                     Location playerLoc = player.getLocation();
                     Location dataLoc = data.getCurrentLocation();
                     if (dataLoc != null && dataLoc.getWorld() != null
                             && playerLoc.getWorld() != null
                             && !dataLoc.getWorld().equals(playerLoc.getWorld())) {
-                        data.updateLocation(playerLoc);
+                        data.resetLocation(playerLoc);
                     }
 
                     for (Check check : checks) {

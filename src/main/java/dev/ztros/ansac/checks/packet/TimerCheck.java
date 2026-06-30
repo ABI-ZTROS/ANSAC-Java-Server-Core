@@ -26,12 +26,11 @@ import java.util.Deque;
 public class TimerCheck extends Check {
 
     private static final long EXPECTED_MS = 50L; // 20 TPS
-    private static final long BALANCE_THRESHOLD = 150L;  // 提高：Folia多线程下正常波动更大
-    private static final long MAX_BALANCE = 1000L;
+    private static final long BALANCE_THRESHOLD = 300L;  // 大幅提高：Folia多线程下正常波动可达200ms
+    private static final long MAX_BALANCE = 2000L;
     private static final long LAG_SPIKE_MS = 250L;
-    private static final int MIN_PACKETS = 40; // 约 2 秒，延长 grace period
+    private static final int MIN_PACKETS = 40; // 约 2 秒 grace period
     private static final int BURST_WINDOW = 20; // 短期爆发检测窗口
-    private static final int FLAG_COOLDOWN = 100; // flag 后 5 秒内不再 flag（100 包）
 
     public TimerCheck(ANSACPlugin plugin) {
         super(plugin, "Timer", "Packet");
@@ -115,9 +114,9 @@ public class TimerCheck extends Check {
                 double severity = (expectedInterval - avgInterval) / (double) expectedInterval;
                 flag(player, data, severity * 2.0,
                     String.format("Timer 爆发加速: 平均间隔 %.1fms (预期 %dms)", avgInterval, expectedInterval));
-                data.setTimerBalance(0); // 彻底重置，避免刷屏
+                data.setTimerBalance(0);
+                data.setFlyingPacketCount(0); // 完全重置，重新跑完整 grace period
                 clearIntervalWindow(data);
-                data.setFlyingPacketCount(MIN_PACKETS); // 回到 grace period 边缘
                 data.setLastFlyingPacket(now);
                 return;
             }
@@ -137,9 +136,8 @@ public class TimerCheck extends Check {
             flag(player, data, severity,
                 String.format("Timer 加速: 累积偏移 +%dms (阈值: %dms, 样本: %d, 延迟 %s)",
                     balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
-            // 彻底重置 balance 和 count，避免递减后立刻再触发刷屏
             data.setTimerBalance(0);
-            data.setFlyingPacketCount(MIN_PACKETS);
+            data.setFlyingPacketCount(0); // 完全重置，重新跑完整 grace period
             clearIntervalWindow(data);
         }
 
@@ -149,7 +147,7 @@ public class TimerCheck extends Check {
                 String.format("Timer 减速: 累积偏移 %dms (阈值: %dms, 样本: %d, 延迟 %s)",
                     balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
             data.setTimerBalance(0);
-            data.setFlyingPacketCount(MIN_PACKETS);
+            data.setFlyingPacketCount(0);
             clearIntervalWindow(data);
         }
 

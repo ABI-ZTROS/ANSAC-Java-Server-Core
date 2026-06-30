@@ -44,7 +44,8 @@ public class PunishmentManager {
 
     private final File punishmentsFile;
     private static final java.time.format.DateTimeFormatter DATE_FORMAT =
-        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss")
+            .withZone(java.time.ZoneId.systemDefault());
 
     public PunishmentManager(ANSACPlugin plugin) {
         this.plugin = plugin;

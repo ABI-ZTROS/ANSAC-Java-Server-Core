@@ -313,6 +313,16 @@ public class PlayerData {
     }
 
     /**
+     * 强制重置 lastLocation 和 currentLocation 为同一位置。
+     * 用于跨世界传送后清除旧世界位置数据。
+     */
+    public void resetLocation(Location newLocation) {
+        this.lastLocation = newLocation.clone();
+        this.currentLocation = newLocation.clone();
+        this.lastMoveTime = System.currentTimeMillis();
+    }
+
+    /**
      * Calculate horizontal distance between last and current location
      */
     public double getHorizontalDistance() {
