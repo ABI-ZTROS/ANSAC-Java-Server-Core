@@ -9,15 +9,16 @@ api-version: '1.21'
 
 commands:
   ansac:
-    description: ANSAC anti-cheat commands
-    usage: /<command> [reload|status|info]
+    description: ANSAC Anti-Cheat main command
+    usage: /ansac [help|reload|status|info|ban|kick|unban|banlist|trust|untrust|trustlist|baseline|inference|sampling|mode|watch|mark|unmark|marklist|realtime|unrealtime|realtimelist]
+    aliases: [ac]
   login:
-    description: Login to your account
-    usage: /<command> <password>
+    description: Login to ANSAC authentication system
+    usage: /login <password>
     aliases: [l]
   register:
-    description: Register a new account
-    usage: /<command> <password> <confirm>
+    description: Register for ANSAC authentication
+    usage: /register <password> <confirmPassword>
     aliases: [reg]
   changepassword:
     description: Change your password

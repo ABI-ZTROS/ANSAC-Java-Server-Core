@@ -877,6 +877,51 @@ public class ANSACCommand implements CommandExecutor {
             .append(Component.text(String.valueOf(svc.getIterationCount()), NamedTextColor.WHITE)));
         sender.sendMessage(Component.text("学习进度：", NamedTextColor.YELLOW)
             .append(Component.text(String.format("%.1f%%", svc.getLearningProgressPercent()), NamedTextColor.WHITE)));
+
+        // 双模型 AB 架构状态
+        if (svc.isDualModelEnabled()) {
+            sender.sendMessage(Component.text("━━━ 双模型 AB 架构 ━━━", NamedTextColor.LIGHT_PURPLE));
+            sender.sendMessage(Component.text("双模型架构：", NamedTextColor.YELLOW)
+                .append(Component.text("已启用", NamedTextColor.GREEN)));
+            sender.sendMessage(Component.text("高危玩家数：", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(svc.getHighRiskPlayers().size()),
+                    svc.getHighRiskPlayers().isEmpty() ? NamedTextColor.GRAY : NamedTextColor.RED)));
+            sender.sendMessage(Component.text("实时推理玩家数：", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(svc.getRealtimeInferencePlayers().size()),
+                    svc.getRealtimeInferencePlayers().isEmpty() ? NamedTextColor.GRAY : NamedTextColor.AQUA)));
+
+            // B模型训练状态
+            var threatSession = svc.getThreatSamplingSession();
+            if (threatSession != null) {
+                sender.sendMessage(Component.text("B模型采样状态：", NamedTextColor.YELLOW)
+                    .append(Component.text(threatSession.getState().name(), NamedTextColor.WHITE)));
+                sender.sendMessage(Component.text("B模型采样进度：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.valueOf(threatSession.getSampleCount())
+                        + " / " + threatSession.getTargetSamples(), NamedTextColor.WHITE)));
+            }
+
+            // ModelSelector 权重
+            var selector = svc.getModelSelector();
+            if (selector != null) {
+                sender.sendMessage(Component.text("A模型权重：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f", selector.getModelAWeight()), NamedTextColor.WHITE)));
+                sender.sendMessage(Component.text("B模型权重：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f", selector.getModelBWeight()), NamedTextColor.WHITE)));
+                sender.sendMessage(Component.text("规则权重：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f", selector.getRuleWeight()), NamedTextColor.WHITE)));
+                sender.sendMessage(Component.text("高危B权重加成：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("x%.1f", selector.getHighRiskBWeightBoost()), NamedTextColor.WHITE)));
+                sender.sendMessage(Component.text("双确认阈值：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f", selector.getDualConfirmThreshold()), NamedTextColor.WHITE)));
+                sender.sendMessage(Component.text("定罪阈值：", NamedTextColor.YELLOW)
+                    .append(Component.text(String.format("%.2f", selector.getSingleConvictThreshold()), NamedTextColor.WHITE)));
+            }
+        } else {
+            sender.sendMessage(Component.text("双模型架构：", NamedTextColor.YELLOW)
+                .append(Component.text("未启用 (config: dual-model.enabled=false)", NamedTextColor.GRAY)));
+        }
+
+        sender.sendMessage(Component.text("提示：使用 /ansac inference <玩家名> 查看玩家完整推理报告。", NamedTextColor.GRAY));
     }
 
     private void handleInferencePlayer(CommandSender sender, String playerName) {

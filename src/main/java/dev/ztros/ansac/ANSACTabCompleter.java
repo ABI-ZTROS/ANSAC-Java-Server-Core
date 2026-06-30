@@ -20,7 +20,9 @@ public class ANSACTabCompleter implements TabCompleter {
     private static final List<String> MAIN_SUBS = Arrays.asList(
         "reload", "status", "info", "ban", "kick", "unban", "banlist",
         "trust", "untrust", "trustlist", "baseline", "inference",
-        "sampling", "mode", "watch"
+        "sampling", "mode", "watch",
+        "mark", "unmark", "marklist",
+        "realtime", "unrealtime", "realtimelist"
     );
 
     @Override
@@ -108,6 +110,20 @@ public class ANSACTabCompleter implements TabCompleter {
                 if (args.length == 3 && (args[1].equalsIgnoreCase("start") || args[1].equalsIgnoreCase("stop"))) {
                     return filterPlayers(prefix);
                 }
+                break;
+
+            case "mark":
+            case "unmark":
+            case "realtime":
+            case "unrealtime":
+                if (args.length == 2) {
+                    return filterPlayers(prefix);
+                }
+                break;
+
+            case "marklist":
+            case "realtimelist":
+                // 无参数子命令
                 break;
         }
 
