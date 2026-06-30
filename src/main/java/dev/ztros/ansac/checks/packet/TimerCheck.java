@@ -35,6 +35,10 @@ public class TimerCheck extends Check {
     private double pingDriftFactor = 0.5;       // 额外漂移 = ping * factor
     private long maxPingDriftNs = 200_000_000L; // 最多额外 200ms
 
+    // 最小超前阈值：余额必须超前墙钟至少 50ms（1个tick）才 flag
+    // 小于 50ms 的超前是正常网络抖动，不是 Timer
+    private static final long MIN_OVER_THRESHOLD_NS = 50_000_000L;
+
     public TimerCheck(ANSACPlugin plugin) {
         super(plugin, "Timer", "Packet");
         loadTimerConfig();
@@ -101,8 +105,9 @@ public class TimerCheck extends Check {
 
         data.setTimerBalance(balance);
 
-        // 核心检测：余额超过墙钟时间 → Timer
-        if (balance > now) {
+        // 核心检测：余额超过墙钟时间超过 50ms（1 tick）→ Timer
+        // 小于 50ms 的超前是正常网络抖动
+        if (balance > now + MIN_OVER_THRESHOLD_NS) {
             double overMs = (balance - now) / 1_000_000.0;
             flag(player, data, Math.min(5.0, overMs / 50.0),
                 String.format("Timer 加速: 余额超前墙钟 %.1fms (漂移容忍: %dms, 延迟 %s)",

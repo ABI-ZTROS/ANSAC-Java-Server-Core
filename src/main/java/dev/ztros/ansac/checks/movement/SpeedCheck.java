@@ -35,6 +35,13 @@ public class SpeedCheck extends Check {
     public void process(Player player, PlayerData data) {
         if (!isEnabled() || data.hasBypass()) return;
 
+        // 鞘翅飞行时跳过 Speed 检查——鞘翅速度模型由 ElytraFlightCheck 负责
+        // 水中也可以用鞘翅，不能只看 isGliding
+        if (player.isGliding()) return;
+
+        // 水中/游泳时跳过——水中速度受浮力、水流、海豚恩惠等影响，波动大
+        if (player.isInWater() || player.isSwimming()) return;
+
         PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
         if (svc == null) return;
 

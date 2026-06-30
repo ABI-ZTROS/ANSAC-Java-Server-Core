@@ -217,9 +217,9 @@ checks:
     speed:
       enabled: true
       punishable: true
-      max-vl: 25
-      setback-threshold: 8.0
-      alert-threshold: 1.0
+      max-vl: 30
+      setback-threshold: 10.0
+      alert-threshold: 3.0
 
     fly:
       enabled: true
@@ -507,9 +507,9 @@ checks:
     timer:
       enabled: true
       punishable: true
-      max-vl: 20
-      setback-threshold: 10.0
-      alert-threshold: 3.0
+      max-vl: 50
+      setback-threshold: 20.0
+      alert-threshold: 5.0
       # 漂移容忍(毫秒)：余额可落后墙钟时间的最大值
       # GrimAC 默认 120ms，适合真实网络(低抖动)
       # 本地双JVM测试环境建议提高到 200-300ms(高抖动)
