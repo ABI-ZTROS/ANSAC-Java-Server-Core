@@ -638,10 +638,10 @@ public class PhysicsInferenceService {
             // 喂入A模型在线学习（如果开启实时学习）
             if (realtimeInferencePlayers.containsKey(uuid)) {
                 synchronized (movementMLP) {
-                    movementMLP.trainOnNormal(features);
+                    movementMLP.train(features, 0.0); // target=0 = 正常
                 }
                 synchronized (combatMLP) {
-                    combatMLP.trainOnNormal(combatFeatures);
+                    combatMLP.train(combatFeatures, 0.0);
                 }
             }
 
