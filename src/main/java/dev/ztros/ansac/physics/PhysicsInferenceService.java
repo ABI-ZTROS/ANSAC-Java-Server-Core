@@ -500,10 +500,10 @@ public class PhysicsInferenceService {
 
         UUID uuid = player.getUniqueId();
 
-        // 注意：不再跳过未认证玩家。
-        // 即使玩家未登录认证，仍然收集物理数据和进行推理，
-        // 这样管理员可以实时监控任何在线玩家的行为。
-        // 处罚逻辑会自行检查认证状态。
+        // 跳过未认证玩家（auth 模块未通过）
+        if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(uuid)) {
+            return;
+        }
 
         // 跳过有豁免权的玩家
         dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);

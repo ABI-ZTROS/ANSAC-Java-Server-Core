@@ -44,11 +44,7 @@ public class AuthListener implements Listener {
             return;
         }
 
-        // 回退到 from 位置而不是取消事件
-        // 取消事件会导致 MONITOR 优先级的监听器（包括反作弊推理）无法收到移动数据
-        // 改为回退位置，让事件仍然传播但玩家不会实际移动
-        event.setTo(new Location(from.getWorld(), from.getX(), from.getY(), from.getZ(),
-            to.getYaw(), to.getPitch()));
+        event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)

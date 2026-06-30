@@ -104,11 +104,10 @@ public class PlayerListener implements Listener {
         }
 
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(event.getPlayer());
+        if (data == null) return;
 
         // Update ping sample for latency compensation
-        if (data != null) {
-            data.getPingCompensator().addPingSample(data.getPing());
-        }
+        data.getPingCompensator().addPingSample(data.getPing());
 
         // Detect sudden velocity changes (wind charge, explosion knockback, etc.)
         PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
@@ -116,9 +115,7 @@ public class PlayerListener implements Listener {
         double velLen = velocity.length();
         if (velLen > PhysicsConstants.MIN_KNOCKBACK_SPEED) {
             long now = System.currentTimeMillis();
-            if (data != null) {
-                data.setLastKnockbackTime(now);
-            }
+            data.setLastKnockbackTime(now);
 
             // 将击退信息同步到物理状态追踪器
             if (inferenceService != null) {
@@ -132,15 +129,12 @@ public class PlayerListener implements Listener {
         }
 
         // Update location data
-        if (data != null) {
-            data.updateLocation(to);
-        }
+        data.updateLocation(to);
 
         // Process movement checks
         plugin.getCheckManager().processPlayer(event.getPlayer());
 
         // Feed movement data to physics inference service
-        // 注意：即使 data 为 null 也调用推理服务，确保物理数据始终被收集
         if (inferenceService != null) {
             inferenceService.onPlayerMove(event.getPlayer(), data, from, to);
         }
