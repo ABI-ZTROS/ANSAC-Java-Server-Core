@@ -166,9 +166,8 @@ public class InferenceScoreboardManager {
             String reason;
             if (state == null) {
                 // 检查是否被 auth 拦截
-                boolean authEnabled = plugin.getAuthService().isEnabled();
-                boolean authed = !authEnabled || plugin.getAuthService().isAuthenticated(data.targetUuid);
-                if (!authed) {
+                var auth = plugin.getAuthService();
+                if (auth != null && auth.isEnabled() && !auth.isAuthenticated(data.targetUuid)) {
                     reason = "玩家未登录认证";
                 } else {
                     reason = "玩家未移动(无物理数据)";
