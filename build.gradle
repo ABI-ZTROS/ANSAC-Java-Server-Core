@@ -54,7 +54,18 @@ processResources {
 
 shadowJar {
     archiveClassifier = ''
-    archiveFileName = 'ANSAC-AntiCheat-' + project.version + '.jar'
+
+    // 支持通过环境变量注入编译时间和CI编号
+    // 在 GitHub Actions 中通过 BUILD_TIME 和 BUILD_NUMBER 环境变量传入
+    def buildTime = System.env.BUILD_TIME ?: ''
+    def buildNumber = System.env.BUILD_NUMBER ?: ''
+    def suffix = ''
+    if (buildTime && buildNumber) {
+        suffix = '-' + buildTime + '-' + buildNumber
+    } else if (buildTime) {
+        suffix = '-' + buildTime
+    }
+    archiveFileName = 'ANSAC-AntiCheat-' + project.version + suffix + '.jar'
 
     // Relocate FoliaLib to prevent conflicts
     relocate 'com.tcoded.folialib', 'dev.ztros.ansac.lib.folialib'
