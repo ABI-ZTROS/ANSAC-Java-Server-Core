@@ -26,11 +26,12 @@ import java.util.Deque;
 public class TimerCheck extends Check {
 
     private static final long EXPECTED_MS = 50L; // 20 TPS
-    private static final long BALANCE_THRESHOLD = 120L;
-    private static final long MAX_BALANCE = 600L;
+    private static final long BALANCE_THRESHOLD = 150L;  // 提高：Folia多线程下正常波动更大
+    private static final long MAX_BALANCE = 1000L;
     private static final long LAG_SPIKE_MS = 250L;
-    private static final int MIN_PACKETS = 30; // 约 1.5 秒
+    private static final int MIN_PACKETS = 40; // 约 2 秒，延长 grace period
     private static final int BURST_WINDOW = 20; // 短期爆发检测窗口
+    private static final int FLAG_COOLDOWN = 100; // flag 后 5 秒内不再 flag（100 包）
 
     public TimerCheck(ANSACPlugin plugin) {
         super(plugin, "Timer", "Packet");
@@ -87,7 +88,6 @@ public class TimerCheck extends Check {
         addToIntervalWindow(data, diff);
 
         // Grace period：前 MIN_PACKETS 个包只收集数据，不累积 balance 也不检测
-        // 这避免了由静转动、登录后初始过渡期等场景的误报
         if (count < MIN_PACKETS) {
             data.setLastFlyingPacket(now);
             return;
@@ -111,12 +111,15 @@ public class TimerCheck extends Check {
         // 短期爆发检测：最近 BURST_WINDOW 包平均间隔
         if (count >= MIN_PACKETS + BURST_WINDOW) {
             double avgInterval = getAverageInterval(data);
-            if (avgInterval < expectedInterval * 0.85) { // 加速超过 15%
+            if (avgInterval < expectedInterval * 0.80) { // 加速超过 20% 才 flag
                 double severity = (expectedInterval - avgInterval) / (double) expectedInterval;
                 flag(player, data, severity * 2.0,
                     String.format("Timer 爆发加速: 平均间隔 %.1fms (预期 %dms)", avgInterval, expectedInterval));
-                data.setTimerBalance(Math.max(0, balance - BALANCE_THRESHOLD));
+                data.setTimerBalance(0); // 彻底重置，避免刷屏
                 clearIntervalWindow(data);
+                data.setFlyingPacketCount(MIN_PACKETS); // 回到 grace period 边缘
+                data.setLastFlyingPacket(now);
+                return;
             }
         }
 
@@ -134,8 +137,10 @@ public class TimerCheck extends Check {
             flag(player, data, severity,
                 String.format("Timer 加速: 累积偏移 +%dms (阈值: %dms, 样本: %d, 延迟 %s)",
                     balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
-            // 递减而非归零：保留剩余偏移继续检测持续加速
-            data.setTimerBalance(Math.max(0, balance - compensatedThreshold));
+            // 彻底重置 balance 和 count，避免递减后立刻再触发刷屏
+            data.setTimerBalance(0);
+            data.setFlyingPacketCount(MIN_PACKETS);
+            clearIntervalWindow(data);
         }
 
         if (balance < -compensatedThreshold) {
@@ -143,7 +148,9 @@ public class TimerCheck extends Check {
             flag(player, data, severity,
                 String.format("Timer 减速: 累积偏移 %dms (阈值: %dms, 样本: %d, 延迟 %s)",
                     balance, compensatedThreshold, count, data.getPingCompensator().getPingStatus()));
-            data.setTimerBalance(Math.min(0, balance + compensatedThreshold));
+            data.setTimerBalance(0);
+            data.setFlyingPacketCount(MIN_PACKETS);
+            clearIntervalWindow(data);
         }
 
         data.setLastFlyingPacket(now);
