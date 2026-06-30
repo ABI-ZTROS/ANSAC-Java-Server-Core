@@ -55,12 +55,13 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
     private static final double BOOST_DECEL_EXEMPT = 0.5;
 
     // --- Physics-based detection thresholds ---
-    private static final double PITCH_SPEED_TOLERANCE = 0.25;  // ±0.25 b/t tolerance
-    private static final int PITCH_SPEED_BUFFER_MAX = 8;
-    private static final int LINEAR_TRAJECTORY_TICKS = 20;   // 20 ticks straight = suspicious
-    private static final double LINEAR_ANGLE_THRESHOLD = 0.5; // yaw/pitch change < 0.5°
-    private static final int SPEED_CONSTANCY_TICKS = 15;      // 15 ticks same speed = suspicious
-    private static final double SPEED_CONSTANCY_STD_DEV = 0.02;
+    private static final double PITCH_SPEED_TOLERANCE = 0.5;  // 大幅提高容差：烟花、风弹、初始惯性等
+    private static final int PITCH_SPEED_BUFFER_MAX = 20;     // 提高到 20 tick (1秒) 才触发
+    private static final int LINEAR_TRAJECTORY_TICKS = 30;     // 30 ticks straight = suspicious
+    private static final double LINEAR_ANGLE_THRESHOLD = 0.5;
+    private static final int SPEED_CONSTANCY_TICKS = 25;       // 25 ticks
+    private static final double SPEED_CONSTANCY_STD_DEV = 0.01;
+    private static final int BOOST_COOLDOWN_TICKS = 40;       // 烟花加速后 2 秒内跳过 pitch-speed 检查
 
     private final ConcurrentHashMap<UUID, ElytraTracker> trackers = new ConcurrentHashMap<>();
 
@@ -185,8 +186,18 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
         }
 
         // --- Check 4: Pitch-speed mismatch ---
-        // Core physics check: speed MUST correlate with pitch angle
-        checkPitchSpeedMismatch(player, data, horizontalSpeed, pitch, tracker);
+        // 烟花加速后跳过此检查：加速后速度自然偏离 pitch 模型
+        if (tracker.boostCooldown > 0) {
+            tracker.boostCooldown--;
+            tracker.pitchMismatchBuffer = 0;
+        } else {
+            checkPitchSpeedMismatch(player, data, horizontalSpeed, pitch, tracker);
+        }
+
+        // 检测烟花加速：速度突增
+        if (horizontalSpeed > tracker.lastSpeed + 0.3 && horizontalSpeed > 0.5) {
+            tracker.boostCooldown = BOOST_COOLDOWN_TICKS;
+        }
 
         // --- Check 5: Linear trajectory (perfectly straight flight) ---
         checkLinearTrajectory(player, data, yaw, pitch, horizontalSpeed, tracker);
@@ -223,9 +234,11 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
         // Apply tolerance
         double tolerance = PITCH_SPEED_TOLERANCE;
         // Pitch near 0 (level flight) has more variance
-        if (Math.abs(pitch) < 10) tolerance = 0.35;
+        if (Math.abs(pitch) < 10) tolerance = 0.7;
         // Steep dives also have more variance
-        if (pitch < -60) tolerance = 0.4;
+        if (pitch < -60) tolerance = 0.8;
+        // Climbing has most variance (stall dynamics)
+        if (pitch > 10) tolerance = 0.8;
 
         double deviation = Math.abs(horizontalSpeed - expectedSpeed);
 
@@ -431,6 +444,7 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
 
         int pitchMismatchBuffer = 0;
         int linearTicks = 0;
+        int boostCooldown = 0;  // 烟花加速冷却，跳过 pitch-speed 检查
         java.util.ArrayList<Double> speedSamples = new java.util.ArrayList<>();
     }
 }

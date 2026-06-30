@@ -4,7 +4,6 @@ import dev.ztros.ansac.ANSACPlugin;
 import dev.ztros.ansac.checks.Check;
 import dev.ztros.ansac.player.PingCompensator;
 import dev.ztros.ansac.player.PlayerData;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayDeque;
@@ -77,14 +76,16 @@ public class TimerCheck extends Check {
         // 这通常是网络层包堆积/批量送达，而非真正的 Timer 加速
         if (diff < 5) return;
 
-        // TPS 补偿：根据服务器实际 TPS 调整 expected interval
-        long expectedInterval = getCompensatedExpectedInterval();
+        // TPS 补偿：使用玩家自身的包间隔平均值作为 expected interval
+        // Folia 每个区域线程有独立 tick rate，全局 TPS 不代表玩家所在区域的 TPS
+        long expectedInterval = getCompensatedExpectedInterval(data);
 
         int count = data.getFlyingPacketCount() + 1;
         data.setFlyingPacketCount(count);
 
         // 短期爆发检测窗口始终记录数据
         addToIntervalWindow(data, diff);
+        addToExpectedWindow(data, diff);
 
         // Grace period：前 MIN_PACKETS 个包只收集数据，不累积 balance 也不检测
         if (count < MIN_PACKETS) {
@@ -154,27 +155,36 @@ public class TimerCheck extends Check {
         data.setLastFlyingPacket(now);
     }
 
-    // ==================== TPS 补偿 ====================
+    // ==================== 基于实际包间隔的期望值计算 ====================
+    // Folia 每个区域线程有独立 tick rate，全局 TPS 不代表玩家所在区域的 TPS
+    // 使用玩家自身的包间隔滚动平均值作为 expected interval
 
-    private static long cachedExpectedInterval = EXPECTED_MS;
-    private static long lastTpsCheck = 0;
+    private static final java.util.Map<PlayerData, Deque<Long>> expectedWindows = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int EXPECTED_WINDOW_SIZE = 40; // 40 包滚动窗口
 
-    private long getCompensatedExpectedInterval() {
-        long now = System.currentTimeMillis();
-        if (now - lastTpsCheck > 5000L) { // 每 5 秒更新一次
-            lastTpsCheck = now;
-            try {
-                double[] tps = Bukkit.getServer().getTPS();
-                if (tps != null && tps.length > 0 && tps[0] > 0.0) {
-                    // TPS 越低，expected interval 越大
-                    double currentTps = Math.min(tps[0], 20.0);
-                    cachedExpectedInterval = Math.round(1000.0 / currentTps);
-                }
-            } catch (Exception ignored) {
-                cachedExpectedInterval = EXPECTED_MS;
-            }
+    private long getCompensatedExpectedInterval(PlayerData data) {
+        // 优先使用玩家自身的包间隔平均值
+        Deque<Long> window = expectedWindows.get(data);
+        if (window != null && !window.isEmpty()) {
+            double sum = 0;
+            for (long v : window) sum += v;
+            double avg = sum / window.size();
+            // 限制在合理范围内 [45, 100] ms
+            return (long) Math.max(45, Math.min(100, Math.round(avg)));
         }
-        return cachedExpectedInterval;
+        return EXPECTED_MS;
+    }
+
+    private void addToExpectedWindow(PlayerData data, long interval) {
+        Deque<Long> window = expectedWindows.computeIfAbsent(data, k -> new ArrayDeque<>(EXPECTED_WINDOW_SIZE));
+        window.addLast(interval);
+        while (window.size() > EXPECTED_WINDOW_SIZE) {
+            window.pollFirst();
+        }
+    }
+
+    private void clearExpectedWindow(PlayerData data) {
+        expectedWindows.remove(data);
     }
 
     // ==================== 短期爆发窗口 ====================
@@ -199,5 +209,6 @@ public class TimerCheck extends Check {
 
     private void clearIntervalWindow(PlayerData data) {
         intervalWindows.remove(data);
+        clearExpectedWindow(data);
     }
 }
