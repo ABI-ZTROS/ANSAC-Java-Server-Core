@@ -107,6 +107,14 @@ public class ElytraFlightCheck extends Check implements IPhysicsCheck {
             return;
         }
 
+        // 水中鞘翅滑行跳过所有检查
+        // 水中可以用鞘翅，且速度行为与空中完全不同（浮力+阻力）
+        if (player.isInWater() || player.isSwimming()) {
+            resetBuffers(data);
+            resetTracker(player.getUniqueId());
+            return;
+        }
+
         Location from = data.getLastLocation();
         Location to = data.getCurrentLocation();
         if (from == null || to == null) return;
