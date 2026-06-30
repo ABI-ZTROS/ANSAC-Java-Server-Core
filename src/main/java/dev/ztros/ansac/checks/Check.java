@@ -119,9 +119,20 @@ public abstract class Check {
         data.addViolation(name, effectiveSeverity);
         int vl = data.getViolation(name) != null ? data.getViolation(name).getTotalVL() : 0;
 
-        // Alert if above threshold
+        // Alert：每类作弊只输出一次预警消息，但 VL 照常累加
         if (vl >= alertThreshold) {
-            alert(player, vl, details);
+            if (!data.getAlertedChecks().contains(name)) {
+                data.getAlertedChecks().add(name);
+                alert(player, vl, details, data);
+            }
+            // 后续触发只记录 debug 日志，不发游戏消息
+            if (vl % 5 == 0) {
+                plugin.getLogger().info("[预警-静默] " + player.getName() + " " + name
+                    + " VL=" + vl + " | " + details
+                    + " | ping=" + data.getPing() + "ms"
+                    + " | timerBalance=" + data.getTimerBalance()
+                    + " | world=" + (data.getCurrentLocation() != null ? data.getCurrentLocation().getWorld().getName() : "null"));
+            }
         }
 
         // Setback if above threshold
@@ -164,14 +175,26 @@ public abstract class Check {
 
     /**
      * Send alert to staff using Adventure Component API.
-     * Uses runAtEntity for each staff player to ensure Folia thread safety.
+     * 包含 debug 信息：VL、ping、timerBalance、世界等。
+     * 每类作弊只调用一次（首次触发时）。
      */
-    protected void alert(Player player, int vl, String details) {
+    protected void alert(Player player, int vl, String details, PlayerData data) {
+        String debugInfo = String.format("ping=%dms | world=%s | loc=%s",
+            data.getPing(),
+            data.getCurrentLocation() != null ? data.getCurrentLocation().getWorld().getName() : "null",
+            data.getCurrentLocation() != null
+                ? String.format("%d,%d,%d",
+                    data.getCurrentLocation().getBlockX(),
+                    data.getCurrentLocation().getBlockY(),
+                    data.getCurrentLocation().getBlockZ())
+                : "null");
+
         Component message = MINI_MESSAGE.deserialize(
             "<gray>[<red>ANSAC</gray>] <yellow>" + player.getName() +
             " <gray>触发了 <red>" + name +
             " <gray>(VL: <white>" + vl +
-            "<gray>) <dark_gray>| <gray>" + details
+            "<gray>) <dark_gray>| <gray>" + details +
+            " <dark_gray>| <dark_gray>[debug] " + debugInfo
         );
 
         // Use runAtEntity for each staff player to ensure Folia thread safety
@@ -183,7 +206,10 @@ public abstract class Check {
             }
         }
 
-        plugin.getLogger().info("[预警] " + player.getName() + " 触发了 " + name + " (VL: " + vl + ") - " + details);
+        plugin.getLogger().info("[预警] " + player.getName() + " 触发了 " + name
+            + " (VL: " + vl + ") - " + details
+            + " | [debug] " + debugInfo
+            + " | timerBalance=" + data.getTimerBalance());
     }
 
     /**

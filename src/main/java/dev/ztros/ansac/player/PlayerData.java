@@ -72,6 +72,11 @@ public class PlayerData {
     @Getter @Setter
     private boolean bypass = false;
 
+    // 已输出过预警消息的检查类型集合
+    // 同一类型只输出一次预警，但 VL 照常累加
+    @Getter
+    private final Set<String> alertedChecks = ConcurrentHashMap.newKeySet();
+
     @Getter @Setter
     private int ping = 0;
 
@@ -272,6 +277,7 @@ public class PlayerData {
      */
     public void resetAllViolations() {
         violations.clear();
+        alertedChecks.clear();
     }
 
     /**
