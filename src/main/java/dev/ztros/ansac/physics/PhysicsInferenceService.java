@@ -872,6 +872,11 @@ public class PhysicsInferenceService {
         return states.get(uuid);
     }
 
+    /** 返回当前正在追踪物理状态的玩家数量 */
+    public int getStateCount() {
+        return states.size();
+    }
+
     /**
      * 标记玩家为受信任。
      * <p>

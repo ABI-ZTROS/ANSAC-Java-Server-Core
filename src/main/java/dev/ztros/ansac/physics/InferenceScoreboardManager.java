@@ -170,7 +170,10 @@ public class InferenceScoreboardManager {
                 if (auth != null && auth.isEnabled() && !auth.isAuthenticated(data.targetUuid)) {
                     reason = "玩家未登录认证";
                 } else {
-                    reason = "玩家未移动(无物理数据)";
+                    // 进一步诊断：检查 PlayerData 是否存在
+                    var pd = plugin.getPlayerDataManager().getPlayerData(data.targetUuid);
+                    int stateCount = svc.getStateCount();
+                    reason = "无物理状态(states=" + stateCount + ",pd=" + (pd != null ? "Y" : "N") + ")";
                 }
             } else {
                 reason = "状态异常";

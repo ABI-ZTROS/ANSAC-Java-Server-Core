@@ -104,10 +104,17 @@ public class PlayerListener implements Listener {
         }
 
         PlayerData data = plugin.getPlayerDataManager().getPlayerData(event.getPlayer());
-        if (data == null) return;
+
+        // 注意：即使 data 为 null 也不 return，
+        // 推理服务需要收到移动数据才能建立物理状态。
+        // PlayerData 在 onPlayerJoin 中通过 runNextTick 延迟创建，
+        // 在 Folia 多线程下可能存在 PlayerData 尚未创建但玩家已开始移动的时间窗口。
+        // 推理服务内部已处理 playerData == null 的情况。
 
         // Update ping sample for latency compensation
-        data.getPingCompensator().addPingSample(data.getPing());
+        if (data != null) {
+            data.getPingCompensator().addPingSample(data.getPing());
+        }
 
         // Detect sudden velocity changes (wind charge, explosion knockback, etc.)
         PhysicsInferenceService inferenceService = plugin.getPhysicsInferenceService();
@@ -115,7 +122,9 @@ public class PlayerListener implements Listener {
         double velLen = velocity.length();
         if (velLen > PhysicsConstants.MIN_KNOCKBACK_SPEED) {
             long now = System.currentTimeMillis();
-            data.setLastKnockbackTime(now);
+            if (data != null) {
+                data.setLastKnockbackTime(now);
+            }
 
             // 将击退信息同步到物理状态追踪器
             if (inferenceService != null) {
@@ -129,7 +138,9 @@ public class PlayerListener implements Listener {
         }
 
         // Update location data
-        data.updateLocation(to);
+        if (data != null) {
+            data.updateLocation(to);
+        }
 
         // Process movement checks
         plugin.getCheckManager().processPlayer(event.getPlayer());
