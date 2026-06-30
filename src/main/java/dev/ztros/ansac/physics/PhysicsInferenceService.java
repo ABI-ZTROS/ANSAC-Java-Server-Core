@@ -500,6 +500,16 @@ public class PhysicsInferenceService {
 
         UUID uuid = player.getUniqueId();
 
+        // DEBUG: 追踪 onPlayerMove 调用链
+        if (states.isEmpty()) {
+            boolean authEnabled = plugin.getAuthService().isEnabled();
+            boolean authed = !authEnabled || plugin.getAuthService().isAuthenticated(uuid);
+            plugin.getLogger().info("[ANSAC-DEBUG] onPlayerMove called: player=" + player.getName()
+                + " authEnabled=" + authEnabled + " authed=" + authed
+                + " from=" + from.getBlockX() + "," + from.getBlockY() + "," + from.getBlockZ()
+                + " to=" + to.getBlockX() + "," + to.getBlockY() + "," + to.getBlockZ());
+        }
+
         // 跳过未认证玩家（auth 模块未通过）
         if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(uuid)) {
             return;
@@ -512,6 +522,10 @@ public class PhysicsInferenceService {
         }
 
         PlayerPhysicsState state = states.computeIfAbsent(uuid, k -> new PlayerPhysicsState());
+        if (states.size() == 1) {
+            plugin.getLogger().info("[ANSAC-DEBUG] 首次创建物理状态: player=" + player.getName()
+                + " states.size=" + states.size());
+        }
 
         long now = System.currentTimeMillis();
         state.updateFromPlayer(player, from, to, now);

@@ -148,6 +148,8 @@ public class PlayerListener implements Listener {
         // Feed movement data to physics inference service
         if (inferenceService != null) {
             inferenceService.onPlayerMove(event.getPlayer(), data, from, to);
+        } else {
+            plugin.getLogger().warning("[ANSAC-DEBUG] inferenceService is null!");
         }
     }
 
