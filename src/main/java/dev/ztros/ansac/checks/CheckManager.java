@@ -68,6 +68,7 @@ public class CheckManager {
 
     private final ANSACPlugin plugin;
     private final List<Check> checks = new ArrayList<>();
+    private TimerCheck timerCheck;
 
     public CheckManager(ANSACPlugin plugin) {
         this.plugin = plugin;
@@ -128,7 +129,8 @@ public class CheckManager {
         checks.add(new PacketMineCheck(plugin));
 
         // Packet checks
-        checks.add(new TimerCheck(plugin));
+        timerCheck = new TimerCheck(plugin);
+        checks.add(timerCheck);
         checks.add(new BadPacketsCheck(plugin));
 
         // Player checks
@@ -165,6 +167,8 @@ public class CheckManager {
                             && playerLoc.getWorld() != null
                             && !dataLoc.getWorld().equals(playerLoc.getWorld())) {
                         data.resetLocation(playerLoc);
+                        // 世界切换时重置 Timer 余额，避免跨世界传送包导致误报
+                        timerCheck.onWorldChange(data);
                     }
 
                     for (Check check : checks) {

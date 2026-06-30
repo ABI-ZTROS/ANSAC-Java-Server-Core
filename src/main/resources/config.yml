@@ -217,8 +217,8 @@ checks:
     speed:
       enabled: true
       punishable: true
-      max-vl: 20
-      setback-threshold: 5.0
+      max-vl: 25
+      setback-threshold: 8.0
       alert-threshold: 1.0
 
     fly:
@@ -231,8 +231,8 @@ checks:
     elytraflight:
       enabled: true
       punishable: true
-      max-vl: 20
-      setback-threshold: 5.0
+      max-vl: 30
+      setback-threshold: 10.0
       alert-threshold: 1.0
 
     noslow:
