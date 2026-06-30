@@ -500,32 +500,18 @@ public class PhysicsInferenceService {
 
         UUID uuid = player.getUniqueId();
 
-        // DEBUG: 追踪 onPlayerMove 调用链
-        if (states.isEmpty()) {
-            boolean authEnabled = plugin.getAuthService().isEnabled();
-            boolean authed = !authEnabled || plugin.getAuthService().isAuthenticated(uuid);
-            plugin.getLogger().info("[ANSAC-DEBUG] onPlayerMove called: player=" + player.getName()
-                + " authEnabled=" + authEnabled + " authed=" + authed
-                + " from=" + from.getBlockX() + "," + from.getBlockY() + "," + from.getBlockZ()
-                + " to=" + to.getBlockX() + "," + to.getBlockY() + "," + to.getBlockZ());
-        }
-
         // 跳过未认证玩家（auth 模块未通过）
         if (plugin.getAuthService().isEnabled() && !plugin.getAuthService().isAuthenticated(uuid)) {
             return;
         }
 
-        // 跳过有豁免权的玩家
+        // 注意：不再在数据收集阶段跳过 bypass 玩家。
+        // bypass 玩家（如 OP）仍然需要被推理监控，只是不会被处罚。
+        // 之前在这里 return 导致 states 始终为空，BossBar 显示"无物理状态"。
         dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);
-        if (playerData != null && playerData.hasBypass()) {
-            return;
-        }
+        boolean hasBypass = playerData != null && playerData.hasBypass();
 
         PlayerPhysicsState state = states.computeIfAbsent(uuid, k -> new PlayerPhysicsState());
-        if (states.size() == 1) {
-            plugin.getLogger().info("[ANSAC-DEBUG] 首次创建物理状态: player=" + player.getName()
-                + " states.size=" + states.size());
-        }
 
         long now = System.currentTimeMillis();
         state.updateFromPlayer(player, from, to, now);
@@ -576,7 +562,7 @@ public class PhysicsInferenceService {
         // 纯模型模式：AI 辅助判罪（需要模型已训练至少一轮）
         // 未训练的模型输出为随机值，不能用于处罚
         boolean modelReady = samplingSession.getTrainRound() > 0;
-        if (detectionMode == DetectionMode.MODEL_ONLY && modelReady && anomalyScore > anomalyThreshold && playerData != null) {
+        if (detectionMode == DetectionMode.MODEL_ONLY && modelReady && anomalyScore > anomalyThreshold && playerData != null && !hasBypass) {
             // 将异常分数映射为 VL 增量，走 Check 层的 VL 累积系统
             double severity = (anomalyScore - anomalyThreshold) / (1.0 - anomalyThreshold); // 映射到 0~1
             playerData.addViolation("AnomalyFusion", severity * 2.0);
@@ -611,7 +597,7 @@ public class PhysicsInferenceService {
         // ==================== 双模型 AB 定罪逻辑 ====================
         // 当 ModelSelector 建议定罪时，走 VL 累积系统进行处罚
         if (dualModelEnabled && dualResult != null && dualResult.shouldConvict()
-                && playerData != null) {
+                && playerData != null && !hasBypass) {
             double confidence = dualResult.getConfidence();
             double severity = (confidence - modelSelector.getSingleConvictThreshold())
                     / (1.0 - modelSelector.getSingleConvictThreshold());
