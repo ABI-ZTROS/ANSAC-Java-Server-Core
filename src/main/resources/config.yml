@@ -159,9 +159,6 @@ physics-inference:
     # 威胁模型采样目标 (从高危玩家收集多少样本后触发批量训练)
     threat-sampling-target: 2000
 
-    # 实时在线学习 (标记为合法的玩家逐tick在线学习, 而非批量异步)
-    realtime-online-learning: true
-
     # 模型文件大小上限(MB)，超过则跳过保存
     # 神经网络权重以double(8字节)存储，大小取决于隐藏层维度
     # MovementMLP(84→56→32→1): ~38KB

@@ -214,18 +214,6 @@ public class ANSACCommand implements CommandExecutor {
                 handleMarkSub(sender, args);
                 break;
 
-            case "realtime":
-                if (!sender.hasPermission("ansac.command.realtime")) {
-                    sender.sendMessage(Component.text("你没有使用此命令的权限。", NamedTextColor.RED));
-                    return true;
-                }
-                if (args.length < 2) {
-                    handleRealtimeList(sender);
-                    return true;
-                }
-                handleRealtimeSub(sender, args);
-                break;
-
             default:
                 sendHelp(sender);
                 break;
@@ -272,8 +260,6 @@ public class ANSACCommand implements CommandExecutor {
         sender.sendMessage(Component.text("── 双模型 AB 架构 ──", NamedTextColor.LIGHT_PURPLE));
         sendHelpEntry(sender, "/ansac mark <add|remove> <玩家>", "标记/取消高危玩家(数据用于B模型训练)");
         sendHelpEntry(sender, "/ansac marklist", "查看高危玩家列表");
-        sendHelpEntry(sender, "/ansac realtime <on|off> <玩家>", "启用/禁用实时同步推理(逐tick在线学习)");
-        sendHelpEntry(sender, "/ansac realtimelist", "查看实时推理玩家列表");
 
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("── 实时监控 ──", NamedTextColor.AQUA));
@@ -470,84 +456,6 @@ public class ANSACCommand implements CommandExecutor {
             Player p = Bukkit.getPlayer(uuid);
             String name = p != null ? p.getName() : uuid.toString().substring(0, 8);
             sender.sendMessage(Component.text("- " + name + " [B模型训练中]", NamedTextColor.LIGHT_PURPLE));
-        }
-    }
-
-    // ==================== 实时同步推理 ====================
-
-    private void handleRealtimeSub(CommandSender sender, String[] args) {
-        if (args.length < 2) {
-            sender.sendMessage(Component.text("用法：/ansac realtime <on|off> <玩家名>", NamedTextColor.RED));
-            return;
-        }
-        String sub = args[1].toLowerCase();
-        String playerName;
-        if (sub.equals("on") || sub.equals("off") || sub.equals("stop")) {
-            if (args.length < 3) {
-                sender.sendMessage(Component.text("用法：/ansac realtime " + sub + " <玩家名>", NamedTextColor.RED));
-                return;
-            }
-            playerName = args[2];
-        } else {
-            // 向后兼容: /ansac realtime <玩家名> 默认为 on
-            playerName = args[1];
-            sub = "on";
-        }
-        Player target = Bukkit.getPlayer(playerName);
-        if (target == null) {
-            sender.sendMessage(Component.text("找不到玩家: " + playerName, NamedTextColor.RED));
-            return;
-        }
-        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
-        if (!svc.isDualModelEnabled()) {
-            sender.sendMessage(Component.text("双模型架构未启用，请在配置中开启 dual-model.enabled", NamedTextColor.RED));
-            return;
-        }
-        switch (sub) {
-            case "on" -> {
-                boolean enabled = svc.enableRealtimeInference(target.getUniqueId());
-                if (enabled) {
-                    sender.sendMessage(Component.text(
-                        "已为 " + target.getName() + " 启用实时同步推理。", NamedTextColor.AQUA));
-                    sender.sendMessage(Component.text(
-                        "模型将逐tick实时推理该玩家行为，并进行在线学习。", NamedTextColor.GRAY));
-                } else {
-                    sender.sendMessage(Component.text(
-                        target.getName() + " 已启用实时同步推理。", NamedTextColor.YELLOW));
-                }
-            }
-            case "off", "stop" -> {
-                boolean disabled = svc.disableRealtimeInference(target.getUniqueId());
-                if (disabled) {
-                    sender.sendMessage(Component.text(
-                        "已为 " + target.getName() + " 禁用实时同步推理。", NamedTextColor.GREEN));
-                } else {
-                    sender.sendMessage(Component.text(
-                        target.getName() + " 未启用实时同步推理。", NamedTextColor.YELLOW));
-                }
-            }
-        }
-    }
-
-    private void handleRealtimeList(CommandSender sender) {
-        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
-        if (svc == null) {
-            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
-            return;
-        }
-        java.util.Set<java.util.UUID> players = svc.getRealtimeInferencePlayers();
-        if (players.isEmpty()) {
-            sender.sendMessage(Component.text("当前没有实时同步推理玩家。", NamedTextColor.GRAY));
-            sender.sendMessage(Component.text("用法: /ansac realtime <玩家名>", NamedTextColor.GRAY));
-            return;
-        }
-        sender.sendMessage(Component.text("=== 实时同步推理列表 (" + players.size() + "人) ===",
-            NamedTextColor.AQUA));
-        for (java.util.UUID uuid : players) {
-            Player p = Bukkit.getPlayer(uuid);
-            String name = p != null ? p.getName() : uuid.toString().substring(0, 8);
-            sender.sendMessage(Component.text("- " + name + " [逐tick实时推理+在线学习]",
-                NamedTextColor.AQUA));
         }
     }
 
@@ -952,9 +860,6 @@ public class ANSACCommand implements CommandExecutor {
             sender.sendMessage(Component.text("高危玩家数：", NamedTextColor.YELLOW)
                 .append(Component.text(String.valueOf(svc.getHighRiskPlayers().size()),
                     svc.getHighRiskPlayers().isEmpty() ? NamedTextColor.GRAY : NamedTextColor.RED)));
-            sender.sendMessage(Component.text("实时推理玩家数：", NamedTextColor.YELLOW)
-                .append(Component.text(String.valueOf(svc.getRealtimeInferencePlayers().size()),
-                    svc.getRealtimeInferencePlayers().isEmpty() ? NamedTextColor.GRAY : NamedTextColor.AQUA)));
 
             sender.sendMessage(Component.text("B模型在线训练样本：", NamedTextColor.YELLOW)
                 .append(Component.text(String.valueOf(svc.getBModelTrainCount()), NamedTextColor.WHITE)));
@@ -1165,10 +1070,7 @@ public class ANSACCommand implements CommandExecutor {
                     sender.sendMessage(Component.text("[高危玩家] B模型权重已自动提升。",
                         NamedTextColor.DARK_RED));
                 }
-                if (dual.isRealtimeInference()) {
-                    sender.sendMessage(Component.text("[实时同步推理] 逐tick在线学习中。",
-                        NamedTextColor.AQUA));
-                }
+
             }
         }
 

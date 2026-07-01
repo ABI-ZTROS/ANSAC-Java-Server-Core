@@ -27,16 +27,14 @@ public record DualInferenceResult(
         /** 模型选择器评估结果 */
         ModelSelector.ModelSelectorResult selectorResult,
         /** 玩家是否为高危标记 */
-        boolean isHighRisk,
-        /** 是否为实时同步推理模式 */
-        boolean isRealtimeInference
+        boolean isHighRisk
 ) {
     /**
      * 空结果，用于无数据时回退。
      */
     public static final DualInferenceResult EMPTY = new DualInferenceResult(
             0.5, 0.5, 0.0, 0.0, 0.0, 0.0,
-            null, false, false
+            null, false
     );
 
     /**

@@ -115,14 +115,8 @@ public class PhysicsInferenceService {
     /** 高危玩家映射表（已确认的作弊者，其数据用于B模型训练） */
     private final ConcurrentHashMap<UUID, Boolean> highRiskPlayers;
 
-    /** 实时同步推理玩家映射表（被标记为合法的玩家，逐tick实时推理+在线学习） */
-    private final ConcurrentHashMap<UUID, Boolean> realtimeInferencePlayers;
-
     /** 双模型是否启用 */
     private volatile boolean dualModelEnabled;
-
-    /** 实时在线学习是否启用 */
-    private volatile boolean realtimeOnlineLearning;
 
     // ==================== 配置参数 ====================
 
@@ -224,9 +218,7 @@ public class PhysicsInferenceService {
 
         // ==================== 双模型 AB 架构初始化 ====================
         this.dualModelEnabled = cfg.isDualModelEnabled();
-        this.realtimeOnlineLearning = cfg.isRealtimeOnlineLearning();
         this.highRiskPlayers = new ConcurrentHashMap<>();
-        this.realtimeInferencePlayers = new ConcurrentHashMap<>();
 
         // 威胁模型文件路径
         this.threatMlpFile = new File(plugin.getDataFolder(), "threat-mlp-model.bin");
@@ -587,7 +579,7 @@ public class PhysicsInferenceService {
             dualResult = new DualInferenceResult(
                 movementScore, combatScore, anomalyScore,
                 threatMovementScore, threatCombatScore, threatFusionScore,
-                selectorResult, isHighRisk, realtimeInferencePlayers.containsKey(uuid)
+                selectorResult, isHighRisk
             );
         }
 
@@ -821,27 +813,13 @@ public class PhysicsInferenceService {
         // 注意：实时在线学习使用 synchronized 保护，因为 Folia 多线程下
         // 不同玩家的 onPlayerMove 跑在不同区域线程上，并发 train() 会损坏权重
         if (dualModelEnabled && highRiskPlayers.containsKey(uuid)) {
-            // 实时在线学习：逐tick单样本SGD
-            if (realtimeOnlineLearning) {
-                synchronized (threatModelBundle) {
-                    threatModelBundle.trainOnCheater(features);
-                }
+            synchronized (threatModelBundle) {
+                threatModelBundle.trainOnCheater(features);
             }
         }
 
-        // ==================== 实时同步推理（被标记为合法的玩家） ====================
-        // 对标记为合法的玩家进行实时同步双模型推理 + 在线学习
-        // 这提供了最高精度的检测：模型逐tick学习其行为模式
-        // synchronized 保护 A/B 模型的并发写入
-        if (dualModelEnabled && realtimeInferencePlayers.containsKey(uuid)) {
-            // 合法玩家行为作为负样本喂入B模型（target=0.0 = 非作弊）
-            if (realtimeOnlineLearning) {
-                synchronized (threatModelBundle) {
-                    threatModelBundle.trainOnNormal(features);
-                }
-            }
-            // A模型也做在线学习（逐tick强化正常行为认知）
-            if (modelReady) {
+        // A模型在线学习（逐tick强化正常行为认知）
+        if (dualModelEnabled && modelReady) {
                 synchronized (movementMLP) {
                     movementMLP.train(features, 1.0);
                 }
@@ -1075,7 +1053,6 @@ public class PhysicsInferenceService {
         states.clear();
         trustedPlayers.clear();
         highRiskPlayers.clear();
-        realtimeInferencePlayers.clear();
         modelPunishCooldown.clear();
         // 保存威胁模型
         if (dualModelEnabled) {
@@ -1090,7 +1067,6 @@ public class PhysicsInferenceService {
     public void onPlayerQuit(UUID uuid) {
         states.remove(uuid);
         modelPunishCooldown.remove(uuid);
-        realtimeInferencePlayers.remove(uuid);
     }
 
     /**
@@ -1369,29 +1345,6 @@ public class PhysicsInferenceService {
     /**
      * 启用实时同步推理（被标记为合法的玩家逐tick实时推理+在线学习）。
      */
-    public boolean enableRealtimeInference(UUID uuid) {
-        if (realtimeInferencePlayers.containsKey(uuid)) return false;
-        realtimeInferencePlayers.put(uuid, true);
-        return true;
-    }
-
-    /**
-     * 禁用实时同步推理。
-     */
-    public boolean disableRealtimeInference(UUID uuid) {
-        return realtimeInferencePlayers.remove(uuid) != null;
-    }
-
-    /** 玩家是否启用了实时同步推理 */
-    public boolean isRealtimeInference(UUID uuid) {
-        return realtimeInferencePlayers.containsKey(uuid);
-    }
-
-    /** 获取所有实时推理玩家UUID */
-    public Set<UUID> getRealtimeInferencePlayers() {
-        return realtimeInferencePlayers.keySet();
-    }
-
     /**
      * 获取玩家双模型推理结果。
      * <p>
@@ -1415,7 +1368,7 @@ public class PhysicsInferenceService {
         if (!dualModelEnabled) {
             return new DualInferenceResult(
                 movementScore, combatScore, anomalyScore,
-                0.0, 0.0, 0.0, null, false, false
+                0.0, 0.0, 0.0, null, false
             );
         }
 
@@ -1431,7 +1384,7 @@ public class PhysicsInferenceService {
             return new DualInferenceResult(
                 movementScore, combatScore, anomalyScore,
                 threatMovementScore, threatCombatScore, threatFusionScore,
-                null, false, realtimeInferencePlayers.containsKey(uuid)
+                null, false
             );
         }
 
@@ -1448,7 +1401,7 @@ public class PhysicsInferenceService {
         return new DualInferenceResult(
             movementScore, combatScore, anomalyScore,
             threatMovementScore, threatCombatScore, threatFusionScore,
-            selectorResult, isHighRisk, realtimeInferencePlayers.containsKey(uuid)
+            selectorResult, isHighRisk
         );
     }
 

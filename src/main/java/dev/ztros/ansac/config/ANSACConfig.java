@@ -78,7 +78,6 @@ public class ANSACConfig {
     @Getter private double singleConvictThreshold;
     @Getter private double highRiskBWeightBoost;
     @Getter private int threatSamplingTarget;
-    @Getter private boolean realtimeOnlineLearning;
 
     // 威胁模型网络参数 (B模型)
     @Getter private int threatMovementHidden1;
@@ -142,7 +141,6 @@ public class ANSACConfig {
         this.singleConvictThreshold = clampDouble(config.getDouble("physics-inference.dual-model.single-convict-threshold", 0.75), 0.1, 0.99);
         this.highRiskBWeightBoost = clampDouble(config.getDouble("physics-inference.dual-model.highrisk-b-weight-boost", 1.5), 1.0, 3.0);
         this.threatSamplingTarget = clampInt(config.getInt("physics-inference.dual-model.threat-sampling-target", 2000), 100, 50000);
-        this.realtimeOnlineLearning = config.getBoolean("physics-inference.dual-model.realtime-online-learning", true);
 
         // 威胁模型网络参数 (B模型)
         this.threatMovementHidden1 = clampInt(config.getInt("physics-inference.mlp-network.threat-movement.hidden1", 128), 4, 512);

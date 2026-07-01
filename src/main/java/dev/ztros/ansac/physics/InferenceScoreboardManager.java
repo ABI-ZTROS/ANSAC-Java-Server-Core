@@ -231,9 +231,6 @@ public class InferenceScoreboardManager {
         if (isTrusted) {
             title.append(" ").append(ChatColor.GREEN).append("[信任]");
         }
-        if (result.isRealtimeInference()) {
-            title.append(" ").append(ChatColor.AQUA).append("[实时]");
-        }
 
         // A/B 模型分数摘要
         title.append(ChatColor.GRAY).append(" | ");

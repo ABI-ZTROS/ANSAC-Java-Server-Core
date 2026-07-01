@@ -10,7 +10,7 @@ api-version: '1.21'
 commands:
   ansac:
     description: ANSAC Anti-Cheat main command
-    usage: /ansac [help|reload|status|info|ban|kick|unban|banlist|trust|untrust|trustlist|baseline|inference|sampling|mode|watch|mark|unmark|marklist|realtime|unrealtime|realtimelist]
+    usage: /ansac [help|reload|status|info|ban|kick|unban|banlist|trust|untrust|trustlist|baseline|inference|sampling|mode|watch|mark|unmark|marklist]
     aliases: [ac]
   login:
     description: Login to ANSAC authentication system
@@ -56,6 +56,4 @@ permissions:
   ansac.command.mark:
     description: Mark/unmark players as high-risk (confirmed cheaters for B-model training)
     default: op
-  ansac.command.realtime:
-    description: Enable/disable real-time sync inference for players
-    default: op
+
