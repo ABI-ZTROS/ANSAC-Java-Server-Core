@@ -1385,15 +1385,6 @@ public class PhysicsInferenceService {
         PlayerPhysicsState state = states.get(uuid);
         if (state == null) return DualInferenceResult.EMPTY;
 
-        // 信任玩家：无条件信任合法模型，B模型不评估，异常度恒为0
-        if (trustedPlayers.containsKey(uuid)) {
-            return new DualInferenceResult(
-                0.0, 0.0, 0.0,  // A模型分数不显示
-                0.0, 0.0, 0.0,  // B模型分数恒为0
-                null, false, realtimeInferencePlayers.containsKey(uuid)
-            );
-        }
-
         dev.ztros.ansac.player.PlayerData playerData = plugin.getPlayerDataManager().getPlayerData(uuid);
         PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
         double[] features = BehaviorFeatureExtractor.extract(state, profile);
