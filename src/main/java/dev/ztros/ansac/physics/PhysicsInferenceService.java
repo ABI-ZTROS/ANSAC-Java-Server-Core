@@ -617,16 +617,14 @@ public class PhysicsInferenceService {
                 }
             }
 
-            // 喂入A模型在线学习（如果开启实时学习）
-            if (realtimeInferencePlayers.containsKey(uuid)) {
-                synchronized (movementMLP) {
-                    movementMLP.train(features, 0.0); // target=0 = 正常
-                }
-                synchronized (combatMLP) {
-                    combatMLP.train(combatFeatures, 0.0);
-                }
-                aModelTrainCount.incrementAndGet();
+            // 喂入A模型在线学习（信任玩家无条件训练，不依赖推理监控开关）
+            synchronized (movementMLP) {
+                movementMLP.train(features, 0.0); // target=0 = 正常
             }
+            synchronized (combatMLP) {
+                combatMLP.train(combatFeatures, 0.0);
+            }
+            aModelTrainCount.incrementAndGet();
 
             // 信任玩家不做任何处罚判定，直接返回
             state.setLastNormalScore(movementScore);
