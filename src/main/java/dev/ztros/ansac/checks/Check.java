@@ -111,8 +111,8 @@ public abstract class Check {
         if (svc != null && svc.getDetectionMode() == DetectionMode.HYBRID) {
             PlayerPhysicsState state = svc.getState(player.getUniqueId());
             double anomalyScore = (state != null) ? state.getLastAnomalyScore() : 0.0;
-            // 仅在模型已训练后才放大（未训练时 anomalyScore 为随机值，不应影响规则）
-            if (svc.getSamplingSession().getTrainRound() > 0 && anomalyScore > 0.0) {
+            // 仅在模型已训练足够样本后才放大（未训练时 anomalyScore 为随机值，不应影响规则）
+            if (svc.getAModelTrainCount() > 1000 && anomalyScore > 0.0) {
                 // anomalyScore 0~1，0.5 时 severity 翻倍，1.0 时三倍
                 effectiveSeverity = severity * (1.0 + anomalyScore * 2.0);
             }
