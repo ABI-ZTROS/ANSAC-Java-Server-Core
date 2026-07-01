@@ -197,12 +197,21 @@ public class InferenceScoreboardManager {
         String sourceLabel = "N/A";
         ChatColor sourceColor = ChatColor.GRAY;
 
+        // 信任玩家：selectorResult=null，不显示威胁度，强制绿色
+        boolean isTrusted = plugin.getPhysicsInferenceService().isTrusted(data.targetUuid);
+
         if (result.selectorResult() != null) {
             ModelSelector.ModelSelectorResult sr = result.selectorResult();
             confidence = sr.confidence();
             sourceLabel = getSourceLabel(sr.source());
             sourceColor = getSourceChatColor(sr.source());
             barColor = getBarColor(sr);
+        } else if (isTrusted) {
+            // 信任玩家：无条件信任合法模型，不显示威胁度
+            sourceLabel = "信任";
+            sourceColor = ChatColor.GREEN;
+            barColor = BarColor.GREEN;
+            confidence = result.normalAnomalyScore(); // 只看A模型异常度
         } else {
             barColor = maxAnomaly >= 0.5 ? BarColor.RED : BarColor.GREEN;
         }
@@ -219,6 +228,9 @@ public class InferenceScoreboardManager {
         if (result.isHighRisk()) {
             title.append(" ").append(ChatColor.DARK_RED).append("[高危]");
         }
+        if (isTrusted) {
+            title.append(" ").append(ChatColor.GREEN).append("[信任]");
+        }
         if (result.isRealtimeInference()) {
             title.append(" ").append(ChatColor.AQUA).append("[实时]");
         }
@@ -229,7 +241,8 @@ public class InferenceScoreboardManager {
         title.append(result.normalMovementScore() >= 0.5 ? ChatColor.GREEN : ChatColor.RED);
         title.append(String.format("%.0f", result.normalAnomalyScore() * 100)).append("%");
 
-        if (plugin.getPhysicsInferenceService().isDualModelEnabled()) {
+        // 信任玩家不显示B模型分数（B模型未训练，输出无意义）
+        if (plugin.getPhysicsInferenceService().isDualModelEnabled() && !isTrusted) {
             title.append(ChatColor.GRAY).append(" B:");
             title.append(result.threatFusionScore() >= 0.5 ? ChatColor.RED : ChatColor.GREEN);
             title.append(String.format("%.0f", result.threatFusionScore() * 100)).append("%");

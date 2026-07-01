@@ -1408,6 +1408,16 @@ public class PhysicsInferenceService {
             state, threatMovementScore, threatCombatScore, 0.0);
         double threatFusionScore = threatModelBundle.forwardFusion(threatCausalInputs);
 
+        // 信任玩家：无条件信任合法模型，不走 ModelSelector 定罪逻辑
+        // 推理监控仍显示 A/B 原始分数，但 selectorResult=null 表示不做定罪
+        if (trustedPlayers.containsKey(uuid)) {
+            return new DualInferenceResult(
+                movementScore, combatScore, anomalyScore,
+                threatMovementScore, threatCombatScore, threatFusionScore,
+                null, false, realtimeInferencePlayers.containsKey(uuid)
+            );
+        }
+
         boolean isHighRisk = highRiskPlayers.containsKey(uuid);
         double ruleFactor = 0.0;
         if (playerData != null) {
