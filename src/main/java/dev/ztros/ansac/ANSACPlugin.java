@@ -132,12 +132,14 @@ public class ANSACPlugin extends JavaPlugin {
         this.trainingBossBarManager = new TrainingBossBarManager(this, physicsInferenceService);
         trainingBossBarManager.start();
 
-        // Start periodic baseline auto-save
+        // Start periodic baseline auto-save (also saves MLP models + state)
         int saveInterval = ansacConfig.getPhysicsSaveIntervalMinutes();
         if (saveInterval > 0) {
             schedulerAdapter.runTimerAsync(() -> {
                 if (physicsInferenceService != null) {
                     physicsInferenceService.saveBaseline();
+                    physicsInferenceService.savePersistedState();
+                    physicsInferenceService.saveModelsPeriodic();
                 }
             }, saveInterval, saveInterval, java.util.concurrent.TimeUnit.MINUTES);
         }

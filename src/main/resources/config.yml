@@ -49,6 +49,10 @@ physics-inference:
   # 是否启用物理推理引擎
   enabled: true
 
+  # 检测模式: RULE_ONLY(仅规则) / MODEL_ONLY(仅AI模型) / HYBRID(混合)
+  # 运行时通过 /ansac mode set 修改会自动持久化到 inference-state.yml
+  detection-mode: hybrid
+
   # 是否优先使用推理结果（启用时检查会优先使用 processWithInference）
   prefer-inference: true
 

@@ -134,6 +134,9 @@ public class PhysicsInferenceService {
     // A模型在线训练计数器
     private final java.util.concurrent.atomic.AtomicLong aModelTrainCount = new java.util.concurrent.atomic.AtomicLong(0);
 
+    // 状态持久化文件
+    private final File stateFile;
+
     /**
      * 是否优先使用推理结果。
      * <p>启用时，检查会优先通过 {@link IPhysicsCheck#processWithInference} 处理。</p>
@@ -240,6 +243,10 @@ public class PhysicsInferenceService {
 
         // 加载B模型
         loadThreatModels();
+
+        // 状态持久化文件
+        this.stateFile = new File(plugin.getDataFolder(), "inference-state.yml");
+        loadPersistedState();
 
         if (plugin != null) {
             plugin.getLogger().info("ANSAC 物理推理引擎已启动: " + BehaviorFeatureExtractor.FEATURE_COUNT
@@ -999,6 +1006,7 @@ public class PhysicsInferenceService {
      */
     public void markPlayerTrusted(UUID uuid) {
         trustedPlayers.put(uuid, true);
+        savePersistedState();
     }
 
     /**
@@ -1008,6 +1016,7 @@ public class PhysicsInferenceService {
      */
     public void unmarkPlayerTrusted(UUID uuid) {
         trustedPlayers.remove(uuid);
+        savePersistedState();
     }
 
     /**
@@ -1040,6 +1049,109 @@ public class PhysicsInferenceService {
     }
 
     /**
+     * 从 inference-state.yml 加载持久化状态（检测模式、标记玩家、训练计数器）。
+     */
+    private void loadPersistedState() {
+        if (!stateFile.exists()) return;
+        try {
+            org.bukkit.configuration.file.YamlConfiguration yaml =
+                org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(stateFile);
+
+            // 检测模式
+            String mode = yaml.getString("detection-mode", null);
+            if (mode != null) {
+                this.detectionMode = DetectionMode.fromString(mode);
+            }
+
+            // 信任玩家
+            for (String key : yaml.getKeys(false)) {
+                if (key.startsWith("trusted.")) {
+                    try {
+                        UUID uuid = UUID.fromString(key.substring(8));
+                        trustedPlayers.put(uuid, true);
+                    } catch (IllegalArgumentException ignored) {}
+                }
+            }
+
+            // 危险玩家
+            for (String key : yaml.getKeys(false)) {
+                if (key.startsWith("highrisk.")) {
+                    try {
+                        UUID uuid = UUID.fromString(key.substring(9));
+                        highRiskPlayers.put(uuid, true);
+                    } catch (IllegalArgumentException ignored) {}
+                }
+            }
+
+            // 训练计数器
+            aModelTrainCount.set(yaml.getLong("a-model-train-count", 0));
+            bModelTrainCount.set(yaml.getLong("b-model-train-count", 0));
+
+            if (plugin != null) {
+                plugin.getLogger().info("已加载持久化状态: 检测模式=" + detectionMode
+                    + " 信任玩家=" + trustedPlayers.size()
+                    + " 危险玩家=" + highRiskPlayers.size()
+                    + " A训练=" + aModelTrainCount.get()
+                    + " B训练=" + bModelTrainCount.get());
+            }
+        } catch (Exception e) {
+            if (plugin != null) plugin.getLogger().warning("加载持久化状态失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 保存持久化状态到 inference-state.yml。
+     */
+    public void savePersistedState() {
+        try {
+            org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
+
+            // 检测模式
+            yaml.set("detection-mode", detectionMode.name());
+
+            // 信任玩家
+            for (UUID uuid : trustedPlayers.keySet()) {
+                yaml.set("trusted." + uuid.toString(), true);
+            }
+
+            // 危险玩家
+            for (UUID uuid : highRiskPlayers.keySet()) {
+                yaml.set("highrisk." + uuid.toString(), true);
+            }
+
+            // 训练计数器
+            yaml.set("a-model-train-count", aModelTrainCount.get());
+            yaml.set("b-model-train-count", bModelTrainCount.get());
+
+            yaml.save(stateFile);
+        } catch (Exception e) {
+            if (plugin != null) plugin.getLogger().warning("保存持久化状态失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 定时保存A/B模型权重（异步，带文件大小检查）。
+     */
+    public void saveModelsPeriodic() {
+        // 保存A模型
+        try {
+            dev.ztros.ansac.physics.mlp.MLPPersistence.saveMovement(movementMLP, mlpFile);
+            dev.ztros.ansac.physics.mlp.MLPPersistence.saveCombat(combatMLP, combatMlpFile);
+            dev.ztros.ansac.physics.mlp.MLPPersistence.saveFusion(causalFusion, fusionMlpFile);
+        } catch (Exception e) {
+            if (plugin != null) plugin.getLogger().warning("定时保存A模型失败: " + e.getMessage());
+        }
+        // 保存B模型
+        if (dualModelEnabled) {
+            try {
+                saveThreatModels();
+            } catch (Exception e) {
+                if (plugin != null) plugin.getLogger().warning("定时保存B模型失败: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
      * 关闭推理服务。
      * <p>
      * 清理所有玩家状态和信任列表。
@@ -1047,16 +1159,30 @@ public class PhysicsInferenceService {
      * </p>
      */
     public void shutdown() {
+        // 保存持久化状态（检测模式、标记玩家、训练计数器）
+        savePersistedState();
+
+        // 保存A模型
+        try {
+            dev.ztros.ansac.physics.mlp.MLPPersistence.saveMovement(movementMLP, mlpFile);
+            dev.ztros.ansac.physics.mlp.MLPPersistence.saveCombat(combatMLP, combatMlpFile);
+            dev.ztros.ansac.physics.mlp.MLPPersistence.saveFusion(causalFusion, fusionMlpFile);
+            if (plugin != null) plugin.getLogger().info("A模型已保存");
+        } catch (Exception e) {
+            if (plugin != null) plugin.getLogger().warning("A模型保存失败: " + e.getMessage());
+        }
+
+        // 保存B模型
+        if (dualModelEnabled) {
+            saveThreatModels();
+        }
+
         // 停止所有实时监控
         watchActive.clear();
         states.clear();
         trustedPlayers.clear();
         highRiskPlayers.clear();
         modelPunishCooldown.clear();
-        // 保存威胁模型
-        if (dualModelEnabled) {
-            saveThreatModels();
-        }
     }
 
     /**
@@ -1321,6 +1447,7 @@ public class PhysicsInferenceService {
     public boolean markHighRisk(UUID uuid) {
         if (highRiskPlayers.containsKey(uuid)) return false;
         highRiskPlayers.put(uuid, true);
+        savePersistedState();
         return true;
     }
 
@@ -1328,7 +1455,9 @@ public class PhysicsInferenceService {
      * 取消高危标记。
      */
     public boolean unmarkHighRisk(UUID uuid) {
-        return highRiskPlayers.remove(uuid) != null;
+        boolean removed = highRiskPlayers.remove(uuid) != null;
+        if (removed) savePersistedState();
+        return removed;
     }
 
     /** 玩家是否被标记为高危 */
@@ -1424,8 +1553,9 @@ public class PhysicsInferenceService {
 
     public void setDetectionMode(DetectionMode mode) {
         this.detectionMode = mode;
+        savePersistedState();
         if (plugin != null) {
-            plugin.getLogger().info("检测模式已切换为: " + mode.name());
+            plugin.getLogger().info("检测模式已切换为: " + mode.name() + " (已持久化)");
         }
     }
 
