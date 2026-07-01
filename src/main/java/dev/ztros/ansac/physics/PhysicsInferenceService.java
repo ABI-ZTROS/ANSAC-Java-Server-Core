@@ -664,6 +664,8 @@ public class PhysicsInferenceService {
                     long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
                     if (now - lastPunish > 10000L) {
                         modelPunishCooldown.put(uuid, now);
+                        // 处罚后清零 VL，避免重连后立即再次触发
+                        playerData.resetViolations("ThreatModelTrusted");
                         final double finalThreat = threatFusionScore;
                         final int finalVL = threatTotalVL;
                         // 构建结构化封禁理由
@@ -709,6 +711,8 @@ public class PhysicsInferenceService {
                 long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
                 if (now - lastPunish > 10000L) {
                     modelPunishCooldown.put(uuid, now);
+                    // 处罚后清零 VL，避免重连后立即再次触发
+                    playerData.resetViolations("AnomalyFusion");
                     final double finalAnomaly = anomalyScore;
                     final int finalVL = totalVL;
                     // 构建结构化封禁理由
@@ -748,6 +752,8 @@ public class PhysicsInferenceService {
                 long lastPunish = modelPunishCooldown.getOrDefault(uuid, 0L);
                 if (now - lastPunish > 10000L) {
                     modelPunishCooldown.put(uuid, now);
+                    // 处罚后清零 VL，避免重连后立即再次触发
+                    playerData.resetViolations("DualModelAI");
                     final double finalConfidence = confidence;
                     final int finalVL = dualTotalVL;
                     final String verdictSource = dualResult.getVerdictSource().name();
@@ -1070,10 +1076,21 @@ public class PhysicsInferenceService {
         trustedPlayers.clear();
         highRiskPlayers.clear();
         realtimeInferencePlayers.clear();
+        modelPunishCooldown.clear();
         // 保存威胁模型
         if (dualModelEnabled) {
             saveThreatModels();
         }
+    }
+
+    /**
+     * 玩家退出时清理推理相关状态。
+     * 清理 PlayerPhysicsState 和处罚冷却，避免残留数据影响下次登录。
+     */
+    public void onPlayerQuit(UUID uuid) {
+        states.remove(uuid);
+        modelPunishCooldown.remove(uuid);
+        realtimeInferencePlayers.remove(uuid);
     }
 
     /**

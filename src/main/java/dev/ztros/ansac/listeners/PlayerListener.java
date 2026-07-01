@@ -82,6 +82,10 @@ public class PlayerListener implements Listener {
         plugin.getSchedulerAdapter().runNextTick(() -> {
             // Notify all checks to clean up per-player state before removing PlayerData
             plugin.getCheckManager().onPlayerQuit(event.getPlayer().getUniqueId());
+            // Clean up physics inference state
+            if (plugin.getPhysicsInferenceService() != null) {
+                plugin.getPhysicsInferenceService().onPlayerQuit(event.getPlayer().getUniqueId());
+            }
             plugin.getPlayerDataManager().removePlayerData(event.getPlayer());
 
             // Notify auth service
