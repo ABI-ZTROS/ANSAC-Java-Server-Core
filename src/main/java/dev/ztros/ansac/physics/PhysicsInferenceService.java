@@ -1441,12 +1441,6 @@ public class PhysicsInferenceService {
     /** 获取A模型在线训练样本数 */
     public long getAModelTrainCount() { return aModelTrainCount.get(); }
 
-    /** 获取B模型在线训练样本数 */
-    public long getBModelTrainCount() { return bModelTrainCount.get(); }
-
-    /** 获取信任玩家数量 */
-    public int getTrustedPlayerCount() { return trustedPlayers.size(); }
-
     public DetectionMode getDetectionMode() { return detectionMode; }
 
     public long getBModelTrainCount() { return bModelTrainCount.get(); }
