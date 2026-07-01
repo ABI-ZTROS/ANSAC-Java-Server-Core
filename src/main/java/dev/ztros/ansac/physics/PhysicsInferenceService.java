@@ -820,12 +820,11 @@ public class PhysicsInferenceService {
 
         // A模型在线学习（逐tick强化正常行为认知）
         if (dualModelEnabled && modelReady) {
-                synchronized (movementMLP) {
-                    movementMLP.train(features, 1.0);
-                }
-                synchronized (combatMLP) {
-                    combatMLP.train(combatFeatures, 1.0);
-                }
+            synchronized (movementMLP) {
+                movementMLP.train(features, 1.0);
+            }
+            synchronized (combatMLP) {
+                combatMLP.train(combatFeatures, 1.0);
             }
         }
     }
