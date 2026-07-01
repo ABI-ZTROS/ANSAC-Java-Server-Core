@@ -141,7 +141,7 @@ public class FastPlaceCheck extends Check {
             if (tracker.fastPlaceBuffer >= compensatedBuffer) {
                 double severity = 1.0 + (placesInWindow - MAX_PLACES_IN_WINDOW) * 0.2;
                 flag(player, data, severity,
-                    String.format("快速放置检测: %d秒内放置了 %d 个方块 (缓冲 %d, 延迟 %s)",
+                    String.format("快速放置检测: %.0f秒内放置了 %d 个方块 (缓冲 %d, 延迟 %s)",
                         CHECK_WINDOW_MS / 1000.0, placesInWindow,
                         tracker.fastPlaceBuffer,
                         data.getPingCompensator().getPingStatus()));
