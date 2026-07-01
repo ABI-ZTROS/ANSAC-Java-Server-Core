@@ -13,6 +13,7 @@ import dev.ztros.ansac.listeners.PlayerListener;
 import dev.ztros.ansac.player.PlayerDataManager;
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceScoreboardManager;
+import dev.ztros.ansac.physics.TrainingBossBarManager;
 import dev.ztros.ansac.punishment.PunishmentManager;
 import dev.ztros.ansac.scheduler.SchedulerAdapter;
 import lombok.Getter;
@@ -49,6 +50,7 @@ public class ANSACPlugin extends JavaPlugin {
 
     @Getter
     private InferenceScoreboardManager inferenceScoreboardManager;
+    private TrainingBossBarManager trainingBossBarManager;
 
     @Override
     public void onLoad() {
@@ -125,7 +127,10 @@ public class ANSACPlugin extends JavaPlugin {
         // Initialize inference scoreboard manager
         this.inferenceScoreboardManager = new InferenceScoreboardManager(this);
         inferenceScoreboardManager.start();
-        getLogger().info("推理 BossBar 管理器已启动。");
+
+        // Initialize training BossBar manager
+        this.trainingBossBarManager = new TrainingBossBarManager(this, physicsInferenceService);
+        trainingBossBarManager.start();
 
         // Start periodic baseline auto-save
         int saveInterval = ansacConfig.getPhysicsSaveIntervalMinutes();
@@ -172,6 +177,7 @@ public class ANSACPlugin extends JavaPlugin {
 
         if (inferenceScoreboardManager != null) {
             inferenceScoreboardManager.shutdown();
+            if (trainingBossBarManager != null) trainingBossBarManager.shutdown();
         }
 
         getLogger().info("ANSAC 已关闭。");

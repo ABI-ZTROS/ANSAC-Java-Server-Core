@@ -8,7 +8,6 @@ import dev.ztros.ansac.physics.mlp.BehaviorFeatureExtractor;
 import dev.ztros.ansac.physics.mlp.InferenceInterpreter;
 
 import dev.ztros.ansac.physics.mlp.MLPInferenceDetail;
-import dev.ztros.ansac.physics.mlp.MLPSamplingSession;
 import dev.ztros.ansac.physics.mlp.profile.PlayerBehaviorProfile;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.punishment.PunishmentEntry;
@@ -957,15 +956,6 @@ public class ANSACCommand implements CommandExecutor {
                 .append(Component.text(String.valueOf(svc.getRealtimeInferencePlayers().size()),
                     svc.getRealtimeInferencePlayers().isEmpty() ? NamedTextColor.GRAY : NamedTextColor.AQUA)));
 
-            // B模型训练状态
-            var threatSession = svc.getThreatSamplingSession();
-            if (threatSession != null) {
-                sender.sendMessage(Component.text("B模型采样状态：", NamedTextColor.YELLOW)
-                    .append(Component.text(threatSession.getState().name(), NamedTextColor.WHITE)));
-                sender.sendMessage(Component.text("B模型采样进度：", NamedTextColor.YELLOW)
-                    .append(Component.text(String.valueOf(threatSession.getSampleCount())
-                        + " / " + threatSession.getTargetSamples(), NamedTextColor.WHITE)));
-            }
             sender.sendMessage(Component.text("B模型在线训练样本：", NamedTextColor.YELLOW)
                 .append(Component.text(String.valueOf(svc.getBModelTrainCount()), NamedTextColor.WHITE)));
 
@@ -1300,47 +1290,11 @@ public class ANSACCommand implements CommandExecutor {
             sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
             return;
         }
-        MLPSamplingSession session = svc.getSamplingSession();
-        sender.sendMessage(Component.text("=== MLP 学习状态 ===", NamedTextColor.GOLD));
-        sender.sendMessage(Component.text("运行模式：", NamedTextColor.YELLOW)
-            .append(Component.text(session.isContinuousMode() ? "持续自动" : "手动确认", NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("会话状态：", NamedTextColor.YELLOW)
-            .append(Component.text(session.getState().name(), NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("样本进度：", NamedTextColor.YELLOW)
-            .append(Component.text(session.getSampleCount() + " / " + session.getTargetSamples(), NamedTextColor.WHITE)));
-        sender.sendMessage(Component.text("训练轮次：", NamedTextColor.YELLOW)
-            .append(Component.text(String.valueOf(session.getTrainRound()), NamedTextColor.WHITE)));
+        sender.sendMessage(Component.text("A模型在线训练样本：", NamedTextColor.YELLOW)
+            .append(Component.text(String.valueOf(svc.getAModelTrainCount()), NamedTextColor.WHITE)));
     }
 
     private void handleSamplingSub(CommandSender sender, String sub) {
-        PhysicsInferenceService svc = plugin.getPhysicsInferenceService();
-        if (svc == null) {
-            sender.sendMessage(Component.text("物理推理服务未启动。", NamedTextColor.RED));
-            return;
-        }
-        MLPSamplingSession session = svc.getSamplingSession();
-        switch (sub.toLowerCase()) {
-            case "start":
-                if (session.getState() == MLPSamplingSession.State.COLLECTING) {
-                    sender.sendMessage(Component.text("MLP 持续学习已在运行中。", NamedTextColor.YELLOW));
-                    return;
-                }
-                session.startCollecting();
-                sender.sendMessage(Component.text(
-                    "已开启 MLP 持续自学习：将自动采集受信任玩家数据并持续训练。", NamedTextColor.GREEN));
-                sender.sendMessage(Component.text(
-                    "使用 /ansac sampling stop 可随时停止学习。", NamedTextColor.GRAY));
-                break;
-            case "stop":
-                session.adminStop();
-                sender.sendMessage(Component.text("已停止 MLP 持续学习。", NamedTextColor.YELLOW));
-                break;
-            case "status":
-                handleSamplingStatus(sender);
-                break;
-            default:
-                sender.sendMessage(Component.text("未知子命令。用法: /ansac sampling <start|stop|status>", NamedTextColor.RED));
-                break;
-        }
+        sender.sendMessage(Component.text("批量采样已移除，现已改为实时在线训练模式", NamedTextColor.YELLOW));
     }
 }

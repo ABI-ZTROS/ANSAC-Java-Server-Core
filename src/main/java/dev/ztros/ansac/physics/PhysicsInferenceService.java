@@ -81,7 +81,6 @@ public class PhysicsInferenceService {
     private final MovementMLP movementMLP;
     private final CombatMLP combatMLP;
     private final CausalFusion causalFusion;
-    private final MLPSamplingSession samplingSession;
     private final File mlpFile;
     private final File combatMlpFile;
     private final File fusionMlpFile;
@@ -103,8 +102,7 @@ public class PhysicsInferenceService {
     /** B模型（威胁模型）束 */
     private final ThreatModelBundle threatModelBundle;
 
-    /** B模型采样会话 */
-    private final MLPSamplingSession threatSamplingSession;
+    /** B模型采样会话（已移除批量采样，保留字段兼容） */
 
     /** 威胁模型持久化文件 */
     private final File threatMlpFile;
@@ -138,6 +136,9 @@ public class PhysicsInferenceService {
 
     // B模型在线训练计数器
     private final java.util.concurrent.atomic.AtomicLong bModelTrainCount = new java.util.concurrent.atomic.AtomicLong(0);
+
+    // A模型在线训练计数器
+    private final java.util.concurrent.atomic.AtomicLong aModelTrainCount = new java.util.concurrent.atomic.AtomicLong(0);
 
     /**
      * 是否优先使用推理结果。
@@ -206,8 +207,6 @@ public class PhysicsInferenceService {
         this.mlpFile = new File(plugin.getDataFolder(), "mlp-model.bin");
         this.combatMlpFile = new File(plugin.getDataFolder(), "combat-mlp-model.bin");
         this.fusionMlpFile = new File(plugin.getDataFolder(), "fusion-mlp-model.bin");
-        int samplingTarget = plugin.getAnsacConfig().getMlpSamplingTarget();
-        this.samplingSession = new MLPSamplingSession(samplingTarget);
 
         ANSACConfig cfg = plugin.getAnsacConfig();
         this.movementMLP = loadOrCreateMovementMlp(cfg);
@@ -237,10 +236,6 @@ public class PhysicsInferenceService {
         // 初始化B模型（威胁模型）
         this.threatModelBundle = loadOrCreateThreatBundle(cfg);
 
-        // B模型采样会话
-        int threatTarget = cfg.getThreatSamplingTarget();
-        this.threatSamplingSession = new MLPSamplingSession(threatTarget);
-
         // 智能模型选择器
         this.modelSelector = new ModelSelector(
             cfg.getDualModelAWeight(),
@@ -251,24 +246,8 @@ public class PhysicsInferenceService {
             cfg.getHighRiskBWeightBoost()
         );
 
-        // B模型持续自动训练回调
-        this.threatSamplingSession.setOnTargetReached((round) -> {
-            List<double[]> batch = threatSamplingSession.drainSamples();
-            if (!batch.isEmpty()) {
-                trainThreatMlp(batch);
-            }
-        });
-
         // 加载B模型
         loadThreatModels();
-
-        // 注册持续自动训练回调：达到采样目标后自动训练
-        this.samplingSession.setOnTargetReached((round) -> {
-            List<double[]> batch = samplingSession.drainSamples();
-            if (!batch.isEmpty()) {
-                trainMlp(batch);
-            }
-        });
 
         if (plugin != null) {
             plugin.getLogger().info("ANSAC 物理推理引擎已启动: " + BehaviorFeatureExtractor.FEATURE_COUNT
@@ -646,6 +625,7 @@ public class PhysicsInferenceService {
                 synchronized (combatMLP) {
                     combatMLP.train(combatFeatures, 0.0);
                 }
+                aModelTrainCount.incrementAndGet();
             }
 
             // 信任玩家不做任何处罚判定，直接返回
@@ -669,18 +649,12 @@ public class PhysicsInferenceService {
                 synchronized (threatModelBundle) {
                     threatModelBundle.trainOnCheater(features);
                 }
-                long count = bModelTrainCount.incrementAndGet();
-                // 每 100 个样本记录一次日志，避免刷屏
-                if (count % 100 == 0) {
-                    plugin.getLogger().info("[B模型训练] 危险玩家 " + player.getName()
-                        + " 威胁度: " + String.format("%.1f%%", threatFusionScore * 100)
-                        + " (训练中，不处罚) B模型在线训练样本: " + count);
-                }
+                bModelTrainCount.incrementAndGet();
             }
 
-            // 只有在检测模式为 MODEL_ONLY 且 B 模型已训练完成时才处罚
-            // 训练阶段（采样未达标）只训练不处罚
-            boolean bModelReady = samplingSession.getTrainRound() > 0;
+            // 只有在检测模式为 MODEL_ONLY 且 B 模型已训练足够样本时才处罚
+            // 训练阶段（样本不足）只训练不处罚
+            boolean bModelReady = bModelTrainCount.get() > 1000; // 至少 1000 样本才认为 B 模型可用
             if (detectionMode == DetectionMode.MODEL_ONLY && bModelReady
                     && threatFusionScore > 0.5 && playerData != null && !hasBypass) {
                 double severity = threatFusionScore;
@@ -723,9 +697,8 @@ public class PhysicsInferenceService {
 
         // ==================== 正常玩家流程（非信任非危险） ====================
 
-        // 纯模型模式：AI 辅助判罪（需要模型已训练至少一轮）
-        // 未训练的模型输出为随机值，不能用于处罚
-        boolean modelReady = samplingSession.getTrainRound() > 0;
+        // 纯模型模式：AI 辅助判罪（需要模型已训练足够样本）
+        boolean modelReady = aModelTrainCount.get() > 1000;
         if (detectionMode == DetectionMode.MODEL_ONLY && modelReady && anomalyScore > anomalyThreshold && playerData != null && !hasBypass) {
             // 将异常分数映射为 VL 增量，走 Check 层的 VL 累积系统
             double severity = (anomalyScore - anomalyThreshold) / (1.0 - anomalyThreshold); // 映射到 0~1
@@ -836,18 +809,6 @@ public class PhysicsInferenceService {
                     }
                 }
             }
-
-            // MLP 完整画像采样
-            if (samplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
-                dev.ztros.ansac.player.PlayerData sampleData = plugin.getPlayerDataManager().getPlayerData(player.getUniqueId());
-                PlayerBehaviorProfile sampleProfile = (sampleData != null) ? sampleData.getBehaviorProfile() : new PlayerBehaviorProfile();
-                double[] sampleFeatures = BehaviorFeatureExtractor.extract(state, sampleProfile);
-                boolean reached = samplingSession.offerSample(sampleFeatures);
-                if (reached) {
-                    // 达到采样目标，在锁外触发自动训练回调
-                    samplingSession.fireTargetReachedCallback();
-                }
-            }
         }
 
         // ==================== 高危玩家数据收集（B模型训练） ====================
@@ -856,18 +817,10 @@ public class PhysicsInferenceService {
         // 注意：实时在线学习使用 synchronized 保护，因为 Folia 多线程下
         // 不同玩家的 onPlayerMove 跑在不同区域线程上，并发 train() 会损坏权重
         if (dualModelEnabled && highRiskPlayers.containsKey(uuid)) {
-            // 实时在线学习：逐tick单样本SGD（而非批量异步）
+            // 实时在线学习：逐tick单样本SGD
             if (realtimeOnlineLearning) {
                 synchronized (threatModelBundle) {
                     threatModelBundle.trainOnCheater(features);
-                }
-            } else {
-                // 批量采样模式
-                if (threatSamplingSession.getState() == MLPSamplingSession.State.COLLECTING) {
-                    boolean reached = threatSamplingSession.offerSample(features);
-                    if (reached) {
-                        threatSamplingSession.fireTargetReachedCallback();
-                    }
                 }
             }
         }
@@ -1364,150 +1317,9 @@ public class PhysicsInferenceService {
         return baselineModel.getScenarioBaselines().size();
     }
 
-    public void trainMlp(List<double[]> samples) {
-        plugin.getSchedulerAdapter().runAsync(() -> {
-            try {
-                final int epochs = trainEpochs;
-                double totalLossFusion = 0.0;
-                int fusionCount = 0;
-                for (int epoch = 0; epoch < epochs; epoch++) {
-                    double totalLossMove = 0.0;
-                    double totalLossCombat = 0.0;
-                    double epochFusionLoss = 0.0;
-                    int epochFusionCount = 0;
-                    for (double[] sample : samples) {
-                        totalLossMove += movementMLP.train(sample, 1.0);
-                        double[] combatSlice = BehaviorFeatureExtractor.extractCombatSlice(sample);
-                        totalLossCombat += combatMLP.train(combatSlice, 1.0);
-
-                        // CausalFusion 训练: 构建8维因果输入
-                        // 从样本特征中提取移动/战斗分数 + 环境特征
-                        double moveScore = movementMLP.forward(sample);
-                        double combatScore = combatMLP.forward(combatSlice);
-                        double ruleScore = 0.0; // 受信任玩家训练样本, 无规则偏离
-                        // 因果输入: envExplain=0, speedRatio=0.5, knockback=0, headJump=0, impact=0
-                        // (训练样本是正常玩家, 环境上下文已编码在84维特征中)
-                        double[] causalInputs = new double[]{
-                            moveScore, combatScore, ruleScore,
-                            0.3, 0.5, 0.0, 0.0, 0.0
-                        };
-                        epochFusionLoss += causalFusion.train(causalInputs, 0.0);
-                        epochFusionCount++;
-                    }
-                    double avgLoss = totalLossMove / samples.size();
-                    if (epoch % 20 == 0 || epoch == epochs - 1) {
-                        plugin.getLogger().info(String.format(
-                            "MLP 训练 epoch %d/%d, 移动损失: %.6f, 战斗损失: %.6f, 融合损失: %.6f",
-                            epoch + 1, epochs, avgLoss, totalLossCombat / samples.size(),
-                            epochFusionCount > 0 ? epochFusionLoss / epochFusionCount : 0.0));
-
-                        // 每20个epoch通知在线管理员训练进度
-                        int finalEpoch = epoch;
-                        double finalAvgLoss = avgLoss;
-                        boolean isLast = (epoch == epochs - 1);
-                        plugin.getSchedulerAdapter().runAsync(() -> {
-                            Component msg = miniMessage.deserialize(
-                                "<gray>[<dark_aqua>ANSAC-MLP</dark_aqua>]</gray> " +
-                                "<yellow>训练进度：<white>" + (finalEpoch + 1) + "/" + epochs + "</white>" +
-                                " | 移动损失：<white>" + String.format("%.6f", finalAvgLoss) + "</white>" +
-                                (isLast
-                                    ? " <green>训练完成!</green>"
-                                    : " <gray>继续训练中...</gray>")
-                            );
-                            for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
-                                if (p.hasPermission("ansac.admin")) {
-                                    p.sendMessage(msg);
-                                    // 同时发送 ActionBar 显示进度条
-                                    double progress = (double)(finalEpoch + 1) / epochs;
-                                    String bar = buildProgressBar(progress, 20);
-                                    p.sendActionBar(miniMessage.deserialize(
-                                        "<dark_aqua>" + bar + "</dark_aqua> <white>" +
-                                        String.format("%.1f%%", progress * 100) + "</white>"
-                                    ));
-                                }
-                            }
-                        });
-                    }
-                }
-                // 保存三个模型
-                MLPPersistence.saveMovement(movementMLP, mlpFile);
-                MLPPersistence.saveCombat(combatMLP, combatMlpFile);
-                MLPPersistence.saveFusion(causalFusion, fusionMlpFile);
-                plugin.getLogger().info("三个 MLP 模型已保存");
-                samplingSession.markReady();
-            } catch (IOException e) {
-                plugin.getLogger().severe("MLP 模型保存失败: " + e.getMessage());
-                samplingSession.adminStop();
-            }
-        });
-    }
-
-    private static String buildProgressBar(double progress, int length) {
-        int filled = (int) Math.round(progress * length);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < length; i++) {
-            sb.append(i < filled ? "\u25a0" : "\u25a1");
-        }
-        return sb.toString();
-    }
-
     public MovementMLP getMovementMLP() { return movementMLP; }
 
     // ==================== 双模型 AB 架构管理方法 ====================
-
-    /**
-     * 训练威胁模型（B模型）。
-     * <p>
-     * 使用高危玩家（已确认作弊者）的行为数据进行批量训练。
-     * 训练目标: target=1.0 表示作弊行为模式。
-     * </p>
-     *
-     * @param samples 作弊玩家行为特征样本列表
-     */
-    public void trainThreatMlp(List<double[]> samples) {
-        plugin.getSchedulerAdapter().runAsync(() -> {
-            try {
-                final int epochs = trainEpochs;
-                double lastLoss = 0.0;
-                for (int epoch = 0; epoch < epochs; epoch++) {
-                    double totalLoss = 0.0;
-                    for (double[] sample : samples) {
-                        totalLoss += threatModelBundle.trainOnCheater(sample);
-                    }
-                    lastLoss = totalLoss / samples.size();
-                    if (epoch % 20 == 0 || epoch == epochs - 1) {
-                        plugin.getLogger().info(String.format(
-                            "威胁模型 (B模型) 训练 epoch %d/%d, 平均损失: %.6f",
-                            epoch + 1, epochs, lastLoss));
-                        // 通知在线管理员
-                        int finalEpoch = epoch;
-                        boolean isLast = (epoch == epochs - 1);
-                        final double finalLoss = lastLoss;
-                        plugin.getSchedulerAdapter().runAsync(() -> {
-                            Component msg = miniMessage.deserialize(
-                                "<gray>[<dark_purple>ANSAC-ThreatMLP</dark_purple>]</gray> " +
-                                "<dark_purple>威胁模型训练</dark_purple> " +
-                                String.format("epoch %d/%d 损失: %.6f", finalEpoch + 1, epochs, finalLoss) +
-                                (isLast ? " <green>✓ 训练完成</green>" : " <gray>继续训练中...</gray>")
-                            );
-                            for (Player p : org.bukkit.Bukkit.getOnlinePlayers()) {
-                                if (p.hasPermission("ansac.admin")) {
-                                    p.sendMessage(msg);
-                                }
-                            }
-                        });
-                    }
-                }
-                // 保存威胁模型
-                saveThreatModels();
-                plugin.getLogger().info("威胁模型 (B模型) 已保存, 训练样本数: " + samples.size());
-                threatSamplingSession.markReady();
-            } catch (Exception e) {
-                plugin.getLogger().severe("威胁模型训练失败: " + e.getMessage());
-                threatSamplingSession.adminStop();
-            }
-        });
-    }
 
     /**
      * 标记玩家为高危（已确认作弊者）。
@@ -1621,13 +1433,19 @@ public class PhysicsInferenceService {
     /** 获取模型选择器 */
     public ModelSelector getModelSelector() { return modelSelector; }
 
-    /** 获取B模型采样会话 */
-    public MLPSamplingSession getThreatSamplingSession() { return threatSamplingSession; }
-
     /** 双模型是否启用 */
     public boolean isDualModelEnabled() { return dualModelEnabled; }
     public CombatMLP getCombatMLP() { return combatMLP; }
     public CausalFusion getCausalFusion() { return causalFusion; }
+
+    /** 获取A模型在线训练样本数 */
+    public long getAModelTrainCount() { return aModelTrainCount.get(); }
+
+    /** 获取B模型在线训练样本数 */
+    public long getBModelTrainCount() { return bModelTrainCount.get(); }
+
+    /** 获取信任玩家数量 */
+    public int getTrustedPlayerCount() { return trustedPlayers.size(); }
 
     public DetectionMode getDetectionMode() { return detectionMode; }
 
@@ -1653,10 +1471,6 @@ public class PhysicsInferenceService {
         PlayerBehaviorProfile profile = (playerData != null) ? playerData.getBehaviorProfile() : new PlayerBehaviorProfile();
         double[] features = BehaviorFeatureExtractor.extract(state, profile);
         return movementMLP.forwardDetailed(features);
-    }
-
-    public MLPSamplingSession getSamplingSession() {
-        return samplingSession;
     }
 
     // ==================== 实时监控 ====================
@@ -1696,7 +1510,7 @@ public class PhysicsInferenceService {
 
                 String thoughtLine = InferenceInterpreter.buildThoughtLine(
                     moveScore, combatScore, anomalyScore,
-                    samplingSession.getTrainRound());
+                    (int)(aModelTrainCount.get() / 1000)); // 每1000样本算1"轮"
 
                 String indicator = InferenceInterpreter.buildThinkingIndicator(anomalyScore);
 
