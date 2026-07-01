@@ -136,6 +136,9 @@ public class PhysicsInferenceService {
     // 模型文件大小上限(字节)，超过则跳过保存
     private long maxModelSizeBytes = 50L * 1024 * 1024; // 默认 50MB
 
+    // B模型在线训练计数器
+    private final java.util.concurrent.atomic.AtomicLong bModelTrainCount = new java.util.concurrent.atomic.AtomicLong(0);
+
     /**
      * 是否优先使用推理结果。
      * <p>启用时，检查会优先通过 {@link IPhysicsCheck#processWithInference} 处理。</p>
@@ -666,6 +669,13 @@ public class PhysicsInferenceService {
                 synchronized (threatModelBundle) {
                     threatModelBundle.trainOnCheater(features);
                 }
+                long count = bModelTrainCount.incrementAndGet();
+                // 每 100 个样本记录一次日志，避免刷屏
+                if (count % 100 == 0) {
+                    plugin.getLogger().info("[B模型训练] 危险玩家 " + player.getName()
+                        + " 威胁度: " + String.format("%.1f%%", threatFusionScore * 100)
+                        + " (训练中，不处罚) B模型在线训练样本: " + count);
+                }
             }
 
             // 只有在检测模式为 MODEL_ONLY 且 B 模型已训练完成时才处罚
@@ -704,12 +714,6 @@ public class PhysicsInferenceService {
                         }
                     }
                 }
-            } else if (threatFusionScore > 0.5) {
-                // 训练阶段：只记录日志，不处罚
-                plugin.getLogger().info("[B模型训练] 危险玩家 " + player.getName()
-                    + " 威胁度: " + String.format("%.1f%%", threatFusionScore * 100)
-                    + " (训练中，不处罚) 采样: " + samplingSession.getSampleCount()
-                    + "/" + samplingSession.getTargetSamples());
             }
 
             state.setLastNormalScore(1.0 - threatFusionScore); // 反转：B模型高=正常度低
@@ -1626,6 +1630,9 @@ public class PhysicsInferenceService {
     public CausalFusion getCausalFusion() { return causalFusion; }
 
     public DetectionMode getDetectionMode() { return detectionMode; }
+
+    public long getBModelTrainCount() { return bModelTrainCount.get(); }
+
     public void setDetectionMode(DetectionMode mode) {
         this.detectionMode = mode;
         if (plugin != null) {

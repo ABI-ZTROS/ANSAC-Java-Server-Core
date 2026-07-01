@@ -966,6 +966,8 @@ public class ANSACCommand implements CommandExecutor {
                     .append(Component.text(String.valueOf(threatSession.getSampleCount())
                         + " / " + threatSession.getTargetSamples(), NamedTextColor.WHITE)));
             }
+            sender.sendMessage(Component.text("B模型在线训练样本：", NamedTextColor.YELLOW)
+                .append(Component.text(String.valueOf(svc.getBModelTrainCount()), NamedTextColor.WHITE)));
 
             // ModelSelector 权重
             var selector = svc.getModelSelector();
