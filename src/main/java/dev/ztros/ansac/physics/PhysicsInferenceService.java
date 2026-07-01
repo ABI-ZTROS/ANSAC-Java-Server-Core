@@ -660,9 +660,19 @@ public class PhysicsInferenceService {
                 state, threatMovementScore, threatCombatScore, 0.0);
             threatFusionScore = threatModelBundle.forwardFusion(threatCausalInputs);
 
-            // 无条件信任B模型：threatFusionScore 直接作为作弊置信度
-            // 不需要 A模型评估，不需要 ModelSelector，不需要双模型确认
-            if (threatFusionScore > 0.5 && playerData != null && !hasBypass) {
+            // 危险玩家核心用途：喂入B模型训练数据
+            // 标记为危险是为了训练B模型，不是立即踢人
+            if (autoLearn) {
+                synchronized (threatModelBundle) {
+                    threatModelBundle.trainOnCheater(features);
+                }
+            }
+
+            // 只有在检测模式为 MODEL_ONLY 且 B 模型已训练完成时才处罚
+            // 训练阶段（采样未达标）只训练不处罚
+            boolean bModelReady = samplingSession.getTrainRound() > 0;
+            if (detectionMode == DetectionMode.MODEL_ONLY && bModelReady
+                    && threatFusionScore > 0.5 && playerData != null && !hasBypass) {
                 double severity = threatFusionScore;
                 playerData.addViolation("ThreatModelTrusted", severity * 2.0);
 
@@ -694,13 +704,12 @@ public class PhysicsInferenceService {
                         }
                     }
                 }
-            }
-
-            // 危险玩家也喂入B模型训练数据
-            if (autoLearn) {
-                synchronized (threatModelBundle) {
-                    threatModelBundle.trainOnCheater(features);
-                }
+            } else if (threatFusionScore > 0.5) {
+                // 训练阶段：只记录日志，不处罚
+                plugin.getLogger().info("[B模型训练] 危险玩家 " + player.getName()
+                    + " 威胁度: " + String.format("%.1f%%", threatFusionScore * 100)
+                    + " (训练中，不处罚) 采样: " + samplingSession.getSampleCount()
+                    + "/" + samplingSession.getTargetSamples());
             }
 
             state.setLastNormalScore(1.0 - threatFusionScore); // 反转：B模型高=正常度低
