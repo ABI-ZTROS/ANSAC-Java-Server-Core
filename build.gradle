@@ -23,7 +23,7 @@ repositories {
 
 dependencies {
     // Server API (provided at runtime) - Folia 1.21.4
-    compileOnly 'dev.folia:folia-api:1.21.4-R0.1-SNAPSHOT'
+    compileOnly 'dev.folia:folia-api:26.1.2.build.8-stable'
     implementation 'com.github.retrooper:packetevents-api:2.12.2'
     implementation 'com.github.retrooper:packetevents-spigot:2.12.2'
 
