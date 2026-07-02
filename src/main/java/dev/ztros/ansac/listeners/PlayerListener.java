@@ -59,6 +59,11 @@ public class PlayerListener implements Listener {
             plugin.getPlayerDataManager().createPlayerData(event.getPlayer());
             plugin.getLogger().info("开始追踪玩家：" + event.getPlayer().getName());
 
+            // 开始录制 Demo
+            if (plugin.getDemoRecorderManager() != null) {
+                plugin.getDemoRecorderManager().startRecording(event.getPlayer());
+            }
+
             // Notify auth service
             if (plugin.getAuthService().isEnabled()) {
                 String ip = "unknown";
@@ -85,6 +90,10 @@ public class PlayerListener implements Listener {
             // Clean up physics inference state
             if (plugin.getPhysicsInferenceService() != null) {
                 plugin.getPhysicsInferenceService().onPlayerQuit(event.getPlayer().getUniqueId());
+            }
+            // 保存并停止 Demo 录制
+            if (plugin.getDemoRecorderManager() != null) {
+                plugin.getDemoRecorderManager().stopAndSave(event.getPlayer().getUniqueId());
             }
             plugin.getPlayerDataManager().removePlayerData(event.getPlayer());
 

@@ -6,7 +6,6 @@ import dev.ztros.ansac.physics.PlayerPhysicsState;
 import dev.ztros.ansac.physics.mlp.DualInferenceResult;
 import dev.ztros.ansac.player.PlayerData;
 import dev.ztros.ansac.player.PlayerDataManager;
-import dev.ztros.ansac.report.ReportDemoRecorder;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -28,7 +27,6 @@ import java.util.Map;
 public class ReportCommand implements CommandExecutor {
 
     private final ANSACPlugin plugin;
-    private final ReportDemoRecorder demoRecorder;
 
     /** VL 阈值：总 VL > 此值视为作弊 */
     private static final int VL_THRESHOLD = 5;
@@ -41,7 +39,6 @@ public class ReportCommand implements CommandExecutor {
 
     public ReportCommand(ANSACPlugin plugin) {
         this.plugin = plugin;
-        this.demoRecorder = new ReportDemoRecorder(plugin);
     }
 
     @Override
@@ -124,8 +121,11 @@ public class ReportCommand implements CommandExecutor {
             }
         }
 
-        // ========== 3. 保存 Demo 快照 ==========
-        String demoFile = demoRecorder.saveDemo(reporter, target, reason, targetData, state, inference);
+        // ========== 3. 保存 Demo 快照（使用持续录制系统） ==========
+        String demoFile = null;
+        if (plugin.getDemoRecorderManager() != null) {
+            demoFile = plugin.getDemoRecorderManager().saveDemoForPlayer(target.getUniqueId());
+        }
 
         // ========== 4. 作弊判定逻辑（全方位） ==========
         boolean isCheating = false;

@@ -205,6 +205,25 @@ public class PacketListener extends PacketListenerAbstract {
                         now, cps, attackInterval, isCrit, reachDist, yawDelta, pitchDelta
                     );
                     data.getBehaviorProfile().addCombatSample(combatSample);
+
+                    // === Demo 录制：记录战斗事件 ===
+                    if (plugin.getDemoRecorderManager() != null) {
+                        String targetName = target.getName();
+                        if (target instanceof org.bukkit.entity.Player targetPlayer) {
+                            targetName = targetPlayer.getName();
+                        }
+                        plugin.getDemoRecorderManager().recordCombat(
+                            player.getUniqueId(),
+                            targetName,
+                            targetEntityId,
+                            reachDist,
+                            data.getAttackCount(),
+                            cps,
+                            isCrit,
+                            yawDelta,
+                            pitchDelta
+                        );
+                    }
                 }
             });
         }

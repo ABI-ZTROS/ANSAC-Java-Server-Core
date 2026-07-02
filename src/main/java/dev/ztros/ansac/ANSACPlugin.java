@@ -14,6 +14,7 @@ import dev.ztros.ansac.player.PlayerDataManager;
 import dev.ztros.ansac.physics.PhysicsInferenceService;
 import dev.ztros.ansac.physics.InferenceScoreboardManager;
 import dev.ztros.ansac.physics.TrainingBossBarManager;
+import dev.ztros.ansac.report.DemoRecorderManager;
 import dev.ztros.ansac.punishment.PunishmentManager;
 import dev.ztros.ansac.scheduler.SchedulerAdapter;
 import lombok.Getter;
@@ -51,6 +52,9 @@ public class ANSACPlugin extends JavaPlugin {
     @Getter
     private InferenceScoreboardManager inferenceScoreboardManager;
     private TrainingBossBarManager trainingBossBarManager;
+
+    @Getter
+    private DemoRecorderManager demoRecorderManager;
 
     @Override
     public void onLoad() {
@@ -135,6 +139,10 @@ public class ANSACPlugin extends JavaPlugin {
         this.trainingBossBarManager = new TrainingBossBarManager(this, physicsInferenceService);
         trainingBossBarManager.start();
 
+        // Initialize demo recorder manager
+        this.demoRecorderManager = new DemoRecorderManager(this);
+        demoRecorderManager.start();
+
         // Start periodic baseline auto-save (also saves MLP models + state)
         int saveInterval = ansacConfig.getPhysicsSaveIntervalMinutes();
         if (saveInterval > 0) {
@@ -183,6 +191,10 @@ public class ANSACPlugin extends JavaPlugin {
         if (inferenceScoreboardManager != null) {
             inferenceScoreboardManager.shutdown();
             if (trainingBossBarManager != null) trainingBossBarManager.shutdown();
+        }
+
+        if (demoRecorderManager != null) {
+            demoRecorderManager.shutdown();
         }
 
         getLogger().info("ANSAC 已关闭。");
