@@ -106,6 +106,9 @@ public class ANSACPlugin extends JavaPlugin {
         getCommand("ansac").setExecutor(new ANSACCommand(this));
         getCommand("ansac").setTabCompleter(new ANSACTabCompleter());
 
+        // Register report command (available to all players)
+        getCommand("report").setExecutor(new ReportCommand(this));
+
         // Register auth commands
         if (authService.isEnabled()) {
             var authCommand = new AuthCommand(this, authService);
