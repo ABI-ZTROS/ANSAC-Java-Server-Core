@@ -51,6 +51,10 @@ public class FlyCheck extends Check implements IPhysicsCheck {
 
     private final ConcurrentHashMap<UUID, JumpTracker> jumpTrackers = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, AltitudeTracker> altitudeTrackers = new ConcurrentHashMap<>();
+    /** 贴地悬浮追踪器 */
+    private final ConcurrentHashMap<UUID, GroundHoverTracker> groundHoverTrackers = new ConcurrentHashMap<>();
+    /** Ground Spoofing 追踪器 */
+    private final ConcurrentHashMap<UUID, GroundSpoofTracker> groundSpoofTrackers = new ConcurrentHashMap<>();
 
     public FlyCheck(ANSACPlugin plugin) {
         super(plugin, "Fly", "Movement");
@@ -155,9 +159,10 @@ public class FlyCheck extends Check implements IPhysicsCheck {
                 && player.getInventory().getChestplate().getType().name().contains("ELYTRA");
         boolean usingFirework = player.isGliding() || (hasElytra && deltaY > 0.3);
 
-        // Ground proximity
+        // Ground proximity - reduced threshold to catch low-hover fly cheats
         double distToGround = distanceToGround(player);
         boolean nearGround = distToGround >= 0 && distToGround < 1.5;
+        boolean veryNearGround = distToGround >= 0 && distToGround < 0.6;
 
         // Inference-driven levitation / slow falling checks
         if (useInference) {
@@ -191,6 +196,25 @@ public class FlyCheck extends Check implements IPhysicsCheck {
             // Continue to other checks (don't return, might also be ascending)
         } else {
             data.setHoverBuffer(0);
+        }
+
+        // --- Check 1.5: Low-hover fly (贴地飞行) ---
+        // 外挂让玩家离地 0.6~1.5 格悬浮，nearGround=true 导致 Check 1 被跳过
+        // 检测条件：不在地面、垂直位移极小、不在水里、不在梯子上、不在 veryNearGround
+        if (!onGround && Math.abs(deltaY) < 0.03
+                && !player.isInWater() && !player.isInLava()
+                && !player.isClimbing() && !veryNearGround
+                && !usingFirework && !recentKnockback) {
+            GroundHoverTracker ghTracker = groundHoverTrackers.computeIfAbsent(uuid, k -> new GroundHoverTracker());
+            ghTracker.ticks++;
+            if (ghTracker.ticks >= compensatedBuffer * 2) {
+                flag(player, data, 1.8,
+                    "贴地悬浮（离地" + String.format("%.2f", distToGround) + "格，连续"
+                    + ghTracker.ticks + " tick）");
+                ghTracker.ticks = 0;
+            }
+        } else {
+            groundHoverTrackers.remove(uuid);
         }
 
         // --- Check 2: Ascending while not on ground ---
@@ -236,6 +260,27 @@ public class FlyCheck extends Check implements IPhysicsCheck {
             }
         } else {
             data.setFallBuffer(0);
+        }
+
+        // --- Check 3.5: Ground Spoofing (客户端伪造 onGround) ---
+        // 外挂发送 onGround=true 但实际位置不在地面（脚下无实体方块）
+        if (onGround) {
+            boolean actuallyOnGround = isActuallyOnGround(player);
+            if (!actuallyOnGround && !player.isInWater() && !player.isInLava()
+                    && !player.isClimbing() && !usingFirework && !recentKnockback) {
+                GroundSpoofTracker gsTracker = groundSpoofTrackers.computeIfAbsent(uuid, k -> new GroundSpoofTracker());
+                gsTracker.ticks++;
+                if (gsTracker.ticks >= compensatedBuffer) {
+                    flag(player, data, 2.0,
+                        "Ground Spoofing（客户端伪造地面状态，连续"
+                        + gsTracker.ticks + " tick）");
+                    gsTracker.ticks = 0;
+                }
+            } else {
+                groundSpoofTrackers.remove(uuid);
+            }
+        } else {
+            groundSpoofTrackers.remove(uuid);
         }
 
         // --- Check 4: Sustained abnormal altitude ---
@@ -334,6 +379,8 @@ public class FlyCheck extends Check implements IPhysicsCheck {
     public void onPlayerQuit(UUID uuid) {
         jumpTrackers.remove(uuid);
         altitudeTrackers.remove(uuid);
+        groundHoverTrackers.remove(uuid);
+        groundSpoofTrackers.remove(uuid);
     }
 
     private boolean shouldSkip(Player player) {
@@ -353,6 +400,29 @@ public class FlyCheck extends Check implements IPhysicsCheck {
             }
         }
         return -1;
+    }
+
+    /**
+     * 服务端验证玩家是否真正在地面上。
+     * 检查玩家脚下是否有实体方块（距离 <= 0.6 格）。
+     * 用于检测 Ground Spoofing（客户端伪造 onGround）。
+     */
+    private boolean isActuallyOnGround(Player player) {
+        Location loc = player.getLocation().clone();
+        double playerY = loc.getY();
+        // 向下扫描，检查玩家脚下 0.6 格内是否有实体方块
+        for (int i = 1; i <= 3; i++) {
+            loc.subtract(0, 0.2, 0);
+            if (loc.getBlock().getType().isSolid()) {
+                double blockTopY = loc.getBlockY() + 1.0;
+                double dist = playerY - blockTopY;
+                // 如果玩家站在方块上，距离应在合理范围内（考虑台阶、半砖等）
+                if (dist >= -0.1 && dist <= 0.6) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static PotionEffectType getPotionEffectTypeByName(String name) {
@@ -388,5 +458,19 @@ public class FlyCheck extends Check implements IPhysicsCheck {
             this.startAltitudeY = 0.0;
             this.hasStartAltitude = false;
         }
+    }
+
+    /**
+     * 贴地悬浮追踪器。
+     */
+    private static class GroundHoverTracker {
+        int ticks;
+    }
+
+    /**
+     * Ground Spoofing 追踪器。
+     */
+    private static class GroundSpoofTracker {
+        int ticks;
     }
 }

@@ -146,6 +146,16 @@ public class PlayerListener implements Listener {
             data.updateLocation(to);
         }
 
+        // 服务端地面验证：检查玩家脚下是否有实体方块
+        // 用于防止 Ground Spoofing（客户端伪造 onGround 状态）
+        boolean serverVerifiedGround = verifyGround(to);
+        if (inferenceService != null) {
+            dev.ztros.ansac.physics.PlayerPhysicsState pstate = inferenceService.getState(event.getPlayer().getUniqueId());
+            if (pstate != null) {
+                pstate.setServerVerifiedGround(serverVerifiedGround);
+            }
+        }
+
         // Process movement checks
         plugin.getCheckManager().processPlayer(event.getPlayer());
 
@@ -153,6 +163,26 @@ public class PlayerListener implements Listener {
         if (inferenceService != null) {
             inferenceService.onPlayerMove(event.getPlayer(), data, from, to);
         }
+    }
+
+    /**
+     * 服务端验证玩家是否真正在地面上。
+     * 检查玩家脚下 0.6 格内是否有实体方块。
+     */
+    private boolean verifyGround(Location location) {
+        Location loc = location.clone();
+        double playerY = loc.getY();
+        for (int i = 1; i <= 3; i++) {
+            loc.subtract(0, 0.2, 0);
+            if (loc.getBlock().getType().isSolid()) {
+                double blockTopY = loc.getBlockY() + 1.0;
+                double dist = playerY - blockTopY;
+                if (dist >= -0.1 && dist <= 0.6) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
