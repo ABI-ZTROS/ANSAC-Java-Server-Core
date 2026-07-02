@@ -27,6 +27,9 @@ commands:
   logout:
     description: Logout from your account
     usage: /<command>
+  report:
+    description: Report a player for suspected cheating
+    usage: /report <player> [reason]
 
 permissions:
   ansac.bypass:
