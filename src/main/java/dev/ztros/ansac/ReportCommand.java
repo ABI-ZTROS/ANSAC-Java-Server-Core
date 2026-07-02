@@ -18,8 +18,6 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 玩家互相举报命令处理器。
@@ -32,15 +30,6 @@ public class ReportCommand implements CommandExecutor {
     private final ANSACPlugin plugin;
     private final ReportDemoRecorder demoRecorder;
 
-    /** 举报人冷却映射：UUID -> 上次举报时间戳(ms) */
-    private final Map<UUID, Long> reporterCooldown = new ConcurrentHashMap<>();
-    /** 被举报玩家冷却映射：UUID -> 上次被举报时间戳(ms) */
-    private final Map<UUID, Long> reportedCooldown = new ConcurrentHashMap<>();
-
-    /** 举报人冷却时间：60秒 */
-    private static final long REPORTER_COOLDOWN_MS = 60_000L;
-    /** 被举报玩家冷却时间：30秒 */
-    private static final long REPORTED_COOLDOWN_MS = 30_000L;
     /** VL 阈值：总 VL > 此值视为作弊 */
     private static final int VL_THRESHOLD = 5;
     /** 推理异常度阈值：异常度 > 此值视为作弊 */
@@ -62,17 +51,6 @@ public class ReportCommand implements CommandExecutor {
             return true;
         }
 
-        UUID reporterUuid = reporter.getUniqueId();
-        long now = System.currentTimeMillis();
-
-        // 检查举报人冷却
-        Long lastReport = reporterCooldown.get(reporterUuid);
-        if (lastReport != null && (now - lastReport) < REPORTER_COOLDOWN_MS) {
-            long remaining = (REPORTER_COOLDOWN_MS - (now - lastReport)) / 1000L;
-            reporter.sendMessage(Component.text("举报冷却中，请等待 " + remaining + " 秒后再举报。", NamedTextColor.YELLOW));
-            return true;
-        }
-
         if (args.length < 1) {
             reporter.sendMessage(Component.text("用法: /report <玩家名> [原因]", NamedTextColor.RED));
             return true;
@@ -87,24 +65,10 @@ public class ReportCommand implements CommandExecutor {
             return true;
         }
 
-        if (target.getUniqueId().equals(reporterUuid)) {
+        if (target.getUniqueId().equals(reporter.getUniqueId())) {
             reporter.sendMessage(Component.text("你不能举报自己。", NamedTextColor.RED));
             return true;
         }
-
-        UUID targetUuid = target.getUniqueId();
-
-        // 检查被举报玩家冷却
-        Long lastReported = reportedCooldown.get(targetUuid);
-        if (lastReported != null && (now - lastReported) < REPORTED_COOLDOWN_MS) {
-            long remaining = (REPORTED_COOLDOWN_MS - (now - lastReported)) / 1000L;
-            reporter.sendMessage(Component.text("该玩家刚刚被举报过，请等待 " + remaining + " 秒后再试。", NamedTextColor.YELLOW));
-            return true;
-        }
-
-        // 记录冷却
-        reporterCooldown.put(reporterUuid, now);
-        reportedCooldown.put(targetUuid, now);
 
         // 执行举报检测
         performReportCheck(reporter, target, reason);
